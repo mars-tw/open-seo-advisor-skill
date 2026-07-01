@@ -1,0 +1,16 @@
+# 統一換行符與編碼，避免跨平台貢獻者（Windows/Mac/Linux）造成不必要的 diff 雜訊。
+* text=auto eol=lf
+
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+
+# Windows 專用腳本保留 CRLF，且需要 UTF-8 BOM 才能被 Windows PowerShell 5.1 正確解讀中文
+*.ps1 text eol=crlf
+
+# 測試 fixture 保持原樣，避免影響測試斷言
+scripts/tests/fixtures/** -text

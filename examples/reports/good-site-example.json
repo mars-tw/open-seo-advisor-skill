@@ -1,0 +1,71 @@
+{
+  "report_id": "seo-report-6132ae61",
+  "generated_at": "2026-07-01T06:47:23.421548+00:00",
+  "target": {
+    "source_type": "local_archive",
+    "identifier": "C:\\Users\\digimkt\\Desktop\\SEO技能\\open-seo-advisor-skill\\scripts\\tests\\fixtures\\good_site",
+    "industry_profile": null,
+    "locale": null
+  },
+  "mode": "consultant",
+  "executive_summary": "C:\\Users\\digimkt\\Desktop\\SEO技能\\open-seo-advisor-skill\\scripts\\tests\\fixtures\\good_site 的整體 SEO 健康分數為 96.0/100。 沒有發現阻斷級或高影響問題，主要是中低影響的優化項目。 本次共產出 2 項發現，詳見下方分級清單。",
+  "site_health_score": 96.0,
+  "findings": [
+    {
+      "id": "SEO-ROBOTS_MISSING-001",
+      "title": "網站沒有 robots.txt",
+      "mode": "consultant",
+      "category": "indexability",
+      "severity": "P3",
+      "impact": 2,
+      "effort": 1,
+      "confidence": 0.8,
+      "affected_urls": [
+        "/robots.txt"
+      ],
+      "evidence": {},
+      "recommendation": "建立 robots.txt 並宣告 sitemap 位置，即使目前沒有需要阻擋的路徑，也建議明確宣告以避免爬蟲行為的不確定性。",
+      "validation": [
+        "確認 /robots.txt 回傳 200 且格式正確"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "robots-txt-intro"
+      ]
+    },
+    {
+      "id": "SEO-SITEMAP_MISSING-001",
+      "title": "網站沒有 sitemap.xml",
+      "mode": "consultant",
+      "category": "indexability",
+      "severity": "P2",
+      "impact": 3,
+      "effort": 2,
+      "confidence": 0.8,
+      "affected_urls": [
+        "/sitemap.xml"
+      ],
+      "evidence": {},
+      "recommendation": "建立 sitemap.xml 並列出所有應被索引的正規 URL，協助搜尋引擎更完整地發現與索引網站內容。",
+      "validation": [
+        "確認 /sitemap.xml 回傳 200 且為合法 XML"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "sitemaps-protocol"
+      ]
+    }
+  ],
+  "top_findings": [
+    "SEO-SITEMAP_MISSING-001",
+    "SEO-ROBOTS_MISSING-001"
+  ],
+  "coverage_notes": [
+    "Core Web Vitals、JavaScript 渲染差異比對、結構化資料驗證、Search Console/GA4 資料整合尚未實作（見 docs/roadmap.md v0.2.0）。"
+  ],
+  "scan_stats": {
+    "urls_crawled": 2,
+    "urls_skipped": 0,
+    "detected_stack": "static"
+  }
+}

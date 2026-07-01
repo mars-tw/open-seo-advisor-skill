@@ -1,0 +1,46 @@
+# Open SEO Advisor - 評分與優先順序權重設定
+#
+# priority_score = impact * confidence / effort，但 severity 為 P0 時一律置頂，
+# 其次依 severity 排序，同 severity 內再依 priority_score 排序。
+
+severity_levels:
+  P0:
+    label: "阻斷級"
+    description: "阻斷索引、全站錯誤、重大資安外洩、惡意重導、搜尋流量災難"
+    color: "#d93025"
+  P1:
+    label: "高影響"
+    description: "模板級或大量 URL 的問題，例如 canonical/hreflang/robots/sitemap/CWV 全站問題"
+    color: "#f9ab00"
+  P2:
+    label: "中影響"
+    description: "特定頁型、內容群、產業頁、區域頁問題"
+    color: "#1a73e8"
+  P3:
+    label: "低影響"
+    description: "低風險優化、內容潤飾、長期實驗項目"
+    color: "#5f6368"
+
+impact_scale:
+  1: "極小範圍，單頁或極少數頁面"
+  2: "小範圍，特定頁型子集"
+  3: "中範圍，單一頁型或單一語系/地區"
+  4: "大範圍，多頁型或影響主要轉換頁"
+  5: "全站範圍或直接影響索引/收入"
+
+effort_scale:
+  1: "設定檔調整，數分鐘可完成"
+  2: "單一模板或單一頁面修改"
+  3: "跨模板修改，需要測試"
+  4: "需要工程排期、跨系統整合"
+  5: "需要架構調整、法務／資安／多團隊協作"
+
+category_weights:
+  indexability: 1.2
+  security: 1.3
+  core_web_vitals: 1.0
+  content_quality: 1.0
+  structured_data: 0.9
+  internal_linking: 0.8
+  international: 1.0
+  local_seo: 0.9

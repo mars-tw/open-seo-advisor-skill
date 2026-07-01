@@ -1,0 +1,19 @@
+# 範例：針對在地服務業網站做 Consultant Mode 健檢的設定
+# 用法：seo-advisor audit consultant --url https://service.example.com --config examples/configs/local-service-audit.yaml
+
+crawl:
+  max_urls: 500
+  max_depth: 5
+  concurrency: 3
+  respect_robots_txt: true
+
+output:
+  formats: ["markdown", "json"]
+  language: "zh-TW"
+
+target:
+  industry_profile: "local_service"
+  locale: "zh-TW"
+
+safety:
+  dry_run: true

@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/open-seo-advisor/open-seo-advisor-skill/schemas/finding.schema.json",
+  "title": "Finding",
+  "description": "Open SEO Advisor 所有模式共用的檢查結果物件。",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "mode",
+    "category",
+    "severity",
+    "impact",
+    "effort",
+    "confidence",
+    "affected_urls",
+    "evidence",
+    "recommendation"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "唯一識別碼，慣例格式 SEO-<CATEGORY>-<NUMBER>，例如 SEO-CANONICAL-001。",
+      "pattern": "^[A-Z0-9]+-[A-Z0-9_]+-[0-9]{3,}$"
+    },
+    "title": {
+      "type": "string",
+      "description": "一句話描述問題。"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["consultant", "engineer", "security", "content_writer", "plugin_dev"]
+    },
+    "category": {
+      "type": "string",
+      "description": "問題分類，例如 indexability, core_web_vitals, structured_data, security, content_quality, international, local_seo。"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["P0", "P1", "P2", "P3"],
+      "description": "見 config/scoring.yaml 的 severity_levels 定義。"
+    },
+    "impact": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "見 config/scoring.yaml 的 impact_scale。"
+    },
+    "effort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "見 config/scoring.yaml 的 effort_scale。"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "這個判斷的信心程度，0 表示純猜測，1 表示有明確證據佐證。"
+    },
+    "affected_urls": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 0
+    },
+    "evidence": {
+      "type": "object",
+      "description": "實際觀察到的原始資料，欄位依 category 而異（例如 http_status, canonical, source_file）。",
+      "additionalProperties": true
+    },
+    "recommendation": {
+      "type": "string",
+      "description": "具體、可執行的修復建議。"
+    },
+    "validation": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "驗證修復是否成功的具體步驟。"
+    },
+    "owner": {
+      "type": "string",
+      "enum": ["consultant", "engineer", "security", "content_writer", "plugin_dev"],
+      "description": "建議由哪個模式/角色實際處理此問題。"
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "此檢查邏輯依據的官方文件 id（對應 config/sources.yaml 的 id 欄位）。"
+    }
+  },
+  "additionalProperties": false
+}

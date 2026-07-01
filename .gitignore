@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+
+# Output artifacts（seo-advisor 掃描產生的報告資料夾）
+/report/
+/seo-report/
+/seo-report-*/
+/seo-demo-report/
+*.report.json
+*.report.md
+report-beginner.md
+report.md
+report.json
+
+# Secrets
+.env
+*.pem
+*.key
+id_rsa*
+
+# OS
+.DS_Store
+Thumbs.db

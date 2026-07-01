@@ -1,0 +1,69 @@
+# Open SEO Advisor - 產業設定檔
+#
+# 每個 profile 定義該產業在 Consultant Mode 中的加權檢查重點，
+# analyzers 會依 --industry 參數載入對應 profile 來調整 finding 的 impact 權重
+# 與額外檢查項目。歡迎社群依實務經驗補充更多產業。
+
+profiles:
+  ecommerce:
+    label: "電子商務"
+    business_type: "B2C"
+    extra_checks:
+      - product_schema_completeness   # Product / Offer / AggregateRating
+      - price_availability_accuracy
+      - faceted_navigation_canonical
+      - pagination_rel_next_prev_or_seo_friendly
+      - category_page_internal_linking
+      - out_of_stock_handling
+      - review_schema_presence
+    key_pages: ["product", "category", "cart", "checkout"]
+
+  saas:
+    label: "SaaS / 軟體服務"
+    business_type: "B2B/B2C"
+    extra_checks:
+      - feature_page_completeness
+      - comparison_page_presence
+      - integration_page_seo
+      - documentation_indexability
+      - security_compliance_page_presence
+      - demo_cta_clarity
+    key_pages: ["pricing", "features", "integrations", "docs", "comparison"]
+
+  local_service:
+    label: "在地服務業"
+    business_type: "B2C"
+    extra_checks:
+      - nap_consistency               # Name/Address/Phone 一致性
+      - local_business_schema
+      - service_area_pages
+      - google_business_profile_alignment
+      - review_strategy
+      - map_embed_presence
+    key_pages: ["service_area", "contact", "reviews"]
+
+  content_media:
+    label: "內容媒體 / 出版"
+    business_type: "B2C"
+    extra_checks:
+      - author_bio_and_expertise
+      - publish_update_date_strategy
+      - topic_cluster_structure
+      - news_or_video_sitemap
+      - ad_experience_and_cwv_conflict
+      - paywall_schema_if_applicable
+    key_pages: ["article", "category", "author"]
+
+  b2b_corporate:
+    label: "企業官網 / 品牌官網"
+    business_type: "B2B"
+    extra_checks:
+      - organization_schema
+      - case_study_and_whitepaper_presence
+      - solution_and_use_case_pages
+      - leadership_and_about_page
+      - multi_region_office_pages
+      - lead_conversion_path_clarity
+    key_pages: ["solutions", "case-studies", "about", "contact"]
+
+default_profile: b2b_corporate

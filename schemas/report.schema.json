@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/open-seo-advisor/open-seo-advisor-skill/schemas/report.schema.json",
+  "title": "Report",
+  "description": "Consultant/Security 等模式執行後產出的完整報告物件。",
+  "type": "object",
+  "required": [
+    "report_id",
+    "generated_at",
+    "target",
+    "mode",
+    "executive_summary",
+    "site_health_score",
+    "findings",
+    "top_findings"
+  ],
+  "properties": {
+    "report_id": { "type": "string" },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO8601 時間戳記，由呼叫端提供，不在核心邏輯內產生。"
+    },
+    "target": {
+      "type": "object",
+      "required": ["source_type", "identifier"],
+      "properties": {
+        "source_type": {
+          "type": "string",
+          "enum": ["http", "local_archive", "ssh", "git_repo", "wordpress_api", "cloudflare", "cpanel"]
+        },
+        "identifier": {
+          "type": "string",
+          "description": "網站 URL 或本地路徑或主機識別字串。"
+        },
+        "industry_profile": { "type": "string" },
+        "locale": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["consultant", "engineer", "security", "content_writer", "plugin_dev"]
+    },
+    "executive_summary": {
+      "type": "string",
+      "description": "3-5 句話總結網站現況與最重要的發現。"
+    },
+    "site_health_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "依 finding 嚴重度加權計算的整體健康分數。"
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "finding.schema.json" }
+    },
+    "top_findings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "依 priority_score 排序後的前 N 筆 finding id。"
+    },
+    "coverage_notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "說明哪些檢查項目因缺少資料來源或授權而未執行，避免誤導使用者以為已全面檢查。"
+    },
+    "scan_stats": {
+      "type": "object",
+      "description": "本次掃描的統計資訊，例如 urls_crawled, urls_skipped, duration_seconds。",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

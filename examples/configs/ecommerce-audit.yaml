@@ -1,0 +1,19 @@
+# 範例：針對電商網站做 Consultant Mode 健檢的設定
+# 用法：seo-advisor audit consultant --url https://shop.example.com --config examples/configs/ecommerce-audit.yaml
+
+crawl:
+  max_urls: 2000
+  max_depth: 8
+  concurrency: 5
+  respect_robots_txt: true
+
+output:
+  formats: ["markdown", "json"]
+  language: "zh-TW"
+
+target:
+  industry_profile: "ecommerce"
+  locale: "zh-TW"
+
+safety:
+  dry_run: true

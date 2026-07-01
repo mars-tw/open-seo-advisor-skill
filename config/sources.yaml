@@ -1,0 +1,130 @@
+# Open SEO Advisor - 檢核標準所依據的官方資料來源
+#
+# 每次更新檢核邏輯時，請同步更新 last_checked 日期，方便社群追蹤標準是否過時。
+
+sources:
+  - id: google-search-essentials
+    title: "Google Search Essentials"
+    url: "https://developers.google.com/search/docs/essentials"
+    used_for: ["technical_seo", "spam_policies", "best_practices"]
+    last_checked: "2026-07-01"
+
+  - id: google-helpful-content
+    title: "Creating helpful, reliable, people-first content"
+    url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content"
+    used_for: ["content_quality", "eeat"]
+    last_checked: "2026-07-01"
+
+  - id: google-gen-ai-content
+    title: "AI generated content and Google Search"
+    url: "https://developers.google.com/search/docs/fundamentals/using-gen-ai-content"
+    used_for: ["content_writer_mode", "scaled_content_abuse"]
+    last_checked: "2026-07-01"
+
+  - id: web-vitals
+    title: "Web Vitals"
+    url: "https://web.dev/articles/vitals"
+    used_for: ["core_web_vitals"]
+    last_checked: "2026-07-01"
+
+  - id: robots-txt-intro
+    title: "Introduction to robots.txt"
+    url: "https://developers.google.com/search/docs/crawling-indexing/robots/intro"
+    used_for: ["technical_seo", "indexability"]
+    last_checked: "2026-07-01"
+
+  - id: canonicalization
+    title: "Consolidate duplicate URLs (canonicalization)"
+    url: "https://developers.google.com/search/docs/crawling-indexing/canonicalization"
+    used_for: ["technical_seo", "indexability"]
+    last_checked: "2026-07-01"
+
+  - id: javascript-seo-basics
+    title: "JavaScript SEO basics"
+    url: "https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics"
+    used_for: ["rendering", "javascript_seo"]
+    last_checked: "2026-07-01"
+
+  - id: structured-data-intro
+    title: "Intro to how structured data markup works"
+    url: "https://developers.google.com/search/docs/appearance/structured-data/intro-structured-data"
+    used_for: ["structured_data"]
+    last_checked: "2026-07-01"
+
+  - id: local-business-schema
+    title: "LocalBusiness structured data"
+    url: "https://developers.google.com/search/docs/appearance/structured-data/local-business"
+    used_for: ["local_seo", "structured_data"]
+    last_checked: "2026-07-01"
+
+  - id: hreflang
+    title: "Tell Google about localized versions of your page"
+    url: "https://developers.google.com/search/docs/specialty/international/localized-versions"
+    used_for: ["international", "hreflang"]
+    last_checked: "2026-07-01"
+
+  - id: ecommerce-seo
+    title: "SEO for ecommerce sites"
+    url: "https://developers.google.com/search/docs/specialty/ecommerce"
+    used_for: ["industry_ecommerce"]
+    last_checked: "2026-07-01"
+
+  - id: spam-policies
+    title: "Google Search essentials: Spam policies"
+    url: "https://developers.google.com/search/docs/essentials/spam-policies"
+    used_for: ["security_mode", "spam_detection"]
+    last_checked: "2026-07-01"
+
+  - id: sitemaps-protocol
+    title: "Sitemaps XML format"
+    url: "https://www.sitemaps.org/protocol.html"
+    used_for: ["technical_seo", "sitemap"]
+    last_checked: "2026-07-01"
+
+  - id: search-console-api
+    title: "Search Console API Reference"
+    url: "https://developers.google.com/webmaster-tools/v1/api_reference_index"
+    used_for: ["consultant_mode", "data_source"]
+    last_checked: "2026-07-01"
+
+  - id: ga4-data-api
+    title: "Google Analytics Data API (GA4)"
+    url: "https://developers.google.com/analytics/devguides/reporting/data/v1"
+    used_for: ["consultant_mode", "data_source"]
+    last_checked: "2026-07-01"
+
+  - id: wordpress-rest-api
+    title: "WordPress REST API Handbook"
+    url: "https://developer.wordpress.org/rest-api/"
+    used_for: ["connector_wordpress", "plugin_dev_mode"]
+    last_checked: "2026-07-01"
+
+  - id: cloudflare-api
+    title: "Cloudflare API"
+    url: "https://developers.cloudflare.com/api/"
+    used_for: ["connector_cloudflare"]
+    last_checked: "2026-07-01"
+
+  - id: indexnow
+    title: "IndexNow Documentation"
+    url: "https://www.indexnow.org/documentation"
+    used_for: ["connector_indexnow", "engineer_mode"]
+    last_checked: "2026-07-01"
+
+  - id: owasp-tls-cheatsheet
+    title: "OWASP Transport Layer Security Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Security_Cheat_Sheet.html"
+    used_for: ["security_mode"]
+    last_checked: "2026-07-01"
+
+  - id: owasp-secrets-management
+    title: "OWASP Secrets Management Cheat Sheet"
+    url: "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+    used_for: ["security_mode", "connector_contract"]
+    last_checked: "2026-07-01"
+
+  - id: schema-org
+    title: "Schema.org full hierarchy"
+    url: "https://schema.org/docs/schemas.html"
+    used_for: ["structured_data", "content_writer_mode"]
+    last_checked: "2026-07-01"

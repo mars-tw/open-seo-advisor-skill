@@ -1,0 +1,34 @@
+# Open SEO Advisor - 預設全域設定
+# 這份檔案定義爬蟲、渲染、輸出的預設行為。使用者可用 --config 覆寫。
+
+crawl:
+  max_urls: 1000
+  max_depth: 6
+  concurrency: 5
+  request_timeout_seconds: 15
+  user_agent: "OpenSEOAdvisor/0.1 (+https://github.com/open-seo-advisor/open-seo-advisor-skill)"
+  respect_robots_txt: true
+  rate_limit_per_second: 3
+  follow_redirects: true
+  max_redirects: 10
+
+render:
+  enabled: false          # 是否用 headless browser 渲染 JS（需安裝 Playwright）
+  wait_until: "networkidle"
+  timeout_seconds: 30
+
+output:
+  formats: ["markdown", "json"]
+  include_evidence: true
+  language: "zh-TW"        # 報告輸出語言，可設定為 en / ja / ko / ... 等
+
+safety:
+  dry_run: true            # 全域預設，任何 connector 的寫入操作都遵守此開關
+  require_confirmation_for_write: true
+  require_confirmation_for_production: true
+  allow_command_execution: false   # Engineer/Security 模式若需執行遠端指令，需使用者顯式開啟
+
+llm:
+  provider: null           # null / "anthropic" / "openai" / "local"
+  model: null
+  max_output_tokens: 4000

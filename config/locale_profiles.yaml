@@ -1,0 +1,53 @@
+# Open SEO Advisor - 語言／地區設定檔
+#
+# 用於國際化 SEO 檢查（hreflang、在地化內容、Local SEO）與報告輸出語言。
+
+locales:
+  zh-TW:
+    label: "繁體中文（台灣）"
+    search_engines: ["google"]
+    currency: "TWD"
+    date_format: "YYYY年MM月DD日"
+    notes: "注意繁簡用字差異，避免簡體詞彙混用；在地化案例需符合台灣法規用語。"
+
+  zh-CN:
+    label: "簡體中文（中國大陸）"
+    search_engines: ["baidu", "google"]
+    currency: "CNY"
+    date_format: "YYYY年MM月DD日"
+    notes: "需額外考慮 ICP 備案、百度 SEO 差異（如 sitemap 提交方式、頁面渲染需求）。"
+
+  en-US:
+    label: "英文（美國）"
+    search_engines: ["google", "bing"]
+    currency: "USD"
+    date_format: "MM/DD/YYYY"
+    notes: ""
+
+  en-GB:
+    label: "英文（英國）"
+    search_engines: ["google", "bing"]
+    currency: "GBP"
+    date_format: "DD/MM/YYYY"
+    notes: ""
+
+  ja-JP:
+    label: "日文（日本）"
+    search_engines: ["google", "yahoo_japan"]
+    currency: "JPY"
+    date_format: "YYYY年MM月DD日"
+    notes: "Yahoo! Japan 使用 Google 演算法，但在地內容與用字習慣需獨立審視。"
+
+  ko-KR:
+    label: "韓文（韓國）"
+    search_engines: ["naver", "google"]
+    currency: "KRW"
+    date_format: "YYYY.MM.DD"
+    notes: "Naver 生態系（部落格/知識 in）對排名影響大，需另外評估。"
+
+hreflang_rules:
+  bidirectional_required: true
+  x_default_recommended: true
+  language_code_standard: "ISO 639-1"
+  region_code_standard: "ISO 3166-1 alpha-2"
+  supported_declaration_forms: ["html_head", "http_header", "xml_sitemap"]

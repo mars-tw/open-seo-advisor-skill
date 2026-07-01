@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open-seo-advisor"
+version = "0.1.1"
+description = "開源、可攜、不綁定單一廠商的全域 SEO 顧問技能"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.6",
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.0",
+    "PyYAML>=6.0",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "black>=24.0",
+    "respx>=0.21",
+]
+render = [
+    "playwright>=1.44",
+]
+
+[project.scripts]
+seo-advisor = "seo_advisor.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["seo_advisor*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]

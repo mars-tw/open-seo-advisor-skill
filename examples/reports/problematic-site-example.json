@@ -1,0 +1,169 @@
+{
+  "report_id": "seo-report-6e4281f2",
+  "generated_at": "2026-07-01T06:47:12.559350+00:00",
+  "target": {
+    "source_type": "local_archive",
+    "identifier": "C:\\Users\\digimkt\\Desktop\\SEO技能\\open-seo-advisor-skill\\scripts\\tests\\fixtures\\bad_site",
+    "industry_profile": null,
+    "locale": null
+  },
+  "mode": "consultant",
+  "executive_summary": "C:\\Users\\digimkt\\Desktop\\SEO技能\\open-seo-advisor-skill\\scripts\\tests\\fixtures\\bad_site 的整體 SEO 健康分數為 72.5/100。 另有 2 個高影響（P1）問題建議優先排入近期排程。 本次共產出 6 項發現，詳見下方分級清單。",
+  "site_health_score": 72.5,
+  "findings": [
+    {
+      "id": "SEO-ROBOTS_MISSING-001",
+      "title": "網站沒有 robots.txt",
+      "mode": "consultant",
+      "category": "indexability",
+      "severity": "P3",
+      "impact": 2,
+      "effort": 1,
+      "confidence": 0.8,
+      "affected_urls": [
+        "/robots.txt"
+      ],
+      "evidence": {},
+      "recommendation": "建立 robots.txt 並宣告 sitemap 位置，即使目前沒有需要阻擋的路徑，也建議明確宣告以避免爬蟲行為的不確定性。",
+      "validation": [
+        "確認 /robots.txt 回傳 200 且格式正確"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "robots-txt-intro"
+      ]
+    },
+    {
+      "id": "SEO-SITEMAP_MISSING-001",
+      "title": "網站沒有 sitemap.xml",
+      "mode": "consultant",
+      "category": "indexability",
+      "severity": "P2",
+      "impact": 3,
+      "effort": 2,
+      "confidence": 0.8,
+      "affected_urls": [
+        "/sitemap.xml"
+      ],
+      "evidence": {},
+      "recommendation": "建立 sitemap.xml 並列出所有應被索引的正規 URL，協助搜尋引擎更完整地發現與索引網站內容。",
+      "validation": [
+        "確認 /sitemap.xml 回傳 200 且為合法 XML"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "sitemaps-protocol"
+      ]
+    },
+    {
+      "id": "SEO-TITLE_MISSING-001",
+      "title": "1 個頁面缺少 <title> 標籤",
+      "mode": "consultant",
+      "category": "content_quality",
+      "severity": "P1",
+      "impact": 4,
+      "effort": 2,
+      "confidence": 0.9,
+      "affected_urls": [
+        "/index.html"
+      ],
+      "evidence": {
+        "affected_count": 1
+      },
+      "recommendation": "為每個頁面撰寫獨特且能反映頁面內容的 <title>，長度建議在50-60 字元之間。",
+      "validation": [
+        "重新爬取確認問題已修正"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "google-search-essentials"
+      ]
+    },
+    {
+      "id": "SEO-META_DESCRIPTION_MISSING-001",
+      "title": "1 個頁面缺少 meta description",
+      "mode": "consultant",
+      "category": "content_quality",
+      "severity": "P3",
+      "impact": 2,
+      "effort": 2,
+      "confidence": 0.9,
+      "affected_urls": [
+        "/index.html"
+      ],
+      "evidence": {
+        "affected_count": 1
+      },
+      "recommendation": "為重要頁面撰寫獨特的 meta description，雖非直接排名因子，但影響搜尋結果的點擊率（CTR）。",
+      "validation": [
+        "重新爬取確認問題已修正"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "google-search-essentials"
+      ]
+    },
+    {
+      "id": "SEO-H1_MISSING-001",
+      "title": "1 個頁面缺少 <h1> 標籤",
+      "mode": "consultant",
+      "category": "content_quality",
+      "severity": "P2",
+      "impact": 3,
+      "effort": 2,
+      "confidence": 0.9,
+      "affected_urls": [
+        "/index.html"
+      ],
+      "evidence": {
+        "affected_count": 1
+      },
+      "recommendation": "為每個頁面加上單一、能反映頁面主題的 <h1> 標籤。",
+      "validation": [
+        "重新爬取確認問題已修正"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "google-search-essentials"
+      ]
+    },
+    {
+      "id": "SEO-CANONICAL_CONFLICT-001",
+      "title": "1 個頁面有多個 canonical 標籤",
+      "mode": "consultant",
+      "category": "indexability",
+      "severity": "P1",
+      "impact": 4,
+      "effort": 2,
+      "confidence": 1.0,
+      "affected_urls": [
+        "/index.html"
+      ],
+      "evidence": {},
+      "recommendation": "每個頁面只能有一個 canonical 標籤，多重宣告會讓搜尋引擎自行選擇甚至忽略，需修正模板邏輯只輸出單一 canonical。",
+      "validation": [
+        "重新爬取確認每頁僅有一個 canonical 標籤"
+      ],
+      "owner": "engineer",
+      "sources": [
+        "canonicalization"
+      ]
+    }
+  ],
+  "top_findings": [
+    "SEO-CANONICAL_CONFLICT-001",
+    "SEO-TITLE_MISSING-001",
+    "SEO-H1_MISSING-001",
+    "SEO-SITEMAP_MISSING-001",
+    "SEO-ROBOTS_MISSING-001",
+    "SEO-META_DESCRIPTION_MISSING-001"
+  ],
+  "coverage_notes": [
+    "Core Web Vitals、JavaScript 渲染差異比對、結構化資料驗證、Search Console/GA4 資料整合尚未實作（見 docs/roadmap.md v0.2.0）。"
+  ],
+  "scan_stats": {
+    "urls_crawled": 1,
+    "urls_skipped": 0,
+    "detected_stack": "static"
+  }
+}

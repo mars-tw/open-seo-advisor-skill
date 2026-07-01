@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/open-seo-advisor/open-seo-advisor-skill/schemas/connector.schema.json",
+  "title": "ConnectorConfig",
+  "description": "使用者提供的連線設定，用來建立對應的 WebsiteConnector 實例。憑證欄位僅在記憶體中使用，絕不應序列化寫入報告或 log。",
+  "type": "object",
+  "required": ["source_type"],
+  "properties": {
+    "source_type": {
+      "type": "string",
+      "enum": ["http", "local_archive", "ssh", "git_repo", "wordpress_api", "cloudflare", "cpanel"]
+    },
+    "url": {
+      "type": "string",
+      "description": "http connector 使用：目標網站的 base URL。"
+    },
+    "path": {
+      "type": "string",
+      "description": "local_archive / git_repo connector 使用：本地路徑。"
+    },
+    "ssh": {
+      "type": "object",
+      "description": "ssh connector 使用。private_key_path 只存路徑，實際金鑰內容不落地到此設定物件。",
+      "properties": {
+        "host": { "type": "string" },
+        "port": { "type": "integer", "default": 22 },
+        "username": { "type": "string" },
+        "private_key_path": { "type": "string" },
+        "read_only": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
+    },
+    "wordpress": {
+      "type": "object",
+      "description": "wordpress_api connector 使用。application_password 只透過環境變數在執行期注入，不寫入此設定檔。",
+      "properties": {
+        "site_url": { "type": "string" },
+        "username": { "type": "string" },
+        "credential_env_var": {
+          "type": "string",
+          "description": "存放 Application Password 的環境變數名稱。"
+        }
+      },
+      "additionalProperties": false
+    },
+    "cloudflare": {
+      "type": "object",
+      "properties": {
+        "zone_id": { "type": "string" },
+        "credential_env_var": {
+          "type": "string",
+          "description": "存放 API Token 的環境變數名稱。"
+        }
+      },
+      "additionalProperties": false
+    },
+    "capabilities_requested": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["read_urls", "read_files", "write_files", "run_commands", "read_logs", "deploy"]
+      },
+      "description": "使用者明確授權的能力範圍；connector 不得執行超出此範圍的操作。",
+      "default": ["read_urls"]
+    },
+    "dry_run": {
+      "type": "boolean",
+      "default": true,
+      "description": "全域 dry-run 開關，覆寫 config/defaults.yaml 的 safety.dry_run。"
+    }
+  },
+  "additionalProperties": false
+}
