@@ -105,6 +105,11 @@ def _render_analytics_markdown(report: AnalyticsReport) -> str:
     lines.append("")
     lines.append(report.summary)
     lines.append("")
+    lines.append(
+        "> 以下診斷為依成效資料自動產生的**推測性判斷**，門檻採觀察到的中位數而非產業標準；"
+        "調整預算或投放前建議由人再確認。"
+    )
+    lines.append("")
     lines.append("## 各渠道成效")
     lines.append("")
     lines.append("| 渠道 | Sessions | 轉換 | 轉換率 | 成本 | 營收 |")

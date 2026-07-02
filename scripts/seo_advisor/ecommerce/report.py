@@ -21,6 +21,11 @@ def render_ecommerce_markdown(report: EcommerceReport) -> str:
     lines.append("")
     lines.append(report.summary)
     lines.append("")
+    lines.append(
+        "> 本報告為依方法論原則自動產生的**推測性建議**，非人工實際稽核；"
+        "實際優化前建議由熟悉你商品與市場的人再確認。"
+    )
+    lines.append("")
 
     lines.append("## 發現與建議（依優先順序）")
     lines.append("")

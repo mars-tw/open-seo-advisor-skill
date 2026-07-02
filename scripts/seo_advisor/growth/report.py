@@ -39,6 +39,10 @@ def render_utm_plan_json(plan: UtmPlan) -> str:
 
 def render_cro_report_markdown(report: CroReport) -> str:
     lines = [f"# 落地頁 CRO 診斷與 A/B 測試計畫：{report.landing_url}", ""]
+    lines.append(
+        "> 以下為自動化的**推測性建議**，非人工判定；A/B 測試需以你的實際數據驗證後再下結論。"
+    )
+    lines.append("")
 
     lines.append("## 轉換率優化發現（依優先順序）")
     lines.append("")

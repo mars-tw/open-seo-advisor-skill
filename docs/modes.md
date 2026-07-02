@@ -1,6 +1,10 @@
-# 五大模式完整規格
+# 核心 SEO 模式完整規格
 
-本文件是每個模式的完整規格來源。`prompts/*.md` 是給 LLM 使用的精簡版
+> **想快速看全專案有什麼、各自實作到什麼程度？** 先看 `docs/capability-map.md`
+> 能力地圖。本文件是**核心 SEO 模式**的詳細規格來源；行銷模組（Meta 廣告 /
+> 產圖 / 成長 / 電商）、統籌器（Matrix / Autopilot）各有專屬文件，見能力地圖。
+
+本文件是每個核心模式的完整規格來源。`prompts/*.md` 是給 LLM 使用的精簡版
 system prompt，本文件是給實作者（人類或 AI coding agent）看的完整規格，
 兩者需保持一致，修改其中一份時請同步檢查另一份。
 
@@ -152,7 +156,8 @@ Severity（S0 Critical / S1 High / S2 Medium / S3 Low）、SEO Impact
 
 ## Content Writer Mode
 
-**狀態：v0.2.0 規劃中，本版本先提供介面與 prompt 模板。**
+**狀態：✅ 已完整實作（LLMProvider 抽象層 + brief→outline→draft→QA +
+`seo-advisor write`，免金鑰用 `--llm-provider mock`）。**
 
 詳見 `docs/content_writer_guide.md`。
 

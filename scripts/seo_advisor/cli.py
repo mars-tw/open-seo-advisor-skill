@@ -36,7 +36,16 @@ from seo_advisor.writers.render import (
 )
 
 app = typer.Typer(
-    help="Open SEO Advisor - 開源全域 SEO 顧問技能 CLI。不知道從哪裡開始？直接輸入 seo-advisor 即可。",
+    help=(
+        "Open SEO Advisor - 開源全域行銷營運技能。\n\n"
+        "最快上手：seo-advisor auto <你的網址>（一個指令搞定，全程免費）。\n"
+        "免金鑰試玩：seo-advisor auto-demo。\n"
+        "不想記指令：直接輸入 seo-advisor 進問答精靈。\n\n"
+        "核心 SEO 模式：audit(顧問) / write(文章)。\n"
+        "行銷模組：ads(廣告) / image(產圖) / growth(成長) / ecommerce(電商)。\n"
+        "統籌器：matrix(AI 矩陣) / auto(一鍵代操)。\n"
+        "全貌與各能力實作狀態見 docs/capability-map.md。"
+    ),
     invoke_without_command=True,
 )
 audit_app = typer.Typer(help="執行 SEO 健檢（顧問模式等，進階用法）")

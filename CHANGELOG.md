@@ -2,6 +2,46 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.8] - Unreleased
+
+紮實度強化版：由 NORA 做一次全專案體檢找出弱點，CLAUDE（CEO/審核端）審核後
+逐項修補。不加新功能，專注把已有的東西變得更紮實、更誠實、更不會絆倒人。
+
+### 修正
+
+- **[bug]** 修正 `autopilot.runner` 的 `mock=task.mock or True`——這個 `or True`
+  讓成本估算永遠是 mock 模式，未來接真實 provider 時會低估成本、失去安全意義。
+  改為明確的 `_MVP_FORCE_PLAN_ONLY` 常數，並加回歸測試鎖住「真實模式不得被
+  標成 mock」。
+- 修正 Windows 透過 pipe/精靈輸入中文會因 surrogate 編碼崩潰的問題
+  （`_console_encoding` 也 reconfigure stdin，見 v0.1.7 亦有）。
+
+### 文件
+
+- 新增 `docs/capability-map.md`：一頁能力地圖，標清每個能力
+  implemented/mock/plan-only/skeleton，並定義 Core Modes / Marketing Modules /
+  Orchestrators 三層 taxonomy。若與其他文件衝突以此為準。
+- 新增 `docs/api-contracts.md`：給貢獻者的介面契約速查。
+- 修正過時敘述：README tagline 更新為「行銷營運技能」、`docs/modes.md` 標題與
+  Content Writer 狀態、QUICKSTART 改成一鍵 auto 流程。
+- `CONTRIBUTING.md` 擴充：新增 module/provider 貢獻規範、方法論合規紅線
+  checklist、pip/pipx 安裝指南。
+
+### 開發者體驗 / CI
+
+- CLI 頂層 help 改成 taxonomy 導覽（最快上手 + 三層分類 + 完整指令）。
+- CI 擴充：所有公開 demo 指令的 smoke test（auto/growth/ecommerce/matrix/
+  image/ads/consultant demo）+ `python -m build` 後在乾淨 venv 安裝 wheel 跑
+  demo，驗證 package-data 都被打包。
+- `pyproject.toml` 加相依主版本上限（避免破壞性大版更新打壞使用者/CI）。
+- Growth/Ecommerce 的 heuristic 報告加「自動推測、非人工判定」提醒，避免過度
+  肯定的信任問題。
+
+### 測試
+
+新增 12 個測試（autopilot 成本 bug 回歸、11 條 provider 失敗路徑），
+總計 240 個測試全過，ruff lint 乾淨。
+
 ## [0.1.7] - Unreleased
 
 讓完全的新手/小白用「一個指令、3 分鐘、放著不管」就能拿到專家級優化方案。

@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.7
+version: 0.1.8
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,12 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.7）
+## 目前實作狀態（v0.1.8）
 
+- ✅ 紮實度強化（v0.1.8）：能力地圖（`docs/capability-map.md`）、API 契約文件
+  （`docs/api-contracts.md`）、CLI taxonomy help、CI 擴充為全 demo smoke +
+  wheel 安裝驗證、依賴版本上限、provider 失敗路徑測試、heuristic 報告加推測
+  性提醒、修正 autopilot 成本估算永遠 mock 的 bug。
 - ✅ 一鍵代操機器人（Autopilot）：`seo-advisor auto <網址或目標>` 一個指令
   自動判斷該跑哪些模組、跑遍分析、產出白話懶人包 + 成本明細 + 待辦清單。
   會花錢/寫入/發布的動作採「一次知情同意」（先給白話成本明細，同意一次才
@@ -152,8 +156,10 @@ seo-advisor audit consultant --source ./my-website --out ./report
 
 ## 目錄導覽
 
+- `docs/capability-map.md`：**能力地圖**——一頁看懂全專案有什麼、實作狀態、怎麼呼叫。
+- `docs/api-contracts.md`：給貢獻者的介面契約速查（provider 抽象層、報告慣例等）。
 - `docs/architecture.md`：整體架構、Connector 抽象層、資料模型。
-- `docs/modes.md`：五大模式的完整檢查清單、輸出格式、外部資料來源。
+- `docs/modes.md`：核心 SEO 模式的完整檢查清單、輸出格式、外部資料來源。
 - `docs/connector_contract.md`：WebsiteConnector 介面規格與資安要求。
 - `docs/content_writer_guide.md`：SEO 寫作品質規範與 prompt 模板。
 - `docs/i18n_seo_guide.md`：跨產業與國際化 SEO 檢查重點。

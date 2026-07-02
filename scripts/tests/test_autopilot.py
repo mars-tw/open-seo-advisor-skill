@@ -117,6 +117,25 @@ def test_critical_risk_never_executes():
     assert is_auto_executable(item, "generate_local_report") is False
 
 
+# --- MVP 安全開關：真實模式成本不得被誤標成 mock ---
+
+def test_real_mode_cost_not_mislabeled_as_mock(tmp_path, monkeypatch):
+    """把 MVP force-plan 開關關掉、且 task 非 mock 時，含產圖的成本明細不得
+    被標成『示範、不花錢』——這鎖住已修復的 mock=or True bug 不再回歸。
+    """
+    import seo_advisor.autopilot.runner as runner_mod
+
+    monkeypatch.setattr(runner_mod, "_MVP_FORCE_PLAN_ONLY", False)
+    # 用會觸發 image_plan 的目標，讓成本明細裡有產圖項目
+    outcome = runner_mod.run_autopilot(
+        AutoTask(target="幫我做廣告圖素材", mock=False), out_dir=str(tmp_path)
+    )
+    image_items = [i for i in outcome.deliverable.cost_estimate.items if i.module == "image_material"]
+    if image_items:
+        note = image_items[0].unit_notes
+        assert "不會真的" not in note  # 真實模式不得標成示範不花錢
+
+
 # --- 完整流程 ---
 
 def test_run_autopilot_produces_reports(tmp_path):

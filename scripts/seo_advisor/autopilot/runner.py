@@ -24,6 +24,11 @@ from seo_advisor.autopilot.report import render_autopilot_beginner_md, render_au
 
 ProgressCallback = Callable[[str], None]
 
+# MVP 安全開關：為真時，所有會花錢/寫入/發布的動作一律只產計畫、不自動執行，
+# 成本明細也以「示範、不會真的花錢」呈現，確保現階段絕不誤燒錢。未來開放真實
+# 執行時改為 False，屆時真實成本會依 task.mock 正確標示（不再被強制標成 mock）。
+_MVP_FORCE_PLAN_ONLY = True
+
 
 @dataclass
 class AutopilotOutcome:
@@ -87,16 +92,20 @@ def run_autopilot(
     module_results = _run_module_analyses(task, modules)
 
     on_progress("第 3/5 步：彙整成本與影響明細")
-    # MVP：分析階段不實際觸發花錢動作，成本明細示範用 mock=True
     plan_image = 4 if "image_plan" in modules else 0
     plan_content = 2 if "content_plan" in modules else 0
+    # 成本明細是否以「示範/不花錢」呈現：MVP 階段強制為真（真實花錢動作一律
+    # 停在計畫，見 _MVP_FORCE_PLAN_ONLY），或使用者明確指定 --mock。
+    # 未來開放真實執行時，只要把 _MVP_FORCE_PLAN_ONLY 設 False，task.mock 就會
+    # 正確生效、真實成本不會再被誤標成 mock。
+    cost_as_mock = _MVP_FORCE_PLAN_ONLY or task.mock
     cost = build_cost_estimate(
         estimate_id=f"cost-{generated_at[:10]}",
         generated_at=generated_at,
         plan_image_variants=plan_image,
         plan_content_pieces=plan_content,
         plan_ad_budget_delta_minor_units=0,
-        mock=task.mock or True,  # MVP 一律以示範/計畫呈現，不自動花錢
+        mock=cost_as_mock,
     )
 
     on_progress("第 4/5 步：整理白話總報告")

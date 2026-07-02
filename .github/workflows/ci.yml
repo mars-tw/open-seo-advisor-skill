@@ -39,7 +39,7 @@ jobs:
         run: python -m pytest -v
 
   cli-smoke-test:
-    name: CLI smoke test (demo mode)
+    name: CLI smoke test (all demo commands)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,13 +55,77 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Run demo scan end-to-end
-        working-directory: scripts
-        run: python -m seo_advisor.cli demo --out ./ci-demo-report
-
-      - name: Verify report files were generated
+      - name: Consultant demo
         working-directory: scripts
         run: |
-          test -f ci-demo-report/report-beginner.md
-          test -f ci-demo-report/report.md
-          test -f ci-demo-report/report.json
+          python -m seo_advisor.cli demo --out ./ci-demo
+          test -f ci-demo/report-beginner.md
+          test -f ci-demo/report.json
+
+      - name: Autopilot demo
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli auto-demo --out ./ci-auto
+          test -f ci-auto/auto-report-beginner.md
+          test -f ci-auto/cost-estimate.json
+
+      - name: Growth demo
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli growth demo --out ./ci-growth
+          test -f ci-growth/analytics-report.json
+
+      - name: Ecommerce demo
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli ecommerce demo --out ./ci-ecom
+          test -f ci-ecom/ecommerce-report.json
+
+      - name: Matrix demo
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli matrix demo --out ./ci-matrix
+          test -f ci-matrix/matrix-report.json
+
+      - name: Image demo
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli image demo --out ./ci-image
+          test -f ci-image/image-manifest.json
+
+      - name: Ads demo
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli ads demo --out ./ci-ads
+          test -f ci-ads/action-plan.json
+
+  wheel-install-smoke:
+    name: Wheel build + clean install smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        working-directory: scripts
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir dist
+
+      - name: Install wheel in a clean venv and run demos
+        working-directory: scripts
+        run: |
+          python -m venv /tmp/clean-venv
+          /tmp/clean-venv/bin/python -m pip install --upgrade pip
+          /tmp/clean-venv/bin/python -m pip install dist/*.whl
+          # 用正式安裝的 console script 跑，驗證 package-data（角色卡/方法論/demo 資產）都被打包
+          /tmp/clean-venv/bin/seo-advisor auto-demo --out /tmp/ci-wheel-auto
+          /tmp/clean-venv/bin/seo-advisor matrix demo --out /tmp/ci-wheel-matrix
+          /tmp/clean-venv/bin/seo-advisor ecommerce demo --out /tmp/ci-wheel-ecom
+          test -f /tmp/ci-wheel-auto/auto-report-beginner.md
+          test -f /tmp/ci-wheel-matrix/matrix-report.json
+          test -f /tmp/ci-wheel-ecom/ecommerce-report.json

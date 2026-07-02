@@ -1,8 +1,11 @@
 # Open SEO Advisor
 
-> 開源、可攜、不綁定單一廠商的全域 SEO 顧問技能。蒸餾業界公認的 SEO 權威方法論
-> 與 Google 官方標準，結合爬蟲與 LLM，協助任何產業、任何規模的網站做 SEO 健檢、
-> 修復、內容產出與外掛開發。
+> 開源、可攜、不綁定單一廠商的**全域行銷營運技能**。從 SEO 健檢出發，延伸到
+> 內容、廣告、產圖、成長行銷、電商 listing，並用 AI 矩陣與一鍵代操把它們串成
+> 「一個指令搞定」——蒸餾業界公認方法論與 Google 官方標準，結合爬蟲與 LLM，
+> 服務任何產業、任何規模。全程免金鑰可試玩、安全優先。
+>
+> 想快速看全貌？先看 [`docs/capability-map.md`](docs/capability-map.md) 能力地圖。
 
 [![CI](https://github.com/mars-tw/open-seo-advisor-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/mars-tw/open-seo-advisor-skill/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
