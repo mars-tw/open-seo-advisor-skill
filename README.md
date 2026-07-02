@@ -68,6 +68,22 @@ seo-advisor growth analytics --provider mock
 成效分析的 Google 資料來源（GA4/GSC/Google Ads）一律 read-only，無憑證時用
 mock。詳見 [`docs/growth_marketing.md`](docs/growth_marketing.md)。
 
+## 電商 Listing 健檢 + 行銷方法論知識庫
+
+內建**中性化蒸餾**的行銷方法論知識庫（電商 / 付費廣告漏斗 / 內容品牌 /
+成長駭客四領域共 50 條可執行檢核原則），並用電商領域原則做 Amazon / 電商
+platform 的 listing 健檢：
+
+```bash
+seo-advisor ecommerce demo                          # 免金鑰示範
+seo-advisor ecommerce audit --input listing.json    # 健檢自己的 listing
+```
+
+> **合規說明**：方法論知識庫萃取業界公開、廣泛認可的通用原則，轉成**不具名、
+> 不含課程名或商標**的檢核清單，不宣稱與任何特定專家有關聯或代言。目的是讓
+> 任何人**免費**就能用這些方法論自我健檢，不需買課或代操。詳見
+> [`docs/methodology.md`](docs/methodology.md)、[`docs/ecommerce_mode.md`](docs/ecommerce_mode.md)。
+
 ## 設計原則
 
 - **不綁定單一廠商**：所有付費 API（Search Console、GA4、PageSpeed Insights、

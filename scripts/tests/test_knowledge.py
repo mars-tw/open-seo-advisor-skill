@@ -1,0 +1,37 @@
+from seo_advisor.knowledge import get_domain, list_domains, load_methodology
+
+
+def test_all_four_domains_loaded():
+    domains = list_domains()
+    assert set(domains) == {"ecommerce", "paid_ads_funnel", "content_brand", "growth_hacking"}
+
+
+def test_each_domain_has_principles():
+    for domain in load_methodology().values():
+        assert domain.label
+        assert len(domain.principles) >= 8
+        for p in domain.principles:
+            assert p.check and p.why
+
+
+def test_get_domain_returns_none_for_unknown():
+    assert get_domain("not-a-domain") is None
+
+
+def test_methodology_is_neutralized_no_expert_names():
+    """合規紅線測試：知識庫不得含任何真實專家人名/課程名/商標。
+
+    這條測試鎖住『中性化蒸餾』原則，讓 CI 持續守護——若未來有人不小心把
+    具名內容加進知識庫，這裡會擋下來。
+    """
+    forbidden = [
+        "ellen", "fishkin", "neil patel", "gary vee", "vaynerchuk",
+        "brian dean", "backlinko", "moz", "ahrefs 課程", "老師的方法",
+    ]
+    blob = ""
+    for domain in load_methodology().values():
+        blob += domain.label.lower()
+        for p in domain.principles:
+            blob += p.check.lower() + p.why.lower()
+    for name in forbidden:
+        assert name not in blob, f"知識庫不應包含具名內容：{name}"

@@ -19,6 +19,7 @@ class Mode(str, Enum):
     PLUGIN_DEV = "plugin_dev"
     META_ADS = "meta_ads"
     IMAGE_MATERIAL = "image_material"
+    ECOMMERCE = "ecommerce"
 
 
 class Severity(str, Enum):

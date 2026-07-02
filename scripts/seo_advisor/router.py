@@ -26,6 +26,9 @@ _MODE_ALIASES: dict[str, Mode] = {
     "image": Mode.IMAGE_MATERIAL,
     "image_material": Mode.IMAGE_MATERIAL,
     "creative": Mode.IMAGE_MATERIAL,
+    "ecommerce": Mode.ECOMMERCE,
+    "amazon": Mode.ECOMMERCE,
+    "listing": Mode.ECOMMERCE,
 }
 
 _IMPLEMENTED_MODES = {
@@ -33,6 +36,7 @@ _IMPLEMENTED_MODES = {
     Mode.CONTENT_WRITER,
     Mode.META_ADS,
     Mode.IMAGE_MATERIAL,
+    Mode.ECOMMERCE,
 }
 
 

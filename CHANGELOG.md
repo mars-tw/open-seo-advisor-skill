@@ -2,6 +2,40 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.6] - Unreleased
+
+把業界行銷/電商方法論以**中性化蒸餾**方式納入專案，讓任何人免費就能用這些
+方法論自我健檢，不需買課或代操。由 NORA 蒸餾、CLAUDE（CEO/審核端）審核合規
+與品質後落地。
+
+### 合規原則（本版核心）
+
+- 方法論一律**中性化蒸餾**：只萃取業界公開、廣泛認可的通用原則，轉成不具名、
+  可執行的檢核清單。**不使用任何真實專家人名、課程名或商標**，不逐字複製任何人
+  的著作或付費課程，不宣稱與任何專家有關聯或代言。與 content_writer_guide.md
+  的合規精神一致。
+- 新增自動化測試 `test_methodology_is_neutralized_no_expert_names`，讓 CI 持續
+  守護這條紅線。
+
+### 新增：行銷方法論知識庫（`knowledge/methodology.yaml`）
+
+- 四大領域共 50 條可執行檢核原則：電商 listing 優化（12）、付費廣告漏斗（12）、
+  內容品牌成長（12）、轉換/成長駭客（14）。
+- `knowledge` 載入器用 importlib.resources 讀取，供各模組引用。
+
+### 新增：電商 Listing 健檢模式（`seo-advisor ecommerce`）
+
+- 運用電商方法論原則檢核 listing 的標題、賣點、主圖/副圖、A+、後端關鍵字、
+  評論/評分、庫存與購買入口、變體，產出健康分數與建議。
+- 缺貨（P0）、缺 Buy Box/低評分/缺主圖（P1）等直接影響轉換的問題優先分級。
+- 每個發現都引用對應的方法論檢核點；資訊不足的欄位不硬給 finding。
+- 純邏輯免金鑰：`seo-advisor ecommerce audit/demo`。
+
+### 測試
+
+新增 22 個測試（ecommerce 8、knowledge 4、含合規測試，及 router/wheel 擴充），
+總計 214 個測試全過，ruff lint 乾淨。
+
 ## [0.1.5] - Unreleased
 
 本版由 NORA 先稽核「成熟網路行銷團隊該有、但專案還缺」的能力缺口，CLAUDE

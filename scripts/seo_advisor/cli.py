@@ -43,6 +43,7 @@ audit_app = typer.Typer(help="執行 SEO 健檢（顧問模式等，進階用法
 app.add_typer(audit_app, name="audit")
 
 from seo_advisor.ads.cli import ads_app  # noqa: E402 - 延後匯入避免循環相依
+from seo_advisor.ecommerce.cli import ecommerce_app  # noqa: E402 - 延後匯入避免循環相依
 from seo_advisor.growth.cli import growth_app  # noqa: E402 - 延後匯入避免循環相依
 from seo_advisor.images.cli import image_app  # noqa: E402 - 延後匯入避免循環相依
 from seo_advisor.matrix.cli import matrix_app  # noqa: E402 - 延後匯入避免循環相依
@@ -51,6 +52,7 @@ app.add_typer(image_app, name="image")
 app.add_typer(ads_app, name="ads")
 app.add_typer(matrix_app, name="matrix")
 app.add_typer(growth_app, name="growth")
+app.add_typer(ecommerce_app, name="ecommerce")
 
 console = Console()
 

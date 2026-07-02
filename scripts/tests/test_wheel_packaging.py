@@ -79,3 +79,9 @@ def test_wheel_includes_bundled_assets(tmp_path):
             f"wheel 內沒有找到 matrix/prompts 的 .md，"
             f"Generic LLM 引擎在正式安裝後會讀不到 prompt。wheel 內容：{names}"
         )
+
+        methodology = [n for n in names if "knowledge" in n and n.endswith("methodology.yaml")]
+        assert methodology, (
+            f"wheel 內沒有找到 knowledge/methodology.yaml，"
+            f"行銷方法論知識庫在正式安裝後會載入失敗。wheel 內容：{names}"
+        )

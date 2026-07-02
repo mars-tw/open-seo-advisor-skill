@@ -26,6 +26,15 @@ def test_ensure_implemented_content_writer_ok():
     ensure_implemented(Mode.CONTENT_WRITER)  # 不應拋出例外
 
 
+def test_ensure_implemented_ecommerce_ok():
+    ensure_implemented(Mode.ECOMMERCE)  # 不應拋出例外
+
+
+def test_resolve_ecommerce_aliases():
+    assert resolve_mode("amazon") == Mode.ECOMMERCE
+    assert resolve_mode("ecommerce") == Mode.ECOMMERCE
+
+
 def test_ensure_implemented_engineer_raises():
     with pytest.raises(ModeNotImplementedError):
         ensure_implemented(Mode.ENGINEER)

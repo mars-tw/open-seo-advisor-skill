@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-seo-advisor"
-version = "0.1.5"
+version = "0.1.6"
 description = "開源、可攜、不綁定單一廠商的全域 SEO 顧問技能"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
@@ -59,6 +59,8 @@ include = ["seo_advisor*"]
 # importlib.resources 讀取，正式安裝後必須存在。
 "seo_advisor.matrix.assets" = ["*.yaml"]
 "seo_advisor.matrix.prompts" = ["*.md"]
+# 行銷方法論知識庫（中性化蒸餾），knowledge 載入器用 importlib.resources 讀取。
+"seo_advisor.knowledge" = ["*.yaml"]
 
 [tool.ruff]
 line-length = 100
