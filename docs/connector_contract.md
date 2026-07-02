@@ -25,8 +25,9 @@ class WebsiteConnector(Protocol):
     def list_urls(self, seed: str, limit: int) -> list["UrlRecord"]:
         """從 sitemap 或爬取取得 URL 清單。"""
 
-    def fetch_url(self, url: str, render: bool = False) -> "PageSnapshot":
-        """取得單一頁面的內容快照，render=True 時使用 headless browser。"""
+    def fetch_url(self, url: str, *, render: bool = False, fetched_at: str = "") -> "PageSnapshot":
+        """取得單一頁面的內容快照，render=True 時使用 headless browser。
+        fetched_at 由呼叫端傳入時間戳記，connector 本身不產生時間。"""
 
     def list_files(self, path: str) -> list["FileRecord"]:
         """列出指定路徑下的檔案（需要 'read_files' capability）。"""
@@ -71,10 +72,34 @@ v0.1.0 只要求實作 `id()`、`capabilities()`、`probe()`、`list_urls()`、
 | `CloudflareConnector` | v0.3.0 規劃 | `read_urls`, 選配 `deploy`（redirect/cache rules） | 需 API Token，最小權限範圍 |
 | `CPanelConnector` | v0.3.0 規劃 | `read_files`, 選配 `write_files` | 有限度的部署能力 |
 
+## SafetyPolicy：把資安原則變成程式碼約束
+
+`seo_advisor.models.SafetyPolicy` 是所有 Connector 建構子都應該接受的參數
+（`policy: SafetyPolicy | None = None`），目的是讓下面這份資安要求清單**不只
+是文件**，而是真的被程式碼檢查：
+
+```python
+class SafetyPolicy(BaseModel):
+    dry_run: bool = True
+    allowed_capabilities: set[str] = {"read_urls"}
+    allow_private_network: bool = False
+    respect_robots_txt: bool = True
+    rate_limit_per_second: float = 3.0
+
+    def require_capability(self, capability: str, *, connector_id: str) -> None: ...
+    def require_write(self, *, connector_id: str) -> None: ...
+```
+
+任何實作 `write_file` / `run_command` / `deploy_patch` 的 Connector 子類別，
+方法內第一步都應該呼叫 `self.policy.require_capability(...)` 與（若非
+dry-run）`self.policy.require_write(...)`，讓「使用者是否真的授權這個操作」
+的判斷收斂到單一位置，而不是每個 Connector 各自實作、容易遺漏。
+
 ## 資安要求（所有 Connector 必須遵守）
 
 1. **預設 read-only、預設 dry-run**：`write_file` / `run_command` /
-   `deploy_patch` 的 `dry_run` 參數預設為 `True`。
+   `deploy_patch` 的 `dry_run` 參數預設為 `True`，並由 `SafetyPolicy.dry_run`
+   統一約束。
 2. **憑證只存在於記憶體中**：憑證只能從環境變數、OS keychain、secret
    manager 或當下輸入取得，禁止寫死在程式碼、設定檔範例、或落地到報告、
    log、例外訊息中。
@@ -85,11 +110,24 @@ v0.1.0 只要求實作 `id()`、`capabilities()`、`probe()`、`list_urls()`、
    `dry_run=False` 執行前，應盡可能先呼叫 `backup()`。
 5. **對 production 的操作要求二次確認**：由呼叫端（CLI / router）負責在
    偵測到目標為正式環境時，強制要求使用者輸入確認字串。
-6. **速率限制與 robots.txt 遵循**：`HTTPConnector` 預設遵守
-   `robots.txt`，且有 `rate_limit_per_second` 限制，避免造成對方主機負擔。
+6. **速率限制與 robots.txt 遵循**：`HTTPConnector` 遵守 `robots.txt`
+   （`security/robots_policy.py`），且有 `rate_limit_per_second` 限制
+   （`security/rate_limiter.py`），避免造成對方主機負擔。被 robots.txt
+   擋下的 URL，`fetch_url()` 會回傳 `fetch_error_type="blocked_by_robots_txt"`
+   而非嘗試繞過。
 7. **不得繞過驗證或做攻擊性測試**：對第三方網站的存取僅限公開頁面讀取；
    `SecurityMode` 的檢查一律是被動式（觀察公開可得的回應），不嘗試利用
    任何漏洞。
+8. **SSRF 防護**：`HTTPConnector` 建構時與每次 `fetch_url()` 都會透過
+   `security/network_policy.py` 檢查目標主機，預設不對 localhost、私有
+   網段（RFC1918）、雲端 metadata IP（如 `169.254.169.254`）發送請求，
+   除非 `SafetyPolicy.allow_private_network` 明確開啟。
+9. **爬取範圍不含外部網域**：sitemap 內若包含指向其他網域的 URL，
+   `HTTPConnector.list_urls()` 會略過並記錄下來，而不是照單全收爬取，
+   避免掃描範圍意外擴散到使用者未授權的第三方網站。頁面內部連結若因
+   redirect（例如 `example.com` → `www.example.com`）換到新 host，
+   該 host 會自動加入允許範圍，避免正常網站的內部連結被誤判為外部連結
+   而漏爬。
 
 ## ConnectorProfile / 資料結構（v0.1.0 範圍）
 

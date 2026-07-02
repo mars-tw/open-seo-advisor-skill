@@ -43,6 +43,7 @@ def analyze_technical_seo(result: CrawlResult, *, seed_url: str) -> list[Finding
     findings.extend(_check_sitemap(result, next_id))
     findings.extend(_check_https(result, seed_url, next_id))
     findings.extend(_check_page_metadata(result, next_id))
+    findings.extend(_check_noindex(result, next_id))
     findings.extend(_check_orphan_pages(result, seed_url, next_id))
 
     return findings
@@ -276,7 +277,7 @@ def _check_page_metadata(result: CrawlResult, next_id) -> list[Finding]:
     missing_meta_description: list[str] = []
     missing_h1: list[str] = []
     multiple_h1: list[str] = []
-    title_texts: Counter[str] = Counter()
+    title_to_urls: dict[str, list[str]] = {}
     canonical_conflicts: list[str] = []
 
     for url, snapshot in result.pages.items():
@@ -290,7 +291,7 @@ def _check_page_metadata(result: CrawlResult, next_id) -> list[Finding]:
         if not title_text:
             missing_title.append(url)
         else:
-            title_texts[title_text] += 1
+            title_to_urls.setdefault(title_text, []).append(url)
 
         meta_desc = soup.find("meta", attrs={"name": "description"})
         if not meta_desc or not meta_desc.get("content", "").strip():
@@ -319,21 +320,28 @@ def _check_page_metadata(result: CrawlResult, next_id) -> list[Finding]:
             )
         )
 
-    duplicate_titles = {text: count for text, count in title_texts.items() if count > 1}
-    if duplicate_titles:
-        affected = [url for url in result.pages if True][:20]
+    duplicate_title_groups = {
+        text: urls for text, urls in title_to_urls.items() if len(urls) > 1
+    }
+    if duplicate_title_groups:
+        affected = [url for urls in duplicate_title_groups.values() for url in urls]
+        # evidence 只保留前幾組範例，避免重複標題組數量很多時報告過於冗長
+        example_groups = dict(list(duplicate_title_groups.items())[:5])
         findings.append(
             Finding(
                 id=next_id("title_duplicate"),
-                title=f"發現 {len(duplicate_titles)} 組重複的 <title>",
+                title=f"發現 {len(duplicate_title_groups)} 組重複的 <title>",
                 mode=Mode.CONSULTANT,
                 category="content_quality",
                 severity=Severity.P2,
                 impact=3,
                 effort=2,
                 confidence=0.8,
-                affected_urls=affected,
-                evidence={"duplicate_title_groups": len(duplicate_titles)},
+                affected_urls=affected[:50],
+                evidence={
+                    "duplicate_title_groups": len(duplicate_title_groups),
+                    "examples": example_groups,
+                },
                 recommendation="為每個頁面撰寫獨特的 title，避免不同頁面使用相同標題造成"
                 "搜尋結果混淆與內部競爭。",
                 validation=["重新爬取確認每個頁面的 title 皆為獨特"],
@@ -427,6 +435,58 @@ def _metadata_finding(
         owner=Mode.ENGINEER,
         sources=["google-search-essentials"],
     )
+
+
+def _check_noindex(result: CrawlResult, next_id) -> list[Finding]:
+    """檢查頁面是否被 <meta name="robots" content="noindex"> 或 HTTP
+    X-Robots-Tag 標頭阻擋索引。這類設定容易在模板誤植或 CMS 設定錯誤時
+    意外套用到不該阻擋的重要頁面，且不像 robots.txt 那麼顯眼容易發現。
+    """
+    findings: list[Finding] = []
+    noindex_urls: list[str] = []
+
+    for url, snapshot in result.pages.items():
+        if snapshot.status_code != 200:
+            continue
+
+        x_robots_tag = snapshot.headers.get("x-robots-tag", "")
+        if "noindex" in x_robots_tag.lower():
+            noindex_urls.append(url)
+            continue
+
+        if not snapshot.html:
+            continue
+
+        soup = BeautifulSoup(snapshot.html, "lxml")
+        robots_meta = soup.find("meta", attrs={"name": "robots"})
+        if robots_meta:
+            content = robots_meta.get("content", "").lower()
+            if "noindex" in content:
+                noindex_urls.append(url)
+
+    if noindex_urls:
+        findings.append(
+            Finding(
+                id=next_id("noindex_present"),
+                title=f"發現 {len(noindex_urls)} 個頁面被設定為 noindex（不會被搜尋引擎索引）",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P1,
+                impact=4,
+                effort=2,
+                confidence=0.85,
+                affected_urls=noindex_urls[:50],
+                evidence={"noindex_count": len(noindex_urls)},
+                recommendation="確認這些頁面是否應該被搜尋引擎索引。如果是重要頁面被誤植 "
+                "noindex（常見於模板繼承錯誤或 CMS 設定疏漏），請移除 "
+                "noindex 設定；如果本來就不該被索引，則此為預期行為。",
+                validation=["重新爬取確認 noindex 設定符合預期"],
+                owner=Mode.ENGINEER,
+                sources=["google-search-essentials"],
+            )
+        )
+
+    return findings
 
 
 def _check_orphan_pages(result: CrawlResult, seed_url: str, next_id) -> list[Finding]:

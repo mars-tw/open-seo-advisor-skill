@@ -49,3 +49,33 @@ def test_single_page_site_not_flagged_as_orphan():
     findings = analyze_technical_seo(result, seed_url="/index.html")
     finding_ids = {f.id for f in findings}
     assert not any("ORPHAN" in fid for fid in finding_ids)
+
+
+def test_duplicate_title_evidence_lists_only_actually_duplicated_urls():
+    connector = LocalArchiveConnector(str(FIXTURES / "duplicate_title_site"))
+    result = crawl_site(connector, seed_url="/page-c-unique.html", max_urls=50, max_depth=3)
+    findings = analyze_technical_seo(result, seed_url="/page-c-unique.html")
+
+    duplicate_finding = next(f for f in findings if "TITLE_DUPLICATE" in f.id)
+
+    # 只有 page-a 與 page-b 共用同一個標題，page-c 標題是獨特的，
+    # 不應該出現在 affected_urls 或 evidence 的重複組裡。
+    assert set(duplicate_finding.affected_urls) == {"/page-a.html", "/page-b.html"}
+    assert "/page-c-unique.html" not in duplicate_finding.affected_urls
+    assert duplicate_finding.evidence["duplicate_title_groups"] == 1
+
+
+def test_noindex_meta_tag_is_detected():
+    connector = LocalArchiveConnector(str(FIXTURES / "noindex_site"))
+    result = crawl_site(connector, seed_url="/index.html", max_urls=50, max_depth=3)
+    findings = analyze_technical_seo(result, seed_url="/index.html")
+
+    noindex_finding = next((f for f in findings if "NOINDEX" in f.id), None)
+    assert noindex_finding is not None
+    assert "/index.html" in noindex_finding.affected_urls
+
+
+def test_good_site_has_no_noindex_finding():
+    result = _crawl("good_site")
+    findings = analyze_technical_seo(result, seed_url="/index.html")
+    assert not any("NOINDEX" in f.id for f in findings)

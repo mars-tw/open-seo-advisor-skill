@@ -34,12 +34,37 @@ _SEVERITY_EXPLANATION = {
 }
 
 _SCORE_BANDS = [
-    (90, 101, "健檢結果很不錯", "網站基礎體質健康，可以把心力放在內容與成長型優化上。"),
+    (90, 101, "健檢結果很不錯", "在本次已檢查項目範圍內，網站基礎體質健康，可以把心力放在內容與成長型優化上。"),
     (75, 90, "大致健康，但有小問題待處理", "還有幾個問題會拖慢網站被搜尋引擎看見的速度，建議儘快處理。"),
     (60, 75, "需要花點心思整理", "搜尋引擎可能沒辦法完整理解你的網站，建議優先處理排在前面的項目。"),
     (40, 60, "有明顯風險，建議優先處理", "目前的問題可能已經影響網站被搜尋到的機會，建議先處理技術問題再談成長。"),
     (0, 40, "健檢紅字偏多，建議優先處理技術問題", "目前的狀況類似房子基礎工程沒打好，建議先穩住地基，再談裝潢與行銷。"),
 ]
+
+# 依 Finding id 中的分類關鍵字，對應一段白話說明「這是什麼問題」「誰該處理」。
+# 用 id 前綴比對而非 category 欄位，因為同一個 category（如 indexability）
+# 底下可能包含好幾種性質不同的具體問題，各自需要不同的白話解釋。
+_FINDING_EXPLAINERS: list[tuple[str, str]] = [
+    ("SITEMAP", "這是網站的「導覽地圖」，搜尋引擎靠它快速找到所有重要頁面。建議請工程師協助建立或修正。"),
+    ("ROBOTS", "這是貼在網站門口的「哪裡歡迎參觀」告示牌，設定錯誤可能誤擋不該擋的頁面。建議請工程師協助確認。"),
+    ("CANONICAL", "這是告訴搜尋引擎「這一頁才是正式版本」的標記，設定衝突會讓搜尋引擎無所適從。建議請工程師修正。"),
+    ("TITLE", "這是頁面的「店名招牌」，會直接顯示在搜尋結果的標題上。建議請文案人員或工程師補上。"),
+    ("META_DESCRIPTION", "這是招牌下方的簡介文字，會影響使用者是否願意點進來看。建議請文案人員補上。"),
+    ("H1", "這是頁面的「主要招牌」，告訴訪客這一頁在講什麼。建議請工程師或文案人員補上。"),
+    ("NOINDEX", "這個設定會讓搜尋引擎完全不收錄該頁面，如果是重要頁面被誤設，可能是模板或系統設定疏漏。建議請工程師確認。"),
+    ("ORPHAN", "這是「沒有任何指標牌指向」的頁面，訪客與搜尋引擎都很難自然找到它。建議請工程師或內容團隊補上內部連結。"),
+    ("HTTPS", "這是網站的安全連線保護，沒有的話瀏覽器會顯示不安全警告，也會影響使用者信任感。建議請工程師盡快處理。"),
+    ("REDIRECT", "這是頁面之間「跳轉指路」的設定，層數太多會拖慢速度、浪費搜尋引擎的爬取資源。建議請工程師簡化。"),
+    ("HTTP_ERRORS", "這些頁面目前打不開或回傳錯誤，訪客與搜尋引擎都會碰壁。建議請工程師盡快檢查修復。"),
+    ("FETCH_FAILED", "這些頁面暫時連不上，可能是網路問題或伺服器忙碌，建議稍後再確認一次。"),
+]
+
+
+def _explain_finding(finding: Finding) -> str | None:
+    for keyword, explanation in _FINDING_EXPLAINERS:
+        if keyword in finding.id:
+            return explanation
+    return None
 
 
 def _score_band(score: float) -> tuple[str, str]:
@@ -83,6 +108,14 @@ def render_beginner_markdown(report: Report) -> str:
     )
     lines.append("")
 
+    if report.coverage_notes:
+        lines.append(
+            "> **提醒**：這份健檢目前還沒涵蓋所有 SEO 面向（例如網頁載入速度、"
+            "手機瀏覽體驗等），詳見本報告最下方的「這次還沒檢查到的項目」。"
+            "分數與結論僅代表「已檢查範圍內」的狀況。"
+        )
+        lines.append("")
+
     lines.append("## 網站健康分數：這個數字代表什麼？")
     lines.append("")
     lines.append(f"### {report.site_health_score:.0f} / 100")
@@ -98,12 +131,15 @@ def render_beginner_markdown(report: Report) -> str:
     lines.append("")
     top_actions = _pick_top_actions(report.findings)
     if not top_actions:
-        lines.append("這次健檢沒有發現需要處理的問題，網站目前狀況良好。")
+        lines.append("在本次已檢查項目範圍內，沒有發現需要處理的問題。")
     else:
         for i, finding in enumerate(top_actions, start=1):
             _, severity_detail = _SEVERITY_EXPLANATION[finding.severity]
+            what_is_this = _explain_finding(finding)
             lines.append(f"{i}. **{finding.title}**")
-            lines.append(f"   - 白話說明：{severity_detail}")
+            if what_is_this:
+                lines.append(f"   - 這是什麼：{what_is_this}")
+            lines.append(f"   - 嚴重程度：{severity_detail}")
             lines.append(f"   - 具體怎麼做：{finding.recommendation}")
             lines.append("")
 
@@ -129,9 +165,12 @@ def render_beginner_markdown(report: Report) -> str:
     lines.append("")
 
     if report.coverage_notes:
-        lines.append("## 小提醒")
+        lines.append("## 這次還沒檢查到的項目")
         lines.append("")
-        lines.append("這次健檢有些項目還沒檢查到（工具持續開發中），包括：")
+        lines.append(
+            "這次健檢的分數與結論，只反映「已檢查項目」的狀況，"
+            "以下項目工具尚未涵蓋（持續開發中）："
+        )
         for note in report.coverage_notes:
             lines.append(f"- {note}")
         lines.append("")

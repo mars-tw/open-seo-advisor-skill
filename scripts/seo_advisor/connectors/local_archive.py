@@ -6,11 +6,12 @@
 
 from __future__ import annotations
 
-import zipfile
 from pathlib import Path
 
 from seo_advisor.connectors.base import WebsiteConnector
-from seo_advisor.models import ConnectorProfile, FileRecord, PageSnapshot, UrlRecord
+from seo_advisor.encoding_utils import decode_html_bytes, detect_html_encoding
+from seo_advisor.models import ConnectorProfile, FileRecord, PageSnapshot, SafetyPolicy, UrlRecord
+from seo_advisor.security.safe_archive import resolve_inside_root, safe_extract_zip
 
 _STACK_MARKERS = {
     "wordpress": ["wp-config.php", "wp-content"],
@@ -24,16 +25,22 @@ _STACK_MARKERS = {
 class LocalArchiveConnector(WebsiteConnector):
     """讀取本地目錄或 zip 檔案，唯讀，不執行任何程式。"""
 
-    def __init__(self, source_path: str, *, extract_to: str | None = None) -> None:
+    def __init__(
+        self,
+        source_path: str,
+        *,
+        extract_to: str | None = None,
+        policy: SafetyPolicy | None = None,
+    ) -> None:
+        self.policy = policy or SafetyPolicy(allowed_capabilities={"read_urls", "read_files"})
+
         path = Path(source_path)
         if not path.exists():
             raise FileNotFoundError(f"找不到路徑：{source_path}")
 
         if path.is_file() and path.suffix.lower() == ".zip":
             extract_dir = Path(extract_to) if extract_to else path.parent / f"{path.stem}_extracted"
-            extract_dir.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(path) as zf:
-                zf.extractall(extract_dir)
+            safe_extract_zip(path, extract_dir)
             self.root = extract_dir
         elif path.is_dir():
             self.root = path
@@ -81,18 +88,18 @@ class LocalArchiveConnector(WebsiteConnector):
                 break
         return records
 
-    def fetch_url(self, url: str, render: bool = False, fetched_at: str = "") -> PageSnapshot:
+    def fetch_url(self, url: str, *, render: bool = False, fetched_at: str = "") -> PageSnapshot:
         if render:
             raise NotImplementedError("本地原始碼包掃描不支援 render=True。")
 
-        rel_path = url.lstrip("/")
-        file_path = self.root / rel_path
+        file_path = resolve_inside_root(self.root, url)
         if not file_path.exists():
             return PageSnapshot(
                 url=url, status_code=404, final_url=url, headers={}, html="", fetched_at=fetched_at
             )
 
-        html = file_path.read_text(encoding="utf-8", errors="replace")
+        raw_bytes = file_path.read_bytes()
+        html = decode_html_bytes(raw_bytes)
         return PageSnapshot(
             url=url,
             status_code=200,
@@ -100,10 +107,11 @@ class LocalArchiveConnector(WebsiteConnector):
             headers={},
             html=html,
             fetched_at=fetched_at,
+            encoding=detect_html_encoding(raw_bytes),
         )
 
     def list_files(self, path: str) -> list[FileRecord]:
-        target = self.root / path.lstrip("/") if path else self.root
+        target = resolve_inside_root(self.root, path) if path else self.root
         if not target.exists():
             return []
         records = []
@@ -118,7 +126,7 @@ class LocalArchiveConnector(WebsiteConnector):
         return records
 
     def read_file(self, path: str) -> bytes:
-        file_path = self.root / path.lstrip("/")
+        file_path = resolve_inside_root(self.root, path)
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError(f"找不到檔案：{path}")
         return file_path.read_bytes()

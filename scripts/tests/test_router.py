@@ -22,6 +22,10 @@ def test_ensure_implemented_consultant_ok():
     ensure_implemented(Mode.CONSULTANT)  # 不應拋出例外
 
 
+def test_ensure_implemented_content_writer_ok():
+    ensure_implemented(Mode.CONTENT_WRITER)  # 不應拋出例外
+
+
 def test_ensure_implemented_engineer_raises():
     with pytest.raises(ModeNotImplementedError):
         ensure_implemented(Mode.ENGINEER)

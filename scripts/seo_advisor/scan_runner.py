@@ -29,6 +29,12 @@ _COVERAGE_NOTES = [
     "Search Console/GA4 資料整合尚未實作（見 docs/roadmap.md v0.2.0）。",
 ]
 
+_UNREACHABLE_ERROR_TYPES = {"timeout", "connect_error"}
+
+
+class SiteUnreachableError(ConnectionError):
+    """網站首頁完全連不上（DNS/連線/逾時失敗）時拋出，避免產出空洞的報告。"""
+
 
 @dataclass
 class ScanOutcome:
@@ -86,6 +92,9 @@ def run_consultant_scan(
         profile = connector.probe()
         coverage_notes.extend(profile.notes)
 
+        if url:
+            _preflight_check_reachable(connector, seed, fetched_at=generated_at)
+
         on_progress("第 2/4 步：逐頁爬取內容")
         crawl_result = crawl_site(
             connector,
@@ -134,6 +143,20 @@ def run_consultant_scan(
         technical_path=technical_path,
         json_path=json_path,
     )
+
+
+def _preflight_check_reachable(connector: WebsiteConnector, seed_url: str, *, fetched_at: str) -> None:
+    """在正式爬取前先確認首頁連得上，避免對完全連不上的網站產出一份看起來
+    「掃描完成」但其實什麼內容都沒抓到的空洞報告，誤導新手以為網站沒問題。
+
+    只擋「連線層級」的失敗（DNS/連線/逾時），HTTP 4xx/5xx 狀態碼視為
+    「網站有回應但頁面有問題」，仍應正常產出報告讓使用者看到這個發現。
+    """
+    snapshot = connector.fetch_url(seed_url, fetched_at=fetched_at)
+    if snapshot.status_code == 0 and snapshot.fetch_error_type in _UNREACHABLE_ERROR_TYPES:
+        raise SiteUnreachableError(
+            f"無法連線到 {seed_url}（{snapshot.fetch_error_message or snapshot.fetch_error_type}）"
+        )
 
 
 def _derive_report_id(target: ReportTarget) -> str:

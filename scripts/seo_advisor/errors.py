@@ -12,6 +12,9 @@ from dataclasses import dataclass
 
 import httpx
 
+from seo_advisor.scan_runner import SiteUnreachableError
+from seo_advisor.security.network_policy import PrivateNetworkBlockedError
+from seo_advisor.security.safe_archive import UnsafeArchiveError
 from seo_advisor.url_utils import InvalidUrlError
 
 
@@ -46,6 +49,38 @@ def translate_exception(exc: Exception, *, url: str | None = None) -> FriendlyEr
                 "打開瀏覽器，把網址列的完整網址複製貼上",
                 "確認網址沒有多餘的空格或錯字",
                 "重新執行一次",
+            ],
+        )
+
+    if isinstance(exc, PrivateNetworkBlockedError):
+        return FriendlyError(
+            title="這個網址指向內部網路，預設不允許掃描",
+            reasons=[str(exc)],
+            next_steps=[
+                "如果你要掃描的是公開網站，請確認網址是否正確",
+                "如果你確實要掃描自己的內網或本機網站（例如 localhost），"
+                "請參考文件開啟 allow_private_network 選項",
+            ],
+        )
+
+    if isinstance(exc, UnsafeArchiveError):
+        return FriendlyError(
+            title="這個壓縮檔的內容不安全，已拒絕處理",
+            reasons=[str(exc)],
+            next_steps=[
+                "確認這個壓縮檔的來源是否可信",
+                "如果是你自己產生的壓縮檔，嘗試重新打包後再試一次",
+            ],
+        )
+
+    if isinstance(exc, SiteUnreachableError):
+        return FriendlyError(
+            title=str(exc),
+            reasons=["網站可能暫時離線、網址打錯、或網站封鎖了自動化工具"],
+            next_steps=[
+                "先在瀏覽器打開這個網址，確認網站本身是否正常",
+                "確認網址拼字正確",
+                "稍後再試一次",
             ],
         )
 

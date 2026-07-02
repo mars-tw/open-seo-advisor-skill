@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-seo-advisor"
-version = "0.1.1"
+version = "0.1.2"
 description = "開源、可攜、不綁定單一廠商的全域 SEO 顧問技能"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
@@ -24,9 +24,16 @@ dev = [
     "ruff>=0.4",
     "black>=24.0",
     "respx>=0.21",
+    "build>=1.2",
 ]
 render = [
     "playwright>=1.44",
+]
+llm-anthropic = [
+    "anthropic>=0.40",
+]
+llm-openai = [
+    "openai>=1.50",
 ]
 
 [project.scripts]
@@ -34,6 +41,14 @@ seo-advisor = "seo_advisor.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["seo_advisor*"]
+
+[tool.setuptools.package-data]
+# demo 模式（seo-advisor demo）依賴這份內建示範網站資產，正式打包成 wheel
+# 時必須明確包含，否則使用者安裝後 `seo-advisor demo` 會找不到檔案。
+"seo_advisor.demo_assets" = ["**/*.html"]
+# scoring.py 讀取這份預設設定計算 category-weighted 健康分數，同樣需要
+# 明確包含才能在正式安裝後正常運作。
+"seo_advisor.config_assets" = ["*.yaml"]
 
 [tool.ruff]
 line-length = 100

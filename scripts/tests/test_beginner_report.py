@@ -19,7 +19,7 @@ def _finding(id_="SEO-A-001", severity=Severity.P1, title="測試問題"):
     )
 
 
-def _build(findings):
+def _build(findings, coverage_notes=None):
     target = ReportTarget(source_type="http", identifier="https://example.com")
     return build_report(
         report_id="r1",
@@ -27,6 +27,7 @@ def _build(findings):
         target=target,
         mode=Mode.CONSULTANT,
         findings=findings,
+        coverage_notes=coverage_notes or [],
     )
 
 
@@ -69,3 +70,29 @@ def test_beginner_report_severity_legend_covers_all_levels():
     md = render_beginner_markdown(report)
     for label in ["P0", "P1", "P2", "P3"]:
         assert label in md
+
+
+def test_beginner_report_mentions_coverage_limitation_near_summary():
+    report = _build([_finding()], coverage_notes=["Core Web Vitals 尚未實作"])
+    md = render_beginner_markdown(report)
+
+    # 提醒文字應該出現在「一句話結論」之後，而不是只藏在報告最下方
+    conclusion_index = md.index("一句話結論")
+    reminder_index = md.index("**提醒**")
+    coverage_section_index = md.index("這次還沒檢查到的項目")
+
+    assert conclusion_index < reminder_index < coverage_section_index
+    assert "Core Web Vitals 尚未實作" in md
+
+
+def test_beginner_report_no_coverage_notes_skips_reminder():
+    report = _build([_finding()], coverage_notes=[])
+    md = render_beginner_markdown(report)
+    assert "這次還沒檢查到的項目" not in md
+
+
+def test_beginner_report_explains_specific_finding_type():
+    finding = _finding(id_="SEO-SITEMAP_MISSING-001", title="網站沒有 sitemap.xml")
+    report = _build([finding])
+    md = render_beginner_markdown(report)
+    assert "導覽地圖" in md

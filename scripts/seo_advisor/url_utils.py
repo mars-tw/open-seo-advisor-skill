@@ -44,6 +44,13 @@ def normalize_url(raw: str) -> str:
             f"例如：example.com 或 https://example.com"
         )
 
+    if parsed.username or parsed.password:
+        raise InvalidUrlError(
+            "網址中不應包含帳號密碼（例如 https://user:pass@example.com），"
+            "這類憑證可能會被意外記錄到報告或日誌中造成外洩。"
+            "請直接輸入網址本身，不要在網址中夾帶帳密。"
+        )
+
     hostname = parsed.hostname or ""
     if not _DOMAIN_PATTERN.match(hostname) and hostname != "localhost":
         raise InvalidUrlError(

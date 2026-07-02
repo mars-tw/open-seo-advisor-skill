@@ -60,13 +60,23 @@
         "type": "string",
         "enum": ["read_urls", "read_files", "write_files", "run_commands", "read_logs", "deploy"]
       },
-      "description": "使用者明確授權的能力範圍；connector 不得執行超出此範圍的操作。",
+      "description": "使用者明確授權的能力範圍；connector 不得執行超出此範圍的操作。對應程式碼中 SafetyPolicy.allowed_capabilities。",
       "default": ["read_urls"]
     },
     "dry_run": {
       "type": "boolean",
       "default": true,
-      "description": "全域 dry-run 開關，覆寫 config/defaults.yaml 的 safety.dry_run。"
+      "description": "全域 dry-run 開關，覆寫 config/defaults.yaml 的 safety.dry_run。對應程式碼中 SafetyPolicy.dry_run。"
+    },
+    "allow_private_network": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否允許對 localhost / 私有網段 / 雲端 metadata IP 發送請求。預設關閉以避免 SSRF；本機 CLI 掃描自己的內網站台時可明確開啟。"
+    },
+    "rate_limit_per_second": {
+      "type": "number",
+      "default": 3,
+      "description": "HTTP connector 對目標主機的請求速率上限，避免造成對方主機負擔。"
     }
   },
   "additionalProperties": false

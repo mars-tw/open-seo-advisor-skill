@@ -39,3 +39,13 @@ def test_localhost_is_accepted():
 
 def test_subdomain_and_path_supported():
     assert normalize_url("shop.example.co.uk") == "https://shop.example.co.uk"
+
+
+def test_url_with_embedded_credentials_is_rejected():
+    with pytest.raises(InvalidUrlError):
+        normalize_url("https://user:pass@example.com")
+
+
+def test_url_with_username_only_is_rejected():
+    with pytest.raises(InvalidUrlError):
+        normalize_url("https://admin@example.com")

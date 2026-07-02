@@ -67,6 +67,40 @@ class Report(BaseModel):
     scan_stats: dict = Field(default_factory=dict)
 
 
+class SafetyPolicy(BaseModel):
+    """所有 Connector 共用的資安約束，由呼叫端（CLI/router）建立並傳入 connector。
+
+    這是把 docs/connector_contract.md 定義的資安原則（預設 read-only、
+    預設 dry-run、最小權限）從「文件規範」變成「建構子強制要求的參數」，
+    避免未來新增 SSH/WordPress/Cloudflare connector 時，資安考量只停留在
+    文件而沒有真的被程式碼約束。
+    """
+
+    dry_run: bool = True
+    allowed_capabilities: set[str] = Field(default_factory=lambda: {"read_urls"})
+    allow_private_network: bool = False
+    respect_robots_txt: bool = True
+    rate_limit_per_second: float = 3.0
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    def require_capability(self, capability: str, *, connector_id: str) -> None:
+        if capability not in self.allowed_capabilities:
+            raise PermissionError(
+                f"{connector_id} 嘗試執行需要 '{capability}' 能力的操作，"
+                f"但目前的 SafetyPolicy 只允許：{sorted(self.allowed_capabilities)}。"
+                "如果這是預期中的操作，請在建立 connector 時於 "
+                "allowed_capabilities 明確加入這個能力。"
+            )
+
+    def require_write(self, *, connector_id: str) -> None:
+        if self.dry_run:
+            raise PermissionError(
+                f"{connector_id} 目前處於 dry_run 模式，拒絕實際寫入。"
+                "如果要真的執行寫入，需由使用者明確關閉 dry_run。"
+            )
+
+
 class ConnectorProfile(BaseModel):
     source_type: str
     detected_stack: str | None = None
@@ -89,6 +123,10 @@ class PageSnapshot(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     html: str = ""
     fetched_at: str
+    fetch_error_type: str | None = None
+    fetch_error_message: str | None = None
+    elapsed_ms: int | None = None
+    encoding: str | None = None
 
 
 class FileRecord(BaseModel):

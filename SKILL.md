@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.1
+version: 0.1.2
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -53,15 +53,22 @@ triggers:
 也可以用自然語言描述需求，由 router 判斷最適合的模式；不確定時一律用
 `AskUserQuestion` 式的澄清詢問，不要自行臆測。
 
-## 目前實作狀態（v0.1.1）
+## 目前實作狀態（v0.1.2）
 
-- ✅ 顧問模式（Consultant Mode）核心骨架：HTTP/LocalArchive connector、
-  技術面 crawler、Finding/Report schema、Markdown+JSON 報告產出。
+- ✅ 顧問模式（Consultant Mode）：HTTP/LocalArchive connector、
+  技術面 crawler、Finding/Report schema、Markdown+JSON 報告產出、
+  noindex 檢查、非 UTF-8 編碼偵測、category-weighted 健康分數。
   詳見 `docs/architecture.md` 與 `docs/modes.md`。
+- ✅ 文章寫手模式（Content Writer Mode）：`LLMProvider` 抽象層
+  （Anthropic / OpenAI / Local / Mock）、brief → outline → draft → QA
+  四階段流程、`seo-advisor write` 指令。詳見 `docs/content_writer_guide.md`。
 - ✅ 新手體驗：互動精靈（`seo-advisor` / `seo-advisor start`）、
   URL 自動正規化、人話錯誤訊息、白話文報告（`report-beginner.md`）、
   Demo 模式（`seo-advisor demo`）、一鍵安裝腳本、`QUICKSTART.md`。
-- 🚧 工程師／資安／文章寫手／外掛開發模式：介面與 prompt 模板已定義於
+- ✅ 資安強化：Connector 層 `SafetyPolicy`（dry-run/capabilities/SSRF
+  防護程式化約束）、zip slip 防護、robots.txt 遵循與 rate limit、
+  sitemap 爬取範圍限制。詳見 `docs/connector_contract.md`。
+- 🚧 工程師／資安／外掛開發模式：介面與 prompt 模板已定義於
   `prompts/`，執行邏輯將於後續版本（v0.2.0 起）逐步實作，
   詳見 `docs/roadmap.md`。
 

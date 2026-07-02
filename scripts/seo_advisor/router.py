@@ -22,7 +22,7 @@ _MODE_ALIASES: dict[str, Mode] = {
     "plugin": Mode.PLUGIN_DEV,
 }
 
-_IMPLEMENTED_MODES = {Mode.CONSULTANT}
+_IMPLEMENTED_MODES = {Mode.CONSULTANT, Mode.CONTENT_WRITER}
 
 
 class UnknownModeError(ValueError):
@@ -45,7 +45,7 @@ def resolve_mode(raw: str) -> Mode:
 def ensure_implemented(mode: Mode) -> None:
     if mode not in _IMPLEMENTED_MODES:
         raise ModeNotImplementedError(
-            f"模式 {mode.value} 尚未實作執行邏輯（目前僅完整實作 consultant），"
+            f"模式 {mode.value} 尚未實作執行邏輯（目前完整實作 consultant 與 content_writer），"
             f"目前僅提供 prompt 模板（見 prompts/{mode.value}.md）與規格"
             f"（見 docs/modes.md），詳見 docs/roadmap.md 的版本規劃。"
         )

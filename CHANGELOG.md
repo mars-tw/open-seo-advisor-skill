@@ -2,6 +2,61 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.2] - Unreleased
+
+本版本源自與 CODEX（審核端）協作的全面架構/資安/新手體驗稽核，修正
+稽核發現的問題，並完整實作 Content Writer Mode。
+
+### 安全性修正
+
+- **[P0]** 修正 `LocalArchiveConnector` 解壓 zip 檔案時的 zip slip /
+  path traversal 漏洞（新增 `security/safe_archive.py`：
+  `safe_extract_zip()` 逐項驗證解壓路徑，`resolve_inside_root()` 約束
+  所有檔案存取在掃描根目錄內），並加上 zip bomb 防護（檔案數量／單檔／
+  總解壓大小上限）。
+- 新增 `SafetyPolicy`（`models.py`）：把 `docs/connector_contract.md`
+  定義的資安原則（dry-run、capabilities、SSRF 防護）從文件變成建構子
+  強制要求的參數，所有 Connector 都需接受並遵守。
+- `HTTPConnector` 補上：robots.txt 遵循（`security/robots_policy.py`）、
+  請求速率限制（`security/rate_limiter.py`）、SSRF 基本防護
+  （`security/network_policy.py`，拒絕 localhost/私有網段/雲端 metadata
+  IP）、sitemap 爬取範圍限制（不會照單全收爬取外部網域的 URL）、
+  redirect 導致的 host 變更會正確更新允許爬取範圍。
+- URL 正規化拒絕含帳號密碼的網址（例如 `https://user:pass@example.com`），
+  避免憑證意外外洩到報告或日誌。
+
+### 修正
+
+- 修正 `WebsiteConnector.fetch_url()` 抽象簽名與實際呼叫不一致的問題。
+- 修正 duplicate title 檢查的 evidence 錯誤：原本 `affected_urls` 沒有
+  真的過濾出重複標題的頁面，而是回傳前 20 個任意頁面。
+- 修正 demo 模式與 scoring 設定的打包問題：原本讀取
+  `scripts/tests/fixtures/`、`config/scoring.yaml`，這些路徑在正式
+  wheel 安裝後不存在；改用套件內建資產（`demo_assets/`、
+  `config_assets/`）+ `importlib.resources`，並新增
+  `test_wheel_packaging.py` 用實際建置 wheel 驗證。
+- `scan_runner.py` 新增 preflight 連線檢查：網站完全連不上（DNS/連線/
+  逾時失敗）時拋出清楚錯誤，不再產出一份空洞卻顯示「掃描完成」的報告。
+
+### 新增
+
+- **Content Writer Mode 完整實作**（`scripts/seo_advisor/writers/`）：
+  - `LLMProvider` 抽象層：`AnthropicProvider`、`OpenAIProvider`、
+    `LocalProvider`（Ollama，免費）、`MockProvider`（測試/離線試玩用）。
+  - brief → outline → draft → QA 四階段流程（`pipeline.py`）。
+  - 程式化品質檢查（`quality.py`）：單一 H1、低品質 AI 內容起手式、
+    YMYL 關鍵字偵測，併入 LLM QA 結果。
+  - CLI 指令 `seo-advisor write`，支援 `--llm-provider mock` 免 API
+    金鑰試玩。
+- 新增 noindex / X-Robots-Tag 檢查（`analyzers/technical.py`）。
+- 新增本地 HTML 編碼偵測（`encoding_utils.py`），支援 Big5/Shift_JIS/
+  GBK 等非 UTF-8 網站，避免中日韓文字被誤判為缺少內容。
+- `scoring.py` 讀取 `config/scoring.yaml` 的 `category_weights`，
+  計算加權後的網站健康分數。
+- 白話報告加上「已檢查範圍內」措辭與具體問題（sitemap/canonical/
+  noindex 等）的白話說明對照表。
+- CI 新增跨平台測試矩陣驗證 wheel 打包正確性。
+
 ## [0.1.1] - Unreleased
 
 ### Added（新手體驗優化）

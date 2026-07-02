@@ -53,6 +53,7 @@ def crawl_site(
 
     result = CrawlResult()
     base_netloc = urlparse(seed_url).netloc
+    is_in_scope = getattr(connector, "is_url_in_scope", None)
 
     try:
         robots_snapshot = connector.fetch_url(
@@ -95,7 +96,10 @@ def crawl_site(
 
         if snapshot.html and depth < max_depth:
             links = _extract_links(snapshot.final_url or url, snapshot.html)
-            same_site_links = [link for link in links if _same_site(base_netloc, link)]
+            if is_in_scope is not None:
+                same_site_links = [link for link in links if is_in_scope(link)]
+            else:
+                same_site_links = [link for link in links if _same_site(base_netloc, link)]
             result.link_graph[url] = set(same_site_links)
             for link in same_site_links:
                 if link not in visited:

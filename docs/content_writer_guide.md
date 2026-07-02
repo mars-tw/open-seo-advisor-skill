@@ -1,5 +1,17 @@
 # 文章寫手模式：品質規範與 Prompt 模板
 
+**狀態：v0.1.2 已完整實作。** 執行邏輯見 `scripts/seo_advisor/writers/`：
+
+```bash
+seo-advisor write --topic "如何挑選 SEO 顧問服務" --lang zh-TW \
+  --llm-provider anthropic --out ./content-report
+```
+
+不需要 API 金鑰也能先試玩：`--llm-provider mock` 會用內建示範資料跑完整
+的 brief → outline → draft → QA 四階段流程，方便在申請 API 金鑰前先了解
+報告長相。`--llm-provider local` 則呼叫本機 Ollama 服務（需自行安裝），
+同樣不需要付費 API 金鑰。
+
 ## 原則來源說明
 
 本指南的檢核原則蒸餾自 Google 官方公開文件（Search Essentials、

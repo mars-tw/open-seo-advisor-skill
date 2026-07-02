@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import time
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
 
 import httpx
 
 from seo_advisor.connectors.base import WebsiteConnector
-from seo_advisor.models import ConnectorProfile, PageSnapshot, UrlRecord
+from seo_advisor.models import ConnectorProfile, PageSnapshot, SafetyPolicy, UrlRecord
+from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
+from seo_advisor.security.rate_limiter import RateLimiter
+from seo_advisor.security.robots_policy import RobotsPolicy
 
 _SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
@@ -23,11 +27,24 @@ class HTTPConnector(WebsiteConnector):
         user_agent: str = "OpenSEOAdvisor/0.1",
         timeout_seconds: float = 15.0,
         max_redirects: int = 10,
+        policy: SafetyPolicy | None = None,
     ) -> None:
+        self.policy = policy or SafetyPolicy(allowed_capabilities={"read_urls"})
+        self._user_agent = user_agent
+
         parsed = urlparse(base_url)
         if not parsed.scheme or not parsed.netloc:
             raise ValueError(f"base_url 必須是完整網址，收到：{base_url!r}")
+        ensure_host_allowed(base_url, allow_private_network=self.policy.allow_private_network)
+
         self.base_url = f"{parsed.scheme}://{parsed.netloc}"
+        # 允許存取的 host 別名集合：初始只有 seed 的 host，之後若第一次請求
+        # 發生 redirect（例如 example.com -> www.example.com），會把新 host
+        # 加入這個集合，避免爬蟲把「正確的最終網域」誤判為外部連結而漏爬。
+        self._allowed_netlocs: set[str] = {parsed.netloc}
+        self._rate_limiter = RateLimiter(self.policy.rate_limit_per_second)
+        self._robots_policy: RobotsPolicy | None = None
+
         self._client = httpx.Client(
             headers={"User-Agent": user_agent},
             timeout=timeout_seconds,
@@ -41,6 +58,16 @@ class HTTPConnector(WebsiteConnector):
     def capabilities(self) -> set[str]:
         return {"read_urls"}
 
+    def is_url_in_scope(self, url: str) -> bool:
+        """判斷 URL 的 host 是否在允許爬取的範圍內（seed host 或其 redirect 目標）。"""
+        netloc = urlparse(url).netloc
+        return netloc in ("", *self._allowed_netlocs)
+
+    def _register_final_host(self, final_url: str) -> None:
+        netloc = urlparse(final_url).netloc
+        if netloc:
+            self._allowed_netlocs.add(netloc)
+
     def probe(self) -> ConnectorProfile:
         notes: list[str] = []
         has_robots = False
@@ -50,6 +77,12 @@ class HTTPConnector(WebsiteConnector):
         try:
             robots_resp = self._client.get(urljoin(self.base_url, "/robots.txt"))
             has_robots = robots_resp.status_code == 200
+            if self.policy.respect_robots_txt:
+                self._robots_policy = RobotsPolicy(
+                    robots_resp.text if has_robots else None, user_agent=self._user_agent
+                )
+                if not has_robots:
+                    notes.append("網站沒有 robots.txt，預設允許爬取所有頁面。")
         except httpx.HTTPError as exc:
             notes.append(f"robots.txt 檢查失敗：{exc}")
 
@@ -85,11 +118,12 @@ class HTTPConnector(WebsiteConnector):
 
     def list_urls(self, seed: str, limit: int) -> list[UrlRecord]:
         records: list[UrlRecord] = []
+        skipped_external: list[str] = []
         sitemap_url = urljoin(self.base_url, "/sitemap.xml")
         try:
             resp = self._client.get(sitemap_url)
             if resp.status_code == 200:
-                records.extend(self._parse_sitemap(resp.text, depth=0))
+                records.extend(self._parse_sitemap(resp.text, depth=0, skipped_external=skipped_external))
         except httpx.HTTPError:
             pass
 
@@ -98,7 +132,9 @@ class HTTPConnector(WebsiteConnector):
 
         return records[:limit]
 
-    def _parse_sitemap(self, xml_text: str, depth: int) -> list[UrlRecord]:
+    def _parse_sitemap(
+        self, xml_text: str, depth: int, *, skipped_external: list[str]
+    ) -> list[UrlRecord]:
         records: list[UrlRecord] = []
         try:
             root = ElementTree.fromstring(xml_text)
@@ -109,33 +145,78 @@ class HTTPConnector(WebsiteConnector):
         if tag.endswith("sitemapindex"):
             for sitemap_el in root.findall("sm:sitemap", _SITEMAP_NS):
                 loc_el = sitemap_el.find("sm:loc", _SITEMAP_NS)
-                if loc_el is not None and loc_el.text and depth < 2:
-                    try:
-                        child_resp = self._client.get(loc_el.text.strip())
-                        if child_resp.status_code == 200:
-                            records.extend(self._parse_sitemap(child_resp.text, depth + 1))
-                    except httpx.HTTPError:
-                        continue
+                if loc_el is None or not loc_el.text or depth >= 2:
+                    continue
+                child_url = loc_el.text.strip()
+                if not self.is_url_in_scope(child_url):
+                    skipped_external.append(child_url)
+                    continue
+                try:
+                    child_resp = self._client.get(child_url)
+                    if child_resp.status_code == 200:
+                        records.extend(
+                            self._parse_sitemap(
+                                child_resp.text, depth + 1, skipped_external=skipped_external
+                            )
+                        )
+                except httpx.HTTPError:
+                    continue
         elif tag.endswith("urlset"):
             for url_el in root.findall("sm:url", _SITEMAP_NS):
                 loc_el = url_el.find("sm:loc", _SITEMAP_NS)
-                if loc_el is not None and loc_el.text:
-                    records.append(
-                        UrlRecord(url=loc_el.text.strip(), source="sitemap", discovered_depth=depth)
-                    )
+                if loc_el is None or not loc_el.text:
+                    continue
+                page_url = loc_el.text.strip()
+                if not self.is_url_in_scope(page_url):
+                    skipped_external.append(page_url)
+                    continue
+                records.append(
+                    UrlRecord(url=page_url, source="sitemap", discovered_depth=depth)
+                )
         return records
 
-    def fetch_url(self, url: str, render: bool = False, fetched_at: str = "") -> PageSnapshot:
+    def fetch_url(self, url: str, *, render: bool = False, fetched_at: str = "") -> PageSnapshot:
         if render:
             raise NotImplementedError(
                 "render=True 需要 Playwright 支援，v0.1.0 尚未實作，見 docs/roadmap.md。"
             )
 
+        try:
+            ensure_host_allowed(url, allow_private_network=self.policy.allow_private_network)
+        except PrivateNetworkBlockedError as exc:
+            return PageSnapshot(
+                url=url,
+                status_code=0,
+                final_url=url,
+                headers={},
+                html="",
+                fetched_at=fetched_at,
+                fetch_error_type="private_network_blocked",
+                fetch_error_message=str(exc),
+            )
+
+        if self._robots_policy is not None and not self._robots_policy.is_allowed(url):
+            return PageSnapshot(
+                url=url,
+                status_code=0,
+                final_url=url,
+                headers={},
+                html="",
+                fetched_at=fetched_at,
+                fetch_error_type="blocked_by_robots_txt",
+                fetch_error_message=f"robots.txt 不允許爬取此 URL：{url}",
+            )
+
+        self._rate_limiter.wait()
+
         redirect_chain: list[str] = []
+        start = time.monotonic()
         try:
             resp = self._client.get(url)
+            elapsed_ms = int((time.monotonic() - start) * 1000)
             for history_resp in resp.history:
                 redirect_chain.append(str(history_resp.url))
+            self._register_final_host(str(resp.url))
             return PageSnapshot(
                 url=url,
                 status_code=resp.status_code,
@@ -144,8 +225,9 @@ class HTTPConnector(WebsiteConnector):
                 headers=dict(resp.headers),
                 html=resp.text if "text/html" in resp.headers.get("content-type", "") else "",
                 fetched_at=fetched_at,
+                elapsed_ms=elapsed_ms,
             )
-        except httpx.HTTPError:
+        except httpx.TimeoutException as exc:
             return PageSnapshot(
                 url=url,
                 status_code=0,
@@ -154,6 +236,35 @@ class HTTPConnector(WebsiteConnector):
                 headers={},
                 html="",
                 fetched_at=fetched_at,
+                fetch_error_type="timeout",
+                fetch_error_message=str(exc),
+                elapsed_ms=int((time.monotonic() - start) * 1000),
+            )
+        except httpx.ConnectError as exc:
+            return PageSnapshot(
+                url=url,
+                status_code=0,
+                final_url=url,
+                redirect_chain=redirect_chain,
+                headers={},
+                html="",
+                fetched_at=fetched_at,
+                fetch_error_type="connect_error",
+                fetch_error_message=str(exc),
+                elapsed_ms=int((time.monotonic() - start) * 1000),
+            )
+        except httpx.HTTPError as exc:
+            return PageSnapshot(
+                url=url,
+                status_code=0,
+                final_url=url,
+                redirect_chain=redirect_chain,
+                headers={},
+                html="",
+                fetched_at=fetched_at,
+                fetch_error_type=type(exc).__name__,
+                fetch_error_message=str(exc),
+                elapsed_ms=int((time.monotonic() - start) * 1000),
             )
 
     def close(self) -> None:

@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 
@@ -24,6 +26,14 @@ from seo_advisor.models import Mode
 from seo_advisor.router import ModeNotImplementedError, UnknownModeError, ensure_implemented, resolve_mode
 from seo_advisor.scan_runner import ScanOutcome, run_consultant_scan
 from seo_advisor.wizard import run_wizard
+from seo_advisor.writers.models import ContentRequest, SearchIntent
+from seo_advisor.writers.pipeline import run_content_writer_pipeline
+from seo_advisor.writers.providers.factory import create_provider
+from seo_advisor.writers.render import (
+    render_content_report_json,
+    render_content_report_markdown,
+    render_final_draft_markdown,
+)
 
 app = typer.Typer(
     help="Open SEO Advisor - 開源全域 SEO 顧問技能 CLI。不知道從哪裡開始？直接輸入 seo-advisor 即可。",
@@ -86,6 +96,83 @@ def audit_consultant(
         ),
         debug=debug,
     )
+
+
+@app.command("write")
+def write_content(
+    topic: str = typer.Option(..., "--topic", help="文章主題"),
+    lang: str = typer.Option("zh-TW", "--lang", help="撰寫語言，例如 zh-TW、en-US"),
+    locale: str = typer.Option(None, "--locale", help="地區代碼，例如 TW、US"),
+    audience: str = typer.Option(None, "--audience", help="目標讀者描述"),
+    intent: str = typer.Option(
+        None,
+        "--intent",
+        help="搜尋意圖：informational/commercial/transactional/navigational/local/mixed",
+    ),
+    industry: str = typer.Option(None, "--industry", help="產業別"),
+    brand_context: str = typer.Option(None, "--brand-context", help="品牌或產品背景說明"),
+    llm_provider: str = typer.Option(
+        "anthropic", "--llm-provider", help="LLM 供應商：anthropic/openai/local/mock"
+    ),
+    model: str = typer.Option(None, "--model", help="覆寫預設模型名稱"),
+    auto_revise: bool = typer.Option(False, "--auto-revise", help="QA 未通過時自動修訂草稿"),
+    out: str = typer.Option("./content-report", "--out", help="報告輸出目錄"),
+    debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
+) -> None:
+    """執行文章寫手模式（Content Writer Mode），產出符合 SEO 品質規範的文章草稿。
+
+    需要對應 provider 的 API 金鑰（例如 ANTHROPIC_API_KEY），或使用
+    --llm-provider local 呼叫本機 Ollama 服務（不需要 API 金鑰）。
+    """
+    try:
+        parsed_intent = SearchIntent(intent) if intent else None
+    except ValueError:
+        valid = ", ".join(i.value for i in SearchIntent)
+        console.print(f"[red]錯誤：--intent 只接受以下選項：{valid}[/red]")
+        raise typer.Exit(code=1)
+
+    request = ContentRequest(
+        topic=topic,
+        lang=lang,
+        locale=locale,
+        audience=audience,
+        intent=parsed_intent,
+        industry=industry,
+        brand_context=brand_context,
+        auto_revise=auto_revise,
+    )
+
+    try:
+        provider = create_provider(llm_provider, model=model)
+        result = run_content_writer_pipeline(
+            provider, request, on_progress=lambda msg: console.print(f"[dim]{msg}[/dim]")
+        )
+    except Exception as exc:  # noqa: BLE001 - 統一在 CLI 邊界把例外轉成人話說明
+        if debug:
+            raise
+        friendly = translate_exception(exc)
+        console.print(f"[red]{friendly.render()}[/red]")
+        raise typer.Exit(code=1)
+
+    out_path = Path(out)
+    out_path.mkdir(parents=True, exist_ok=True)
+    report_path = out_path / "content-report.md"
+    json_path = out_path / "content-report.json"
+    draft_path = out_path / "draft.md"
+
+    report_path.write_text(render_content_report_markdown(result), encoding="utf-8")
+    json_path.write_text(render_content_report_json(result), encoding="utf-8")
+    draft_path.write_text(render_final_draft_markdown(result), encoding="utf-8")
+
+    status = "通過" if result.qa.passed else "需要人工修正"
+    console.print(
+        f"[bold green]完成！品質審核：{status}（分數 {result.qa.quality_score:.0f}/100）[/bold green]"
+    )
+    console.print(f"可直接使用的草稿：{draft_path}")
+    console.print(f"完整報告（含 brief/outline/QA）：{report_path}")
+    console.print(f"機器可讀資料：{json_path}")
+    if result.brief.is_ymyl:
+        console.print("[yellow]提醒：這是 YMYL 主題，發布前建議由領域專家審核。[/yellow]")
 
 
 @app.command("mode")

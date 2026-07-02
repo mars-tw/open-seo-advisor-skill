@@ -21,6 +21,9 @@ report-beginner.md
 report.md
 report.json
 
+# LocalArchiveConnector 解壓 zip 時建立的暫存目錄
+*_extracted/
+
 # Secrets
 .env
 *.pem

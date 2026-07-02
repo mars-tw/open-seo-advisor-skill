@@ -24,6 +24,7 @@ from seo_advisor.models import (
     LogEntry,
     PageSnapshot,
     PatchResult,
+    SafetyPolicy,
     UrlRecord,
 )
 
@@ -33,7 +34,16 @@ class ConnectorCapabilityError(NotImplementedError):
 
 
 class WebsiteConnector(ABC):
-    """所有網站接入方式的統一介面。"""
+    """所有網站接入方式的統一介面。
+
+    子類別建構子應接受 `policy: SafetyPolicy` 參數（可給預設值以維持
+    向後相容），並在 `capabilities()` 回傳前用
+    `self.policy.require_capability(...)` 驗證實際要執行的操作是否在
+    使用者授權範圍內，而不是只把 docs/connector_contract.md 的資安原則
+    停留在文件層次。
+    """
+
+    policy: SafetyPolicy
 
     @abstractmethod
     def id(self) -> str:
@@ -56,8 +66,13 @@ class WebsiteConnector(ABC):
         """取得 URL 清單（透過 sitemap 或爬取）。"""
 
     @abstractmethod
-    def fetch_url(self, url: str, render: bool = False) -> PageSnapshot:
-        """取得單一頁面的內容快照。render=True 需 headless browser 支援。"""
+    def fetch_url(self, url: str, *, render: bool = False, fetched_at: str = "") -> PageSnapshot:
+        """取得單一頁面的內容快照。
+
+        render=True 需要 headless browser 支援（v0.1.x 尚未實作，見
+        docs/roadmap.md）。fetched_at 由呼叫端傳入 ISO8601 時間戳記，
+        connector 本身不產生時間（維持可測試性與可重現性）。
+        """
 
     def list_files(self, path: str) -> list[FileRecord]:
         raise ConnectorCapabilityError(
@@ -70,11 +85,24 @@ class WebsiteConnector(ABC):
         )
 
     def write_file(self, path: str, content: bytes, dry_run: bool = True) -> PatchResult:
+        """實作此方法的子類別，第一行應呼叫：
+
+            self.policy.require_capability("write_files", connector_id=self.id())
+            if not dry_run:
+                self.policy.require_write(connector_id=self.id())
+
+        確保「使用者是否授權寫入」與「這次呼叫是否為 dry-run」都經過
+        SafetyPolicy 驗證，而不是只靠呼叫端自律。
+        """
         raise ConnectorCapabilityError(
             f"{self.id()} 不支援 write_file()，請確認 capabilities() 是否包含 'write_files'。"
         )
 
     def run_command(self, command: list[str], dry_run: bool = True) -> CommandResult:
+        """實作此方法的子類別必須驗證 'run_commands' capability，並且
+        `command` 只能來自固定的 allowlist（不得是任意 shell 字串），
+        詳見 docs/connector_contract.md 的資安要求。
+        """
         raise ConnectorCapabilityError(
             f"{self.id()} 不支援 run_command()，請確認 capabilities() 是否包含 'run_commands'。"
         )
