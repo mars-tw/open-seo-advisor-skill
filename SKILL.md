@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.4
+version: 0.1.5
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,12 +71,16 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.4）
+## 目前實作狀態（v0.1.5）
 
 - ✅ AI 矩陣營運系統（統籌層）：NORA 總控 + 26 角色資料驅動 registry、
   關鍵字/行業路由、安全升級（高風險任務強制人工審核+plan-only）、
   mock/generic engine、整合交付、`seo-advisor matrix run/demo/roles`。
   詳見 `docs/ai-matrix-os.md`。
+- ✅ 成長行銷模組（Growth）：UTM 歸因規劃與衛生檢查、CRO 落地頁診斷與
+  A/B 測試設計、跨渠道成效分析（GA4/GSC/Google Ads read-only + Mock），
+  `seo-advisor growth utm/cro/analytics/demo`，全部免金鑰可試玩。
+  詳見 `docs/growth_marketing.md`。
 - ✅ 顧問模式（Consultant Mode）：HTTP/LocalArchive connector、
   技術面 crawler、Finding/Report schema、Markdown+JSON 報告產出、
   noindex 檢查、非 UTF-8 編碼偵測、category-weighted 健康分數。

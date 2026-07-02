@@ -53,6 +53,21 @@ seo-advisor matrix run --goal "推廣新產品增加詢價" --industry 製造業
 
 詳見 [`docs/ai-matrix-os.md`](docs/ai-matrix-os.md)。
 
+## 成長行銷模組
+
+補齊網路行銷團隊的完整能力鏈：**UTM 歸因、CRO 落地頁優化、跨渠道成效分析**
+（`seo-advisor growth`），全部免金鑰可試玩。
+
+```bash
+seo-advisor growth demo                                  # UTM + CRO + 成效分析
+seo-advisor growth utm --url https://example.com/promo --channels google,facebook,email
+seo-advisor growth cro --url https://example.com/landing
+seo-advisor growth analytics --provider mock
+```
+
+成效分析的 Google 資料來源（GA4/GSC/Google Ads）一律 read-only，無憑證時用
+mock。詳見 [`docs/growth_marketing.md`](docs/growth_marketing.md)。
+
 ## 設計原則
 
 - **不綁定單一廠商**：所有付費 API（Search Console、GA4、PageSpeed Insights、

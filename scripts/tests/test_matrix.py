@@ -48,6 +48,18 @@ def test_internal_process_goal_selects_ops_roles():
     assert "rina" in roles or "doc" in roles
 
 
+def test_email_goal_selects_mira():
+    assert "mira" in select_roles(TaskRequest(user_goal="幫我規劃 Email 電子報分眾與再行銷"))
+
+
+def test_competitor_analysis_selects_atlas():
+    assert "atlas" in select_roles(TaskRequest(user_goal="做競品分析與市場調研"))
+
+
+def test_content_calendar_selects_maya():
+    assert "maya" in select_roles(TaskRequest(user_goal="規劃跨平台內容行事曆與短影音腳本"))
+
+
 def test_requested_roles_are_honored():
     task = TaskRequest(user_goal="任意", requested_roles=["iris", "maya"])
     roles = select_roles(task)
