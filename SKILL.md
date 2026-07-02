@@ -1,12 +1,13 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.2
+version: 0.1.3
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
-  並提供顧問／工程師／資安／文章寫手／外掛開發五種模式，協助任何產業、任何規模
-  的網站進行 SEO 健檢、修復、內容產出與外掛開發。
+  並提供顧問／工程師／資安／文章寫手／外掛開發／Meta 廣告優化／產圖素材七種
+  模式，協助任何產業、任何規模的網站進行 SEO 健檢、修復、內容產出、廣告優化
+  與素材製作。
 triggers:
   - "/seo"
   - "/seo-audit"
@@ -14,8 +15,12 @@ triggers:
   - "/seo-security"
   - "/seo-write"
   - "/seo-plugin"
+  - "/seo-ads"
+  - "/seo-image"
   - "幫我做 SEO 健檢"
   - "分析這個網站的 SEO 問題"
+  - "幫我看廣告成效"
+  - "產生廣告素材"
   - "seo audit"
   - "site health check"
 ---
@@ -39,21 +44,23 @@ triggers:
    command 就不要求持久 shell 存取。
 5. 對正式環境（production）的任何寫入或部署操作，一律要求人工二次確認。
 
-## 五大模式總覽
+## 七大模式總覽
 
 | 模式 | 觸發 | 目標 | 詳細規格 |
 |---|---|---|---|
-| 顧問模式 Consultant | `/seo-audit consultant` | 全站健檢、產出診斷報告與優先順序 | `docs/modes.md#consultant-mode` |
+| 顧問模式 Consultant | `seo-advisor audit consultant` | 全站健檢、產出診斷報告與優先順序 | `docs/modes.md#consultant-mode` |
 | 工程師模式 Engineer | `/seo-fix engineer` | 直接修復技術 SEO 問題（sitemap/canonical/hreflang/schema/CWV） | `docs/modes.md#engineer-mode` |
 | 資安模式 Security | `/seo-security` | 檢查與 SEO 相關的資安風險 | `docs/modes.md#security-mode` |
-| 文章寫手模式 Content Writer | `/seo-write` | 依 SEO 權威指導原則產出內容 | `docs/modes.md#content-writer-mode` |
+| 文章寫手模式 Content Writer | `seo-advisor write` | 依 SEO 權威指導原則產出內容 | `docs/content_writer_guide.md` |
 | 外掛開發模式 Plugin Dev | `/seo-plugin` | 開發 WordPress 等 CMS 的 SEO 外掛 | `docs/modes.md#plugin-dev-mode` |
+| Meta 廣告優化 Meta Ads | `seo-advisor ads` | 診斷 Meta 廣告帳戶、產出優化建議與 dry-run 行動計畫 | `docs/meta_ads_mode.md` |
+| 產圖素材 Image Material | `seo-advisor image` | 為廣告/社群/文章產生圖像素材（provider 抽象層） | `docs/image_material_mode.md` |
 
 模式路由邏輯見 `scripts/seo_advisor/router.py`：使用者可用明確指令指定模式，
 也可以用自然語言描述需求，由 router 判斷最適合的模式；不確定時一律用
 `AskUserQuestion` 式的澄清詢問，不要自行臆測。
 
-## 目前實作狀態（v0.1.2）
+## 目前實作狀態（v0.1.3）
 
 - ✅ 顧問模式（Consultant Mode）：HTTP/LocalArchive connector、
   技術面 crawler、Finding/Report schema、Markdown+JSON 報告產出、
@@ -62,6 +69,13 @@ triggers:
 - ✅ 文章寫手模式（Content Writer Mode）：`LLMProvider` 抽象層
   （Anthropic / OpenAI / Local / Mock）、brief → outline → draft → QA
   四階段流程、`seo-advisor write` 指令。詳見 `docs/content_writer_guide.md`。
+- ✅ Meta 廣告優化模式（Meta Ads Mode）：`AdsProvider` 抽象層
+  （Meta / Mock）、`AdsSafetyPolicy` 多重預算防護、廣告成效診斷、
+  dry-run 行動計畫、`seo-advisor ads audit/plan/demo`。實際代操（動用
+  真實預算）預設全鎖，詳見 `docs/meta_ads_mode.md`。
+- ✅ 產圖素材模式（Image Material Mode）：`ImageProvider` 抽象層
+  （OpenAI / Mock）、合規前置檢查、多變體生成、與 Content Writer 串接、
+  `seo-advisor image generate/demo/from-content`。詳見 `docs/image_material_mode.md`。
 - ✅ 新手體驗：互動精靈（`seo-advisor` / `seo-advisor start`）、
   URL 自動正規化、人話錯誤訊息、白話文報告（`report-beginner.md`）、
   Demo 模式（`seo-advisor demo`）、一鍵安裝腳本、`QUICKSTART.md`。

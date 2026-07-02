@@ -20,9 +20,20 @@ _MODE_ALIASES: dict[str, Mode] = {
     "write": Mode.CONTENT_WRITER,
     "plugin_dev": Mode.PLUGIN_DEV,
     "plugin": Mode.PLUGIN_DEV,
+    "ads": Mode.META_ADS,
+    "meta_ads": Mode.META_ADS,
+    "ad_optimizer": Mode.META_ADS,
+    "image": Mode.IMAGE_MATERIAL,
+    "image_material": Mode.IMAGE_MATERIAL,
+    "creative": Mode.IMAGE_MATERIAL,
 }
 
-_IMPLEMENTED_MODES = {Mode.CONSULTANT, Mode.CONTENT_WRITER}
+_IMPLEMENTED_MODES = {
+    Mode.CONSULTANT,
+    Mode.CONTENT_WRITER,
+    Mode.META_ADS,
+    Mode.IMAGE_MATERIAL,
+}
 
 
 class UnknownModeError(ValueError):

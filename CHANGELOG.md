@@ -2,6 +2,45 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.3] - Unreleased
+
+與 CODEX（顧問端）協作開出規格後，新增兩個新的專家模式，讓技能從
+「SEO 健檢/內容」延伸到「廣告優化/素材製作」。
+
+### 新增：Meta 廣告優化專家（Meta Ads Mode）
+
+- `AdsProvider` 抽象層（`ads/providers/`）：`MetaAdsProvider`（Meta
+  Marketing API，read-only audit）、`MockAdsProvider`（免金鑰試玩）。
+- `AdsSafetyPolicy`（`ads/models.py`）：動用真實預算的多重防護。
+  **預設值刻意保守**——增加預算、啟用投放、暫停整個活動一律預設禁止，
+  需逐項明確開啟；預算變更有百分比/金額/總增額多重上限；帳戶白名單；
+  資料量不足時不建議動作。
+- 廣告成效診斷（`ads/analyzer.py`）：缺 Pixel（P0）、高花費低 ROAS、
+  素材疲勞、擴量候選、資料量不足判斷。
+- dry-run 行動計畫（`ads/planner.py`）：只把「不擴大花費」的安全動作
+  （暫停低效素材）排入計畫，每個動作都有 rollback snapshot；擴量建議
+  只在報告呈現，不自動排入計畫。
+- CLI：`seo-advisor ads audit / plan / demo`。實際代操（`apply`）刻意
+  尚未開放，整體流程為 audit → plan（dry-run）→ 人工檢視 → 手動套用。
+
+### 新增：GPT 產圖素材專家（Image Material Mode）
+
+- `ImageProvider` 抽象層（`images/providers/`）：`OpenAIImageProvider`
+  （gpt-image-1）、`MockImageProvider`（產生佔位 PNG，免金鑰試玩）。
+- 合規前置檢查（`images/compliance.py`）：在送出 API 請求前攔截冒用品牌/
+  名人肖像、誤導性療效獲利保證、偽造介面、仿冒藝術家風格等違規需求。
+- 多用途/多版位/多變體生成，輸出 image-manifest.json 與 AI 生成揭露建議。
+- 與 Content Writer 串接：`seo-advisor image from-content` 讀取文章報告
+  產生配圖。
+- CLI：`seo-advisor image generate / demo / from-content`。
+
+### 其他
+
+- `Mode` enum 新增 `META_ADS` / `IMAGE_MATERIAL`，router 加入對應別名。
+- 新增測試 41 個（image 12、ads 17、其餘涵蓋 provider/合規/安全防護），
+  總計 163 個測試全過。
+- pyproject 新增 optional dependencies：`image-openai`、`ads-meta`。
+
 ## [0.1.2] - Unreleased
 
 本版本源自與 CODEX（審核端）協作的全面架構/資安/新手體驗稽核，修正

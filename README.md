@@ -19,7 +19,7 @@ SEO 相關風險」「SEO 內容編輯怎麼寫符合 E-E-A-T 的文章」「外
 WordPress SEO 外掛」這五種專業角色的方法論，蒸餾成可執行的檢查清單、報告格式
 與程式碼。
 
-## 五大模式
+## 七大模式
 
 1. **顧問模式 Consultant** — 全站 SEO 健檢，產出診斷報告與 P0–P3 優先順序建議。
 2. **工程師模式 Engineer** — 直接修復 sitemap、robots.txt、canonical、hreflang、
@@ -29,8 +29,14 @@ WordPress SEO 外掛」這五種專業角色的方法論，蒸餾成可執行的
 4. **文章寫手模式 Content Writer** — 呼叫 LLM（Anthropic Claude / OpenAI GPT /
    本地模型皆可）產出符合 SEO 權威指導原則的內容。
 5. **外掛開發模式 Plugin Dev** — 為 WordPress 等 CMS 開發 SEO 相關外掛與模組。
+6. **Meta 廣告優化 Meta Ads** — 診斷 Meta（Facebook/Instagram）廣告帳戶，
+   產出優化建議與 dry-run 行動計畫。動用真實預算的操作受多重安全防護，預設全鎖。
+7. **產圖素材 Image Material** — 為廣告/社群/文章產生圖像素材，圖像 provider
+   可換（OpenAI / 未來可加其他），並有合規前置檢查。
 
-詳細規格見 [`SKILL.md`](SKILL.md) 與 [`docs/modes.md`](docs/modes.md)。
+已完整實作：Consultant、Content Writer、Meta Ads、Image Material。
+詳細規格見 [`SKILL.md`](SKILL.md)、[`docs/meta_ads_mode.md`](docs/meta_ads_mode.md)、
+[`docs/image_material_mode.md`](docs/image_material_mode.md)。
 
 ## 設計原則
 
