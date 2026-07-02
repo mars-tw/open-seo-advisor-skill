@@ -9,6 +9,8 @@ from __future__ import annotations
 from rich.console import Console
 from rich.prompt import Prompt
 
+from seo_advisor.autopilot.models import AutoTask
+from seo_advisor.autopilot.runner import run_autopilot
 from seo_advisor.demo import run_demo_scan
 from seo_advisor.errors import translate_exception
 from seo_advisor.scan_runner import ScanOutcome, run_consultant_scan
@@ -17,22 +19,29 @@ from seo_advisor.scan_runner import ScanOutcome, run_consultant_scan
 def run_wizard(console: Console, *, debug: bool = False) -> None:
     console.print()
     console.print("[bold cyan]歡迎使用 Open SEO Advisor[/bold cyan]")
-    console.print("我會幫你檢查一個網站的 SEO 健康狀況，全程用問答方式進行，不需要記任何指令。")
+    console.print("全程用問答方式進行，不需要記任何指令。不確定選哪個？直接選 1 就好。")
     console.print()
 
     console.print("請問你想做什麼？")
-    console.print("  [bold]1[/bold] - 掃描一個真實網站，產生 SEO 健檢報告")
-    console.print("  [bold]2[/bold] - 掃描本機資料夾裡的網站原始碼")
-    console.print("  [bold]3[/bold] - 先看一份範例報告（不需要輸入網址）")
+    console.print("  [bold]1[/bold] - 一鍵全自動（給我一個網址，剩下交給我，最推薦）")
+    console.print("  [bold]2[/bold] - 只做 SEO 健檢（掃描一個真實網站）")
+    console.print("  [bold]3[/bold] - 掃描本機資料夾裡的網站原始碼")
+    console.print("  [bold]4[/bold] - 先看一份範例報告（不需要輸入網址）")
     console.print()
 
-    choice = Prompt.ask("請輸入數字", choices=["1", "2", "3"], default="3")
+    choice = Prompt.ask("請輸入數字", choices=["1", "2", "3", "4"], default="1")
 
-    if choice == "3":
+    if choice == "1":
+        target = Prompt.ask("請輸入你的網站網址，或一句想達成的目標")
+        out_dir = Prompt.ask("報告要存到哪個資料夾？", default="./auto-report")
+        _run_autopilot_and_report(console, target, out_dir, debug=debug)
+        return
+
+    if choice == "4":
         _run_and_report(console, lambda progress: run_demo_scan(out_dir="./seo-demo-report", on_progress=progress), debug=debug)
         return
 
-    if choice == "1":
+    if choice == "2":
         raw_url = Prompt.ask("請輸入網站網址（例如 example.com）")
         out_dir = Prompt.ask("報告要存到哪個資料夾？", default="./seo-report")
         _run_and_report(
@@ -49,6 +58,35 @@ def run_wizard(console: Console, *, debug: bool = False) -> None:
         lambda progress: run_consultant_scan(url=None, source=folder, out_dir=out_dir, on_progress=progress),
         debug=debug,
     )
+
+
+def _run_autopilot_and_report(console: Console, target: str, out_dir: str, *, debug: bool) -> None:
+    console.print()
+    console.print("[dim]交給我，正在自動出動各領域專家分析……全程免費、不會花任何錢。[/dim]")
+    try:
+        outcome = run_autopilot(
+            AutoTask(target=target),
+            out_dir=out_dir,
+            consented=False,
+            on_progress=lambda msg: console.print(f"  [dim]{msg}[/dim]"),
+        )
+    except Exception as exc:  # noqa: BLE001 - 攔截所有例外轉成人話
+        console.print()
+        if debug:
+            raise
+        console.print(f"[red]{translate_exception(exc).render()}[/red]")
+        return
+
+    console.print()
+    console.print("[bold green]完成！一鍵顧問已幫你分析完畢。[/bold green]")
+    console.print()
+    console.print("[bold]先看這份最好懂的：[/bold]")
+    console.print(f"  給你的白話懶人包：{outcome.beginner_path}")
+    console.print(f"  會不會花錢的明細：{outcome.cost_estimate_path}")
+    console.print(f"  完整報告（可交給團隊）：{outcome.report_path}")
+    console.print()
+    console.print("[dim]這次只做了免費的分析。若要讓系統自動執行安全動作，"
+                  "可用 seo-advisor auto <網址> --approve 完成一次同意。[/dim]")
 
 
 def _run_and_report(console: Console, scan_fn, *, debug: bool) -> None:

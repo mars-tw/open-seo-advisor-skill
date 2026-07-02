@@ -4,4 +4,4 @@ from seo_advisor._console_encoding import ensure_utf8_console
 
 ensure_utf8_console()
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"

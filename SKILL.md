@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.6
+version: 0.1.7
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,14 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.6）
+## 目前實作狀態（v0.1.7）
 
+- ✅ 一鍵代操機器人（Autopilot）：`seo-advisor auto <網址或目標>` 一個指令
+  自動判斷該跑哪些模組、跑遍分析、產出白話懶人包 + 成本明細 + 待辦清單。
+  會花錢/寫入/發布的動作採「一次知情同意」（先給白話成本明細，同意一次才
+  執行白名單內安全動作；破壞性/付款/發布等永遠不自動做）。互動精靈第一個
+  選項就是一鍵全自動。免金鑰試玩：`seo-advisor auto-demo`。詳見
+  `docs/autopilot_mode.md`。
 - ✅ 行銷方法論知識庫（中性化蒸餾）：四領域共 50 條可執行檢核原則
   （電商 listing / 付費廣告漏斗 / 內容品牌成長 / 轉換成長駭客），
   不具名、不含課程名或商標，供各模組引用。詳見 `docs/methodology.md`。
@@ -113,9 +119,19 @@ triggers:
 
 ## 快速開始
 
+**最快的用法（連小白都行）**：裝好後執行一鍵指令，剩下交給它——
+
+```bash
+seo-advisor auto https://你的網站.com
+```
+
+它會自動分析、產出一份白話懶人包 + 成本明細 + 待辦清單，全程免費、不會花任何
+錢（真正要花錢的動作會先給你看明細、同意一次才執行）。想先看範例就跑
+`seo-advisor auto-demo`。
+
 **完全不會寫程式？** 執行 `install.ps1`（Windows）或 `install.sh`
-（Mac/Linux），再執行 `seo-advisor`，會有問答式精靈引導你完成第一次
-掃描。詳見專案根目錄的 `QUICKSTART.md`。
+（Mac/Linux），再執行 `seo-advisor`，會有問答式精靈引導你——第一個選項就是
+一鍵全自動。詳見專案根目錄的 `QUICKSTART.md`。
 
 進階指令：
 

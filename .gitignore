@@ -10,11 +10,24 @@ venv/
 dist/
 build/
 
-# Output artifacts（seo-advisor 掃描產生的報告資料夾）
+# Output artifacts（seo-advisor 各模式產生的報告資料夾）
 /report/
 /seo-report/
 /seo-report-*/
 /seo-demo-report/
+/auto-report/
+/auto-demo/
+/growth-*/
+/ecommerce-*/
+/matrix-report/
+/matrix-demo/
+/content-report/
+/ads-report/
+/ads-plan/
+/ads-demo/
+/image-assets/
+/image-demo/
+/content-images/
 *.report.json
 *.report.md
 report-beginner.md

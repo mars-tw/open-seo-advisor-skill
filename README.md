@@ -8,7 +8,9 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 > **第一次使用？不用懂程式，也不用懂 SEO。**
-> 直接看 [`QUICKSTART.md`](QUICKSTART.md)，5 分鐘拿到你的第一份 SEO 健檢報告。
+> 裝好後就一個指令：`seo-advisor auto https://你的網站.com`——它會自動分析、
+> 產出一份白話懶人包 + 待辦清單，全程免費、不會花任何錢。想先看範例就跑
+> `seo-advisor auto-demo`。完整步驟見 [`QUICKSTART.md`](QUICKSTART.md)。
 
 ## 這是什麼
 
