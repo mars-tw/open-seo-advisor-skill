@@ -2,6 +2,31 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.4] - Unreleased
+
+新增「AI 矩陣營運系統」作為七大模式之上的統籌層。本版由 CLAUDE（升為
+最高執行長／審核端）派工、NORA（原 CODEX 工作機器人更名，擔任總控長／
+工程執行端）執行，CLAUDE 審核後落地——協作規則記錄於 `.collab-rules.md`。
+
+### 新增：AI 矩陣營運系統（AI Matrix Operating System）
+
+- `matrix/` 模組：把 AI 從單一工具升級為可跨行業套用的虛擬組織。
+- 26 個 AI 工作夥伴角色，**資料驅動**（`assets/roles.yaml`，不為每個角色
+  寫 class），涵蓋總控/策略/行銷/銷售/產品/營運/財務/人資/法務/行政。
+- NORA 路由器（`router.py`）：依 user_goal 關鍵字 + 行業加權選角色，
+  對應規劃書的四個範例情境（製造業新品/餐飲來客/課程招生/內部流程）。
+- **安全升級規則**：任何含 write/deploy/spend/publish/send（中英文）的任務，
+  即使角色平常不需審核，也強制升級為 human_review_required + plan-only。
+  JACK（廣告預算）/ LEX（法務）/ GRACE（財務）/ ECHO（發布）在 roles.yaml
+  預設就標記需人工審核。
+- engine 抽象層：MockEngine（免金鑰）、GenericLLMEngine（接 Content Writer
+  的 LLMProvider，無金鑰時 fallback 到 mock）。Phase 2 會把 IRIS/MAYA/JACK/
+  PIXEL 接到對應專屬引擎。
+- planner（派工）+ synthesizer（整合成 MatrixDeliverable）+ runner。
+- CLI：`seo-advisor matrix run / demo / roles / role`。
+- 角色卡與 prompt 用 importlib.resources 打包（wheel 驗證測試已擴充）。
+- 新增 16 個 matrix 測試，總計 179 個測試全過。
+
 ## [0.1.3] - Unreleased
 
 與 CODEX（顧問端）協作開出規格後，新增兩個新的專家模式，讓技能從

@@ -67,3 +67,15 @@ def test_wheel_includes_bundled_assets(tmp_path):
             f"wheel 內沒有找到 config_assets/scoring.yaml，"
             f"分類權重計算在正式安裝後會退回預設權重。wheel 內容：{names}"
         )
+
+        matrix_roles = [n for n in names if "matrix/assets" in n and n.endswith("roles.yaml")]
+        assert matrix_roles, (
+            f"wheel 內沒有找到 matrix/assets/roles.yaml，"
+            f"AI 矩陣營運系統在正式安裝後會載入不到角色。wheel 內容：{names}"
+        )
+
+        matrix_prompts = [n for n in names if "matrix/prompts" in n and n.endswith(".md")]
+        assert matrix_prompts, (
+            f"wheel 內沒有找到 matrix/prompts 的 .md，"
+            f"Generic LLM 引擎在正式安裝後會讀不到 prompt。wheel 內容：{names}"
+        )

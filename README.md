@@ -38,6 +38,21 @@ WordPress SEO 外掛」這五種專業角色的方法論，蒸餾成可執行的
 詳細規格見 [`SKILL.md`](SKILL.md)、[`docs/meta_ads_mode.md`](docs/meta_ads_mode.md)、
 [`docs/image_material_mode.md`](docs/image_material_mode.md)。
 
+## 上層統籌層：AI 矩陣營運系統
+
+在七大模式之上，還有一個 **AI 矩陣營運系統**（`seo-advisor matrix`）：
+提出一句目標，NORA 總控就會判斷情境、派工給 26 位 AI 工作夥伴角色
+（策略/行銷/銷售/產品/營運/財務/人資/法務/行政）協作，各角色盡量接到
+上述已實作的模式引擎，最後整合成一份可執行交付物。任何高風險任務
+（發布/花錢/部署等）會被強制升級為需人工確認且只產計畫。
+
+```bash
+seo-advisor matrix demo   # 免金鑰試玩
+seo-advisor matrix run --goal "推廣新產品增加詢價" --industry 製造業
+```
+
+詳見 [`docs/ai-matrix-os.md`](docs/ai-matrix-os.md)。
+
 ## 設計原則
 
 - **不綁定單一廠商**：所有付費 API（Search Console、GA4、PageSpeed Insights、

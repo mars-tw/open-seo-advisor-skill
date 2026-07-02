@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.3
+version: 0.1.4
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -60,8 +60,23 @@ triggers:
 也可以用自然語言描述需求，由 router 判斷最適合的模式；不確定時一律用
 `AskUserQuestion` 式的澄清詢問，不要自行臆測。
 
-## 目前實作狀態（v0.1.3）
+## 上層統籌層：AI 矩陣營運系統（AI Matrix Operating System）
 
+在七大模式之上，還有一個「AI 矩陣營運系統」統籌層（`seo-advisor matrix`）：
+使用者提出一句目標，NORA 總控會判斷情境、派工給 26 位 AI 工作夥伴角色
+（涵蓋策略/行銷/銷售/產品/營運/財務/人資/法務/行政）協作，各角色盡量接到
+上述已實作的模式引擎，最後整合成一份可執行交付物。
+
+任何含「發布/寄送/花錢/投放/部署/上架/調整預算」的高風險任務，會被強制
+升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
+詳見 `docs/ai-matrix-os.md`。
+
+## 目前實作狀態（v0.1.4）
+
+- ✅ AI 矩陣營運系統（統籌層）：NORA 總控 + 26 角色資料驅動 registry、
+  關鍵字/行業路由、安全升級（高風險任務強制人工審核+plan-only）、
+  mock/generic engine、整合交付、`seo-advisor matrix run/demo/roles`。
+  詳見 `docs/ai-matrix-os.md`。
 - ✅ 顧問模式（Consultant Mode）：HTTP/LocalArchive connector、
   技術面 crawler、Finding/Report schema、Markdown+JSON 報告產出、
   noindex 檢查、非 UTF-8 編碼偵測、category-weighted 健康分數。
