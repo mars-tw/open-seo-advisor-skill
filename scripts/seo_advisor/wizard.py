@@ -62,7 +62,7 @@ def run_wizard(console: Console, *, debug: bool = False) -> None:
 
 def _run_autopilot_and_report(console: Console, target: str, out_dir: str, *, debug: bool) -> None:
     console.print()
-    console.print("[dim]交給我，正在自動出動各領域專家分析……全程免費、不會花任何錢。[/dim]")
+    console.print("[dim]交給我，正在自動出動各領域專家分析……預設只做分析、不花錢、不改動你的網站。[/dim]")
     try:
         outcome = run_autopilot(
             AutoTask(target=target),
@@ -82,7 +82,7 @@ def _run_autopilot_and_report(console: Console, target: str, out_dir: str, *, de
     console.print()
     console.print("[bold]先看這份最好懂的：[/bold]")
     console.print(f"  給你的白話懶人包：{outcome.beginner_path}")
-    console.print(f"  會不會花錢的明細：{outcome.cost_estimate_path}")
+    console.print(f"  會不會花錢的明細：{outcome.cost_estimate_md_path}")
     console.print(f"  完整報告（可交給團隊）：{outcome.report_path}")
     console.print()
     console.print("[dim]這次只做了免費的分析。若要讓系統自動執行安全動作，"

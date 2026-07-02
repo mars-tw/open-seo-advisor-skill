@@ -49,3 +49,14 @@ def test_url_with_embedded_credentials_is_rejected():
 def test_url_with_username_only_is_rejected():
     with pytest.raises(InvalidUrlError):
         normalize_url("https://admin@example.com")
+
+
+def test_looks_like_url_distinguishes_url_from_goal():
+    from seo_advisor.url_utils import looks_like_url
+
+    assert looks_like_url("example.com") is True
+    assert looks_like_url("www.example.com") is True
+    assert looks_like_url("https://example.com") is True
+    assert looks_like_url("幫我規劃成長方案") is False
+    assert looks_like_url("optimize my amazon listing") is False  # 含空白 → 目標描述
+    assert looks_like_url("") is False

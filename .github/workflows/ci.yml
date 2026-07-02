@@ -68,6 +68,13 @@ jobs:
           python -m seo_advisor.cli auto-demo --out ./ci-auto
           test -f ci-auto/auto-report-beginner.md
           test -f ci-auto/cost-estimate.json
+          test -f ci-auto/cost-estimate.md
+
+      - name: Autopilot with bare domain routes correctly
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli auto "example.com" --mock --out ./ci-auto-bare
+          grep -q consultant ci-auto-bare/auto-report.json
 
       - name: Growth demo
         working-directory: scripts

@@ -29,9 +29,18 @@ foreach ($candidate in @("python", "python3", "py")) {
     try {
         $version = & $candidate --version 2>&1
         if ($LASTEXITCODE -eq 0) {
-            $pythonCmd = $candidate
-            Write-Success "找到 Python：$version（使用指令：$candidate）"
-            break
+            # 解析版本，必須 >= 3.10 才收（避免用舊版建好環境後才壞掉）
+            if ($version -match "(\d+)\.(\d+)") {
+                $major = [int]$Matches[1]
+                $minor = [int]$Matches[2]
+                if ($major -gt 3 -or ($major -eq 3 -and $minor -ge 10)) {
+                    $pythonCmd = $candidate
+                    Write-Success "找到 Python：$version（使用指令：$candidate）"
+                    break
+                } else {
+                    Write-Host "略過 $candidate（$version）：需要 Python 3.10 以上。" -ForegroundColor DarkYellow
+                }
+            }
         }
     } catch {
         continue
@@ -39,7 +48,7 @@ foreach ($candidate in @("python", "python3", "py")) {
 }
 
 if (-not $pythonCmd) {
-    Write-Failure "找不到 Python，請先到 https://www.python.org/downloads/ 安裝 Python 3.10 以上版本。"
+    Write-Failure "找不到 Python 3.10 以上版本。請先到 https://www.python.org/downloads/ 安裝 Python 3.10 或更新版本。"
     Write-Failure "安裝時記得勾選「Add Python to PATH」，安裝完成後重新開一個 PowerShell 視窗再執行本腳本。"
     exit 1
 }
@@ -62,7 +71,7 @@ if (Test-Path $venvDir) {
 $venvPython = Join-Path $venvDir "Scripts\python.exe"
 
 Write-Step "安裝 Open SEO Advisor 套件（第一次安裝可能需要幾分鐘，請耐心等候，畫面會持續顯示進度）"
-& $venvPython -m pip install --quiet --upgrade pip
+& $venvPython -m pip install --upgrade pip
 & $venvPython -m pip install -e "$scriptsDir"
 if ($LASTEXITCODE -ne 0) {
     Write-Failure "套件安裝失敗，請檢查上方錯誤訊息，或參考 docs/install-troubleshooting.md。"
@@ -72,12 +81,24 @@ if ($LASTEXITCODE -ne 0) {
 Write-Step "驗證安裝"
 & $venvPython -m seo_advisor.cli mode consultant
 
+$venvExe = Join-Path $venvDir "Scripts\seo-advisor.exe"
+
 Write-Host ""
 Write-Success "安裝完成！"
 Write-Host ""
-Write-Host "接下來請執行以下指令啟動虛擬環境，並開始使用："
+Write-Host "最簡單的用法：直接複製貼上這一行，先看一份範例（不需網址、不花錢）：" -ForegroundColor Green
 Write-Host ""
-Write-Host "    $venvDir\Scripts\Activate.ps1" -ForegroundColor Yellow
-Write-Host "    seo-advisor" -ForegroundColor Yellow
+Write-Host "    & `"$venvExe`" auto-demo" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "要分析你自己的網站，把網址接在後面就好：" -ForegroundColor Green
+Write-Host ""
+Write-Host "    & `"$venvExe`" auto https://你的網站.com" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "（上面這種寫法不需要先「啟動虛擬環境」，複製貼上就能跑，最適合新手。）" -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "如果你熟悉 PowerShell，也可以先啟動虛擬環境再用短指令：" -ForegroundColor DarkGray
+Write-Host "    $venvDir\Scripts\Activate.ps1" -ForegroundColor DarkGray
+Write-Host "    seo-advisor auto-demo" -ForegroundColor DarkGray
+Write-Host "  （若出現 Activate.ps1 被封鎖，請改用上面「複製貼上」那種免啟動寫法。）" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "不知道下一步怎麼做？請看 QUICKSTART.md。"

@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 
 from seo_advisor.autopilot.models import AutoTask
-from seo_advisor.autopilot.runner import run_autopilot
+from seo_advisor.autopilot.runner import apply_consent, run_autopilot
 from seo_advisor.autopilot.safety import build_consent_phrase, verify_consent
 from seo_advisor.errors import translate_exception
 
@@ -61,6 +61,12 @@ def auto(
     """
     task = AutoTask(target=target, industry=industry, mock=mock)
 
+    # 固定信任宣告：讓新手一開始就安心，不必擔心工具亂花錢或弄壞東西。
+    console.print(
+        "[green]安心提示：預設只做分析，不會花錢、不會發布、不會改動你的網站。"
+        "任何付費或寫入動作都會先列明細，你同意一次才執行。[/green]"
+    )
+
     # 先跑一次分析（尚未同意），拿到成本明細
     try:
         preview = run_autopilot(
@@ -76,18 +82,38 @@ def auto(
     if approve:
         consented = _consent_flow(preview.deliverable.cost_estimate)
         if consented:
-            # 以同意狀態重跑，讓報告反映同意與執行紀錄
-            preview = run_autopilot(task, out_dir=out, consented=True)
+            # 不重跑分析：用剛剛預覽並經你同意的「同一份」計畫更新狀態與報告，
+            # 確保執行的正是你看過的那份，也更快。
+            preview = apply_consent(preview, out_dir=out)
             console.print("[green]已取得同意，安全動作已執行（需花錢的動作仍以計畫呈現，不會誤燒錢）。[/green]")
         else:
             console.print("[yellow]已停止自動執行。分析報告已完成，沒有任何花錢、寫入或發布動作被執行。[/yellow]")
 
+    _print_done(preview)
+
+
+def _open_hint(path) -> str:
+    """依平台給「怎麼打開這個檔案」的可複製指令。"""
+    import sys
+
+    p = str(path)
+    if sys.platform.startswith("win"):
+        return f'start "" "{p}"'
+    if sys.platform == "darwin":
+        return f'open "{p}"'
+    return f'xdg-open "{p}"'
+
+
+def _print_done(outcome) -> None:
     console.print()
-    console.print("[bold green]完成！[/bold green]")
-    console.print(f"給你的白話懶人包：{preview.beginner_path}")
-    console.print(f"完整報告：{preview.report_path}")
-    console.print(f"成本與影響明細：{preview.cost_estimate_path}")
-    console.print(f"機器可讀資料：{preview.json_path}")
+    console.print("[bold green]完成！先打開這份最好懂的：[/bold green]")
+    console.print(f"  {outcome.beginner_path}")
+    console.print(f"  [dim]打開它：{_open_hint(outcome.beginner_path)}[/dim]")
+    console.print()
+    console.print("其他檔案：")
+    console.print(f"  會不會花錢的明細（給人看）：{outcome.cost_estimate_md_path}")
+    console.print(f"  完整報告（可交給團隊）：{outcome.report_path}")
+    console.print(f"  給自動化用的資料：{outcome.json_path}、{outcome.cost_estimate_path}")
 
 
 def demo(
@@ -97,6 +123,4 @@ def demo(
     console.print("[cyan]這是示範模式，全程免金鑰、不會花任何錢。[/cyan]")
     task = AutoTask(target="https://example.com", industry="電商", mock=True)
     outcome = run_autopilot(task, out_dir=out, consented=False, on_progress=lambda m: console.print(f"[dim]{m}[/dim]"))
-    console.print("[bold green]完成！[/bold green]")
-    console.print(f"給你的白話懶人包：{outcome.beginner_path}")
-    console.print(f"成本與影響明細：{outcome.cost_estimate_path}")
+    _print_done(outcome)

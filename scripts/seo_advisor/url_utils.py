@@ -59,3 +59,20 @@ def normalize_url(raw: str) -> str:
         )
 
     return text
+
+
+def looks_like_url(raw: str) -> bool:
+    """判斷使用者輸入比較像「網址」還是「一句目標描述」。
+
+    給 autopilot 之類需要區分兩者的地方用：新手常直接打 `example.com`（沒有
+    https://、也沒有空白），這種要能被當成網址；而「幫我規劃成長方案」這種
+    含空白的自然語言則不是網址。判斷方式是嘗試 normalize_url，成功即視為網址。
+    """
+    text = raw.strip()
+    if not text or " " in text or "　" in text:
+        return False
+    try:
+        normalize_url(text)
+        return True
+    except InvalidUrlError:
+        return False

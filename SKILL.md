@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.8
+version: 0.1.9
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,13 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.8）
+## 目前實作狀態（v0.1.9）
 
+- ✅ 新手快速啟用 + UX 優化（v0.1.9）：多視角稽核機器人來回多輪把關；修裸網域
+  URL bug（`example.com` 免打 https 即可）、信任文案統一（預設不花錢/不改站，
+  付費先同意）、autopilot 誠實標示 execution_mode 並附下一步指令、新增給人看的
+  `cost-estimate.md`、完成訊息附「怎麼打開報告」指令、安裝腳本加 Python 版本
+  硬擋與免 activate fallback。
 - ✅ 紮實度強化（v0.1.8）：能力地圖（`docs/capability-map.md`）、API 契約文件
   （`docs/api-contracts.md`）、CLI taxonomy help、CI 擴充為全 demo smoke +
   wheel 安裝驗證、依賴版本上限、provider 失敗路徑測試、heuristic 報告加推測
@@ -129,9 +134,9 @@ triggers:
 seo-advisor auto https://你的網站.com
 ```
 
-它會自動分析、產出一份白話懶人包 + 成本明細 + 待辦清單，全程免費、不會花任何
-錢（真正要花錢的動作會先給你看明細、同意一次才執行）。想先看範例就跑
-`seo-advisor auto-demo`。
+它會自動分析、產出一份白話懶人包 + 成本明細 + 待辦清單。**預設只做分析、
+不花錢、不改動你的網站**；真正要花錢或寫入的動作會先給你看明細、同意一次才
+執行。想先看範例就跑 `seo-advisor auto-demo`。
 
 **完全不會寫程式？** 執行 `install.ps1`（Windows）或 `install.sh`
 （Mac/Linux），再執行 `seo-advisor`，會有問答式精靈引導你——第一個選項就是

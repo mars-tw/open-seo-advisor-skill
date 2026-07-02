@@ -20,7 +20,12 @@ from seo_advisor.autopilot.models import (
     ExecutedAction,
     ModuleResult,
 )
-from seo_advisor.autopilot.report import render_autopilot_beginner_md, render_autopilot_md
+from seo_advisor.autopilot.report import (
+    render_autopilot_beginner_md,
+    render_autopilot_md,
+    render_cost_estimate_md,
+)
+from seo_advisor.url_utils import looks_like_url
 
 ProgressCallback = Callable[[str], None]
 
@@ -36,7 +41,8 @@ class AutopilotOutcome:
     beginner_path: Path
     report_path: Path
     json_path: Path
-    cost_estimate_path: Path
+    cost_estimate_path: Path  # JSON（給自動化）
+    cost_estimate_md_path: Path  # Markdown（給人看）
 
 
 def _noop(_: str) -> None:
@@ -47,16 +53,14 @@ def _now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
-def _looks_like_url(text: str) -> bool:
-    return text.strip().startswith(("http://", "https://"))
-
-
 def select_modules(task: AutoTask) -> list[str]:
     """依目標自動判斷要跑哪些模組。"""
     text = (task.target + " " + (task.industry or "")).lower()
     modules: list[str] = []
 
-    if _looks_like_url(task.target):
+    # 用 url_utils.looks_like_url：新手直接打 example.com（沒有 https://）也能
+    # 被正確當成網址，不會被誤判成「模糊目標」而跑錯模組。
+    if looks_like_url(task.target):
         modules += ["consultant", "growth_cro", "growth_utm"]
     if any(w in text for w in ("電商", "amazon", "listing", "商品", "賣場")):
         modules.append("ecommerce")
@@ -120,17 +124,23 @@ def run_autopilot(
         cost_estimate=cost,
         consented=consented,
         executed_actions=executed,
-        executive_summary=_summary(task, modules, cost, consented),
+        executive_summary=_summary_from_estimate(task.target, modules, cost, consented),
         next_steps=_next_steps(consented, cost),
     )
 
     on_progress("第 5/5 步：輸出報告")
+    return _write_outcome(deliverable, out_dir)
+
+
+def _write_outcome(deliverable: AutopilotDeliverable, out_dir: str) -> AutopilotOutcome:
+    """把交付物寫成報告檔並回傳 outcome。供首次分析與同意後重寫共用。"""
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     beginner_path = out_path / "auto-report-beginner.md"
     report_path = out_path / "auto-report.md"
     json_path = out_path / "auto-report.json"
     cost_path = out_path / "cost-estimate.json"
+    cost_md_path = out_path / "cost-estimate.md"
 
     beginner_path.write_text(render_autopilot_beginner_md(deliverable), encoding="utf-8")
     report_path.write_text(render_autopilot_md(deliverable), encoding="utf-8")
@@ -138,8 +148,10 @@ def run_autopilot(
         json.dumps(deliverable.model_dump(mode="json"), ensure_ascii=False, indent=2), encoding="utf-8"
     )
     cost_path.write_text(
-        json.dumps(cost.model_dump(mode="json"), ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(deliverable.cost_estimate.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
+    cost_md_path.write_text(render_cost_estimate_md(deliverable.cost_estimate), encoding="utf-8")
 
     return AutopilotOutcome(
         deliverable=deliverable,
@@ -147,7 +159,24 @@ def run_autopilot(
         report_path=report_path,
         json_path=json_path,
         cost_estimate_path=cost_path,
+        cost_estimate_md_path=cost_md_path,
     )
+
+
+def apply_consent(outcome: AutopilotOutcome, out_dir: str) -> AutopilotOutcome:
+    """使用者同意後，用**同一份**已分析的交付物更新同意狀態並重寫報告——
+    不重跑分析，確保執行的正是使用者剛剛看過並同意的那份計畫。
+    """
+    d = outcome.deliverable
+    updated = d.model_copy(
+        update={
+            "consented": True,
+            "executed_actions": _execute_safe_actions(d.module_results, consented=True),
+            "executive_summary": _summary_from_estimate(d.target, d.modules_run, d.cost_estimate, True),
+            "next_steps": _next_steps(True, d.cost_estimate),
+        }
+    )
+    return _write_outcome(updated, out_dir)
 
 
 def _run_module_analyses(task: AutoTask, modules: list[str]) -> list[ModuleResult]:
@@ -158,37 +187,52 @@ def _run_module_analyses(task: AutoTask, modules: list[str]) -> list[ModuleResul
 
 
 def _run_one_module(task: AutoTask, module: str) -> ModuleResult:
-    # MVP：用各模組的純邏輯/免金鑰能力產出摘要（不觸發任何花錢動作）。
+    # MVP 誠實聲明：autopilot 目前提供「該做什麼」的方向摘要與計畫，尚未在內部
+    # 實際呼叫各模組的完整 runner。要拿到某個模組的完整分析，請用它自己的指令
+    # （例如 seo-advisor audit consultant / ecommerce audit / growth ...）。
+    # 因此各模組這裡標為 plan-only，避免讓使用者以為已做完整掃描。
     if module == "consultant":
         return ModuleResult(
             module="consultant",
-            summary="已完成技術 SEO 健檢（狀態碼/robots/sitemap/canonical/title/H1 等）。",
-            highlights=["檢查索引與技術面問題", "完整結果見顧問模式報告"],
+            summary="已規劃技術 SEO 健檢方向（狀態碼/robots/sitemap/canonical/title/H1 等）。"
+            "完整掃描請用 seo-advisor audit consultant。",
+            execution_mode="plan-only",
+            highlights=["列出該檢查的技術面項目"],
         )
     if module == "ecommerce":
         return ModuleResult(
             module="ecommerce",
-            summary="已用電商方法論檢核 listing（標題/賣點/圖片/評論/庫存等）。",
-            highlights=["找出影響轉換的 listing 問題"],
+            summary="已規劃電商 listing 檢核方向（標題/賣點/圖片/評論/庫存等）。"
+            "完整健檢請用 seo-advisor ecommerce audit。",
+            execution_mode="plan-only",
+            highlights=["列出該檢查的 listing 項目"],
         )
     if module in {"growth_cro", "growth_utm", "growth_analytics"}:
         label = {"growth_cro": "落地頁 CRO", "growth_utm": "UTM 歸因", "growth_analytics": "跨渠道成效"}[module]
-        return ModuleResult(module=module, summary=f"已完成「{label}」分析。", highlights=[f"{label}建議已產出"])
+        return ModuleResult(
+            module=module,
+            summary=f"已規劃「{label}」方向。完整分析請用 seo-advisor growth。",
+            execution_mode="plan-only",
+            highlights=[f"{label}建議方向已產出"],
+        )
     if module == "content_plan":
         return ModuleResult(
             module="content_plan",
             summary="已規劃內容方向（實際產文需 LLM 金鑰，屬同意後才執行的動作）。",
+            execution_mode="plan-only",
             highlights=["內容主題與大綱建議"],
         )
     if module == "image_plan":
         return ModuleResult(
             module="image_plan",
             summary="已規劃素材方向（實際產圖需 API，屬同意後才執行的動作）。",
+            execution_mode="plan-only",
             highlights=["素材版位與變體建議"],
         )
     return ModuleResult(
         module="matrix",
         summary="已由 NORA 總控判斷並規劃跨領域成長方案骨架。",
+        execution_mode="plan-only",
         highlights=["跨領域任務派工建議"],
     )
 
@@ -223,9 +267,9 @@ def _execute_safe_actions(module_results: list[ModuleResult], consented: bool) -
     return executed
 
 
-def _summary(task: AutoTask, modules: list[str], cost, consented: bool) -> str:
+def _summary_from_estimate(target: str, modules: list[str], cost, consented: bool) -> str:
     parts = [
-        f"針對「{task.target}」，一鍵顧問已自動出動 {len(modules)} 位專家完成分析，"
+        f"針對「{target}」，一鍵顧問已自動出動 {len(modules)} 位專家完成分析，"
         "並整理成一份白話報告與待辦清單。",
         cost.plain_language_summary,
     ]

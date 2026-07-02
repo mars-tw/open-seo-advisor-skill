@@ -2,6 +2,47 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.9] - Unreleased
+
+新手/傻瓜快速啟用 + 使用者體驗優化。由 NORA 扮演多視角稽核機器人（傻瓜使用者/
+新手開發者/資深 UX/無障礙/文案信任）互相審核、來回多輪，CLAUDE（CEO/審核端）
+每輪把關收斂。
+
+### 修正
+
+- **[bug]** 裸網域 URL：新手直接打 `example.com`（沒有 `https://`）原本會被
+  autopilot 誤判成「模糊目標」而跑錯模組。新增 `url_utils.looks_like_url`，
+  現在裸網域會正確當網址跑顧問/CRO/UTM，含空白的自然語言仍走 matrix。
+- `auto --approve` 原本會在同意後**重跑一次分析**；改為 `apply_consent` 用
+  同一份已預覽並經同意的計畫更新狀態，不重跑（更快、且保證執行的正是你看過的）。
+
+### 使用者體驗 / 新手友善
+
+- **信任文案統一**：README/QUICKSTART/SKILL/wizard 的「全程免費、不會花任何錢」
+  全改成「預設只做分析、不花錢、不改動你的網站；付費或寫入動作會先列明細、
+  你同意一次才執行」，消除與 approve 機制的語意衝突。
+- `auto` 首屏固定印出安心提示（預設不花錢/不發布/不寫入）。
+- **誠實標示**：`ModuleResult` 加 `execution_mode`，報告以人話標籤呈現
+  （已完成掃描/已完成分析/示範資料/已產生行動計畫），並在每項後附「拿完整
+  結果可貼上的指令」，避免讓人以為已做完整掃描、也不會覺得「什麼都沒做」。
+- 新增 `cost-estimate.md`（給人看的成本明細），JSON 標明「給自動化用」。
+- 完成訊息主推白話懶人包，並附「怎麼打開這個檔案」的可複製指令
+  （Windows `start` / macOS `open` / Linux `xdg-open`）。
+
+### 安裝腳本 / 文件
+
+- `install.ps1`：加 Python >= 3.10 版本硬擋；移除會讓人誤以為卡住的 `--quiet`；
+  成功訊息改成「複製貼上、免啟動虛擬環境」的完整指令，並附 execution policy
+  被擋時的 fallback。
+- `install.sh`：移除 `--quiet`；成功訊息同樣改成免 activate 的完整指令。
+- `QUICKSTART.md`：加「找不到 seo-advisor 指令」的免 activate fallback。
+
+### CI / 測試
+
+- CI 增加：autopilot 產出 `cost-estimate.md` 檢查、裸網域 `auto example.com`
+  正確路由檢查。
+- 新增 `looks_like_url`、`apply_consent`、裸網域路由測試。
+
 ## [0.1.8] - Unreleased
 
 紮實度強化版：由 NORA 做一次全專案體檢找出弱點，CLAUDE（CEO/審核端）審核後

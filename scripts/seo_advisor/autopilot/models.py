@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -63,11 +65,16 @@ class CostEstimate(BaseModel):
     plain_language_summary: str = ""
 
 
+# 模組這次是「怎麼跑出來的」，如實標示避免讓使用者以為 mock 是真實掃描。
+ExecutionMode = Literal["真實掃描", "純邏輯", "mock", "plan-only"]
+
+
 class ModuleResult(BaseModel):
     """單一被 autopilot 呼叫的模組的結果摘要。"""
 
     module: str
     summary: str
+    execution_mode: ExecutionMode = "純邏輯"
     report_paths: list[str] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
 

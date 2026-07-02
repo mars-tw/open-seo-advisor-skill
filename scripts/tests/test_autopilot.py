@@ -34,6 +34,25 @@ def test_vague_goal_falls_back_to_matrix():
     assert "matrix" in modules
 
 
+def test_bare_domain_treated_as_url():
+    # 新手常直接打 example.com（沒有 https://），要能被當網址、跑顧問類模組
+    modules = select_modules(AutoTask(target="example.com"))
+    assert "consultant" in modules
+    modules2 = select_modules(AutoTask(target="www.shop.com.tw"))
+    assert "consultant" in modules2
+
+
+def test_apply_consent_does_not_rerun_analysis(tmp_path):
+    from seo_advisor.autopilot.runner import apply_consent, run_autopilot
+
+    preview = run_autopilot(AutoTask(target="example.com", mock=True), out_dir=str(tmp_path), consented=False)
+    before = preview.deliverable.module_results
+    final = apply_consent(preview, out_dir=str(tmp_path))
+    # 同意後用的是同一份分析結果（沒有重跑），只是狀態改為已同意
+    assert final.deliverable.consented is True
+    assert final.deliverable.module_results == before
+
+
 # --- 成本明細誠實性 ---
 
 def test_mock_estimate_is_zero_cost():
