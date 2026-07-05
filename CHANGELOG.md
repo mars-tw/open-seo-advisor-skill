@@ -2,6 +2,42 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.10] - Unreleased
+
+深度技術/資安強化。由 NORA 做程式碼層級深度稽核（資安/效能/健壯性/跨平台），
+CLAUDE（CEO/審核端）逐項驗證真偽後修補，並經 NORA 第 2 輪複審抓出修正裡的
+不完整處再補齊。
+
+### 安全修正
+
+- **[P0] SSRF redirect 繞過**：`HTTPConnector` 原本 `follow_redirects=True`，
+  只在請求前檢查原始 URL，公開網址可經 30x 被導向 private IP 或雲端 metadata
+  endpoint（如 `169.254.169.254`）而繞過檢查。改為 `follow_redirects=False`
+  + 手動 `_safe_get()`，**每一跳都重新做 SSRF 檢查、只允許 http/https、超過
+  上限即停**。已加測試證明 metadata 內容拿不到、file:// 被擋、正常 redirect 仍運作。
+- **[P1] 回應大小上限（真串流）**：`_safe_get` 改用 `client.stream()`，body
+  邊下載邊累加、超過上限（HTML 10MB / sitemap 20MB）即中止下載，避免超大
+  回應把整個 body 讀進記憶體造成 memory DoS（不再是下載完才截斷）。
+- **[P1] sitemap index 放大**：傳入剩餘 `limit`、子 sitemap 數上限 50、每次
+  子 sitemap 抓取前套 rate limit、達 limit 即停，避免請求放大 / 資源耗盡。
+- **[P1] 本地檔案大小上限**：`LocalArchiveConnector` 讀檔前先 `stat()`，超過
+  25MB 的檔案回報 `file_too_large` 而不讀進記憶體。
+- **XML 安全**：sitemap 解析前拒絕含 `<!DOCTYPE` / `<!ENTITY` 的內容，徹底
+  避免 billion laughs / XXE（無需新增 defusedxml 依賴）。
+- **錯誤訊息遮蔽**：新增 `redact_secrets`，統一遮蔽 URL 內帳密、`token=`、
+  `sk-*` / `sk-ant-*` 金鑰、本機使用者路徑；`FriendlyError.render` 全面套用，
+  避免錯誤訊息意外洩漏敏感資訊。
+
+### 健壯性 / 驗證
+
+- `AdsSafetyPolicy` 與 `InsightsRow` 的金額/百分比/次數/天數欄位加
+  `Field(ge=0, le=...)`，避免被設成負數或荒謬值而讓預算保護失效。
+
+### 測試
+
+新增 http 資安測試（SSRF redirect、串流截斷、DOCTYPE 拒絕）、redaction 測試、
+ads 數值驗證測試，總計 255 個測試全過，ruff lint 乾淨。
+
 ## [0.1.9] - Unreleased
 
 新手/傻瓜快速啟用 + 使用者體驗優化。由 NORA 扮演多視角稽核機器人（傻瓜使用者/

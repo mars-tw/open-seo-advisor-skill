@@ -13,6 +13,9 @@ from seo_advisor.encoding_utils import decode_html_bytes, detect_html_encoding
 from seo_advisor.models import ConnectorProfile, FileRecord, PageSnapshot, SafetyPolicy, UrlRecord
 from seo_advisor.security.safe_archive import resolve_inside_root, safe_extract_zip
 
+# 單一本地檔案讀入記憶體的大小上限，避免超大檔案造成 OOM。
+_MAX_LOCAL_FILE_BYTES = 25 * 1024 * 1024  # 25 MB
+
 _STACK_MARKERS = {
     "wordpress": ["wp-config.php", "wp-content"],
     "nextjs": ["next.config.js", "next.config.mjs", "next.config.ts"],
@@ -98,6 +101,21 @@ class LocalArchiveConnector(WebsiteConnector):
                 url=url, status_code=404, final_url=url, headers={}, html="", fetched_at=fetched_at
             )
 
+        # 大小上限：避免使用者的 repo/zip 內夾帶超大檔案讀進記憶體造成 OOM。
+        if file_path.stat().st_size > _MAX_LOCAL_FILE_BYTES:
+            return PageSnapshot(
+                url=url,
+                status_code=0,
+                final_url=url,
+                headers={},
+                html="",
+                fetched_at=fetched_at,
+                fetch_error_type="file_too_large",
+                fetch_error_message=(
+                    f"檔案超過大小上限（{_MAX_LOCAL_FILE_BYTES // (1024 * 1024)} MB），已略過：{url}"
+                ),
+            )
+
         raw_bytes = file_path.read_bytes()
         html = decode_html_bytes(raw_bytes)
         return PageSnapshot(
@@ -129,4 +147,9 @@ class LocalArchiveConnector(WebsiteConnector):
         file_path = resolve_inside_root(self.root, path)
         if not file_path.exists() or not file_path.is_file():
             raise FileNotFoundError(f"找不到檔案：{path}")
+        if file_path.stat().st_size > _MAX_LOCAL_FILE_BYTES:
+            raise ValueError(
+                f"檔案超過大小上限（{_MAX_LOCAL_FILE_BYTES // (1024 * 1024)} MB），"
+                f"為避免記憶體耗盡不予讀取：{path}"
+            )
         return file_path.read_bytes()

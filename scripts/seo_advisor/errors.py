@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -16,6 +17,27 @@ from seo_advisor.scan_runner import SiteUnreachableError
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError
 from seo_advisor.security.safe_archive import UnsafeArchiveError
 from seo_advisor.url_utils import InvalidUrlError
+
+# 遮蔽敏感片段：避免錯誤訊息意外洩漏 token、URL 內帳密、或本機使用者路徑。
+_USERINFO_RE = re.compile(r"(https?://)[^/@\s:]+(?::[^/@\s]+)?@")
+_TOKEN_RE = re.compile(
+    r"(?i)\b(api[_-]?key|token|secret|access[_-]?token|authorization|bearer)"
+    r"\s*[=:]\s*[^\s,;'\"]+"
+)
+_WIN_HOME_RE = re.compile(r"[Cc]:\\Users\\[^\\/\s]+")
+_NIX_HOME_RE = re.compile(r"/(?:home|Users)/[^/\s]+")
+# OpenAI / Anthropic 風格的金鑰前綴，即使沒有 key= 也能被抓到。
+_KEY_PREFIX_RE = re.compile(r"\b(sk-ant-[A-Za-z0-9_-]{6,}|sk-[A-Za-z0-9_-]{6,})")
+
+
+def redact_secrets(text: str) -> str:
+    """把可能的敏感片段遮蔽掉，用於任何要顯示給使用者或寫入報告的錯誤訊息。"""
+    text = _USERINFO_RE.sub(r"\1[已遮蔽]@", text)
+    text = _TOKEN_RE.sub(lambda m: f"{m.group(1)}=[已遮蔽]", text)
+    text = _KEY_PREFIX_RE.sub("[已遮蔽]", text)
+    text = _WIN_HOME_RE.sub(r"C:\\Users\\[使用者]", text)
+    text = _NIX_HOME_RE.sub("/home/[使用者]", text)
+    return text
 
 
 @dataclass
@@ -27,10 +49,13 @@ class FriendlyError:
     next_steps: list[str]
 
     def render(self) -> str:
-        lines = [f"[問題] {self.title}", ""]
-        if self.reasons:
+        # 所有輸出統一經過遮蔽，避免任何 reason/title 意外帶出敏感資訊。
+        title = redact_secrets(self.title)
+        reasons = [redact_secrets(r) for r in self.reasons]
+        lines = [f"[問題] {title}", ""]
+        if reasons:
             lines.append("可能原因：")
-            lines.extend(f"  - {r}" for r in self.reasons)
+            lines.extend(f"  - {r}" for r in reasons)
             lines.append("")
         if self.next_steps:
             lines.append("建議下一步：")

@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.9
+version: 0.1.10
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,13 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.9）
+## 目前實作狀態（v0.1.10）
 
+- ✅ 深度技術/資安強化（v0.1.10）：NORA 程式碼層級深度稽核 + 多輪複審。修
+  P0 SSRF redirect 繞過（每一跳重新檢查、擋 metadata IP）、回應大小上限改真
+  串流防 memory DoS、sitemap index 請求放大防護、本地檔案大小上限、sitemap XML
+  拒絕 DOCTYPE/ENTITY 防 billion laughs、錯誤訊息 redact 敏感資訊、廣告安全
+  政策數值驗證。
 - ✅ 新手快速啟用 + UX 優化（v0.1.9）：多視角稽核機器人來回多輪把關；修裸網域
   URL bug（`example.com` 免打 https 即可）、信任文案統一（預設不花錢/不改站，
   付費先同意）、autopilot 誠實標示 execution_mode 並附下一步指令、新增給人看的

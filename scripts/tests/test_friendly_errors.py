@@ -40,3 +40,40 @@ def test_render_produces_readable_text():
     text = friendly.render()
     assert "[問題]" in text
     assert "建議下一步" in text
+
+
+# --- 敏感資訊遮蔽（避免錯誤訊息洩漏 token/帳密/本機路徑）---
+
+def test_redact_url_userinfo():
+    from seo_advisor.errors import redact_secrets
+
+    out = redact_secrets("connect failed https://admin:s3cret@internal.host/x")
+    assert "s3cret" not in out
+    assert "admin" not in out
+
+
+def test_redact_token_assignment():
+    from seo_advisor.errors import redact_secrets
+
+    assert "sk-abc123" not in redact_secrets("error api_key=sk-abc123def")
+    assert "xyz789" not in redact_secrets("Authorization: xyz789")
+
+
+def test_redact_home_path():
+    from seo_advisor.errors import redact_secrets
+
+    assert "digimkt" not in redact_secrets(r"open C:\Users\digimkt\file.txt")
+    assert "alice" not in redact_secrets("open /home/alice/file.txt")
+
+
+def test_friendly_error_render_redacts():
+    from seo_advisor.errors import FriendlyError
+
+    fe = FriendlyError(
+        title="failed for https://u:p@h/x",
+        reasons=["token=deadbeef leaked"],
+        next_steps=["retry"],
+    )
+    rendered = fe.render()
+    assert "deadbeef" not in rendered
+    assert "u:p@h" not in rendered

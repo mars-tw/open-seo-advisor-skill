@@ -177,3 +177,25 @@ def test_plan_json_is_written(tmp_path):
     )
     data = json.loads(outcome.plan_json_path.read_text(encoding="utf-8"))
     assert data["dry_run"] is True
+
+
+# --- 數值驗證：負數應被 Pydantic 拒絕，避免預算保護失效 ---
+
+def test_ads_safety_policy_rejects_negative_budget_cap():
+    import pytest
+    from pydantic import ValidationError
+
+    from seo_advisor.ads.models import AdsSafetyPolicy
+
+    with pytest.raises(ValidationError):
+        AdsSafetyPolicy(max_total_budget_delta_minor_units_per_run=-1)
+
+
+def test_ads_metric_rejects_negative_spend():
+    import pytest
+    from pydantic import ValidationError
+
+    from seo_advisor.ads.models import InsightsRow
+
+    with pytest.raises(ValidationError):
+        InsightsRow(entity_id="1", entity_type="ad", spend_minor_units=-5)

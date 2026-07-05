@@ -46,14 +46,14 @@ class InsightsRow(BaseModel):
     entity_type: str  # "campaign" | "adset" | "ad"
     name: str = ""
     status: AdEntityStatus = AdEntityStatus.ACTIVE
-    spend_minor_units: int = 0
-    impressions: int = 0
-    clicks: int = 0
-    conversions: int = 0
-    conversion_value_minor_units: int = 0
-    frequency: float = 0.0
-    daily_budget_minor_units: int | None = None
-    days_active: int = 0
+    spend_minor_units: int = Field(default=0, ge=0)
+    impressions: int = Field(default=0, ge=0)
+    clicks: int = Field(default=0, ge=0)
+    conversions: int = Field(default=0, ge=0)
+    conversion_value_minor_units: int = Field(default=0, ge=0)
+    frequency: float = Field(default=0.0, ge=0)
+    daily_budget_minor_units: int | None = Field(default=None, ge=0)
+    days_active: int = Field(default=0, ge=0)
 
     @property
     def ctr(self) -> float:
@@ -85,22 +85,23 @@ class AdsSafetyPolicy(BaseModel):
     require_apply_confirmation: bool = True
     require_budget_confirmation: bool = True
 
-    max_actions_per_run: int = 10
-    max_pause_ads_per_run: int = 20
+    max_actions_per_run: int = Field(default=10, ge=0)
+    max_pause_ads_per_run: int = Field(default=20, ge=0)
 
     # MVP 一律禁止的高風險動作（會擴大花費或恢復投放）
     allow_campaign_pause: bool = False
     allow_activate_entities: bool = False
     allow_budget_increase: bool = False
 
-    # 預算變更的多重上限（即使開啟增加預算，也受這些上限約束）
-    max_budget_change_percent_per_entity: float = 0.15
-    max_budget_change_minor_units_per_entity: int = 5000
-    max_total_budget_delta_minor_units_per_run: int = 10000
+    # 預算變更的多重上限（即使開啟增加預算，也受這些上限約束）。
+    # 加上 ge/le 驗證，避免被設成負數或荒謬值而讓預算保護失效。
+    max_budget_change_percent_per_entity: float = Field(default=0.15, ge=0, le=1)
+    max_budget_change_minor_units_per_entity: int = Field(default=5000, ge=0)
+    max_total_budget_delta_minor_units_per_run: int = Field(default=10000, ge=0)
 
     # 決策門檻：資料量不足時不建議動作，避免根據雜訊做決定
-    min_observation_days: int = 7
-    min_spend_minor_units_for_decision: int = 1000
+    min_observation_days: int = Field(default=7, ge=0)
+    min_spend_minor_units_for_decision: int = Field(default=1000, ge=0)
 
     rollback_log_required: bool = True
 
