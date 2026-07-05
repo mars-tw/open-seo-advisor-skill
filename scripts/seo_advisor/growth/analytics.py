@@ -96,10 +96,16 @@ def _find_low_conversion_traffic(
                         "conversions": row.conversions,
                         "conversion_rate": row.conversion_rate,
                         "median_conversion_rate": median_cvr,
+                        # 判斷門檻透明化：低於此轉換率且流量≥500 才會被標記。
+                        "flagged_threshold": round(threshold, 4),
+                        "threshold_rule": "max(0.5%, 各渠道轉換率中位數 × 0.4)",
+                        "threshold_profile": "default",
+                        "min_sessions_to_flag": 500,
                     },
                     recommendation=(
                         "檢查落地頁訊息是否承接廣告/貼文承諾、CTA 是否明確、"
                         "表單是否過長，以及受眾意圖是否與頁面一致。"
+                        "（此門檻為通用預設值，請依你的產業、客單價與銷售週期調整判斷。）"
                     ),
                 )
             )
@@ -129,10 +135,15 @@ def _find_high_cost_low_return(rows: list[AnalyticsMetricRow]) -> list[Analytics
                         "conversions": row.conversions,
                         "roas": round(roas, 2),
                         "cost_per_conversion": cost_per_conversion,
+                        # 判斷門檻透明化：花費≥500 元且（轉換≤3 或 ROAS<0.8）才標記。
+                        "flagged_rule": "cost ≥ 500 且 (conversions ≤ 3 或 ROAS < 0.8)",
+                        "roas_threshold": 0.8,
+                        "threshold_profile": "default",
                     },
                     recommendation=(
                         "先不要加碼此渠道；檢查關鍵字/受眾、素材、出價與落地頁，"
                         "必要時只產生 dry-run 預算調整計畫，需人工審核後才套用。"
+                        "（ROAS 0.8 為通用預設門檻，實際可接受值依你的毛利率而定。）"
                     ),
                 )
             )

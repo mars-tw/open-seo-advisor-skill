@@ -2,6 +2,31 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.11] - Unreleased
+
+輸出實用度強化。由 NORA 全技能盤點提出優化清單，CLAUDE（CEO/審核端）挑出
+「高價值 + 風險可控」批次執行，並經 NORA 第 2 輪複審抓出誤報後修正。
+
+### 新增 SEO 檢查（Consultant Mode，大幅提升診斷實用度）
+
+- **canonical 跨網域檢查**：偵測 canonical 指向不同網域（會把搜尋權重讓給外站）。
+  已對 `www.x.com` ↔ `x.com` 等合法 canonicalization 做 host 正規化避免誤報；
+  文案提醒轉載/多網域/遷移可能是刻意設定，請確認。
+- **Open Graph 檢查**：偵測頁面缺少 og:title / og:image（分享到社群時沒有預覽
+  卡片、降低點擊）。已跳過 noindex 頁與 API/後台路徑降噪。
+- **JSON-LD 結構化資料檢查**：偵測 JSON-LD 語法無法解析（會失去 rich result）。
+
+### 輸出品質
+
+- Growth 成效分析的低轉換 / 高成本 finding 補上**判斷門檻透明化**
+  （flagged_threshold、threshold_rule、roas_threshold），並標明為通用預設值、
+  提醒依產業與毛利調整，避免暗示絕對標準。
+
+### 測試
+
+新增 10 個測試（三個新檢查的正/負案例、www↔apex 不誤報、noindex/API 頁降噪），
+總計 264 個測試全過，ruff lint 乾淨。
+
 ## [0.1.10] - Unreleased
 
 深度技術/資安強化。由 NORA 做程式碼層級深度稽核（資安/效能/健壯性/跨平台），

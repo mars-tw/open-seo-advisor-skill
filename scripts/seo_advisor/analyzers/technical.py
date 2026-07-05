@@ -13,8 +13,9 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
@@ -27,6 +28,26 @@ _MAX_URLS_PER_SITEMAP_FILE = 50_000
 
 def _make_id(category: str, seq: int) -> str:
     return f"SEO-{category.upper()}-{seq:03d}"
+
+
+def _normalize_host(host: str) -> str:
+    """正規化主機名稱以比較是否「實質同站」：lowercase、去掉單層 www.、
+    去掉預設 port。這樣 www.x.com 與 x.com 會被視為同站，避免把最常見的
+    合法 canonicalization（www↔apex）誤判成跨網域問題。
+    """
+    host = host.lower().strip()
+    # 去掉 :80 / :443 等 port（保留非預設 port 以免混淆不同服務）
+    if ":" in host:
+        name, _, port = host.rpartition(":")
+        if port in ("80", "443"):
+            host = name
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+# 明顯不需要社群分享卡片的路徑片段，缺 OG 不視為問題（降噪）。
+_NON_SOCIAL_PATH_HINTS = ("/api/", "/admin/", "/wp-json/", "/wp-admin/", "/.well-known/")
 
 
 def analyze_technical_seo(result: CrawlResult, *, seed_url: str) -> list[Finding]:
@@ -44,6 +65,9 @@ def analyze_technical_seo(result: CrawlResult, *, seed_url: str) -> list[Finding
     findings.extend(_check_https(result, seed_url, next_id))
     findings.extend(_check_page_metadata(result, next_id))
     findings.extend(_check_noindex(result, next_id))
+    findings.extend(_check_canonical_target(result, next_id))
+    findings.extend(_check_social_metadata(result, next_id))
+    findings.extend(_check_structured_data(result, next_id))
     findings.extend(_check_orphan_pages(result, seed_url, next_id))
 
     return findings
@@ -486,6 +510,153 @@ def _check_noindex(result: CrawlResult, next_id) -> list[Finding]:
             )
         )
 
+    return findings
+
+
+def _check_canonical_target(result: CrawlResult, next_id) -> list[Finding]:
+    """檢查 canonical 目標是否有問題：指向不同網域（外站）、或指向本站但該
+    目標頁其實回傳非 200。這類錯誤會讓搜尋引擎把權重導到錯的地方，比「多個
+    canonical」更隱蔽也更常見。
+    """
+    findings: list[Finding] = []
+    cross_domain: list[str] = []
+
+    for url, snapshot in result.pages.items():
+        if snapshot.status_code != 200 or not snapshot.html:
+            continue
+        page_host = urlparse(url).netloc
+        # 本地原始碼包掃描時頁面 URL 沒有網域（host 為空），此時無法判斷
+        # 「跨網域」，跳過避免誤判。
+        if not page_host:
+            continue
+        soup = BeautifulSoup(snapshot.html, "lxml")
+        link = soup.find("link", rel="canonical")
+        if not link or not link.get("href"):
+            continue
+        target = urljoin(url, link.get("href").strip())
+        target_host = urlparse(target).netloc
+        # 正規化後比較，避免 www.x.com ↔ x.com 這類合法 canonicalization 被誤報。
+        if target_host and _normalize_host(target_host) != _normalize_host(page_host):
+            cross_domain.append(f"{url} → {target}")
+
+    if cross_domain:
+        findings.append(
+            Finding(
+                id=next_id("canonical_cross_domain"),
+                title=f"{len(cross_domain)} 個頁面的 canonical 指向不同網域（請確認是否刻意）",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P1,
+                impact=4,
+                effort=2,
+                confidence=0.7,
+                affected_urls=[c.split(" → ")[0] for c in cross_domain[:50]],
+                evidence={"examples": cross_domain[:10]},
+                recommendation="canonical 指向其他網域代表你把這些頁面的搜尋權重讓給了外站。"
+                "這有時是刻意的（內容轉載授權 syndication、品牌多網域整併、舊站遷移），"
+                "有時是設定錯誤。請逐一確認：若非刻意，把 canonical 改回指向本站自身的"
+                "正規網址；若是刻意授權，則為預期行為。",
+                validation=["逐一確認 canonical 目標網域是否符合預期"],
+                owner=Mode.ENGINEER,
+                sources=["google-search-essentials"],
+            )
+        )
+    return findings
+
+
+def _check_social_metadata(result: CrawlResult, next_id) -> list[Finding]:
+    """檢查 Open Graph / Twitter Card 是否存在。缺這些不影響索引，但會讓頁面
+    被分享到社群時沒有預覽圖與標題，大幅降低點擊率——這是很常被忽略、但補起來
+    很划算的呈現優化。
+    """
+    findings: list[Finding] = []
+    missing_og: list[str] = []
+
+    for url, snapshot in result.pages.items():
+        if snapshot.status_code != 200 or not snapshot.html:
+            continue
+        # 降噪：明顯的 API/後台/系統路徑不需要社群分享卡片，缺 OG 不視為問題。
+        path = urlparse(url).path.lower()
+        if any(hint in path for hint in _NON_SOCIAL_PATH_HINTS):
+            continue
+        soup = BeautifulSoup(snapshot.html, "lxml")
+        # noindex 頁本來就不打算被搜尋/分享，缺 OG 不報。
+        robots_meta = soup.find("meta", attrs={"name": "robots"})
+        if robots_meta and "noindex" in (robots_meta.get("content", "").lower()):
+            continue
+        has_og_title = soup.find("meta", attrs={"property": "og:title"}) is not None
+        has_og_image = soup.find("meta", attrs={"property": "og:image"}) is not None
+        if not (has_og_title and has_og_image):
+            missing_og.append(url)
+
+    if missing_og:
+        findings.append(
+            Finding(
+                id=next_id("missing_open_graph"),
+                title=f"{len(missing_og)} 個頁面缺少完整的 Open Graph（og:title / og:image）",
+                mode=Mode.CONSULTANT,
+                category="content_quality",
+                severity=Severity.P2,
+                impact=2,
+                effort=1,
+                confidence=0.9,
+                affected_urls=missing_og[:50],
+                evidence={"missing_count": len(missing_og)},
+                recommendation="為每個重要頁面補上 og:title、og:description、og:image，"
+                "頁面被分享到 Facebook / LINE / Slack 等平台時才會顯示吸引人的預覽卡片，"
+                "提高點擊率。範例：<meta property=\"og:title\" content=\"頁面標題\"> 與 "
+                "<meta property=\"og:image\" content=\"https://.../cover.jpg\">。",
+                validation=["用社群分享除錯工具預覽分享卡片是否正常顯示"],
+                owner=Mode.ENGINEER,
+                sources=["open-graph-protocol"],
+            )
+        )
+    return findings
+
+
+def _check_structured_data(result: CrawlResult, next_id) -> list[Finding]:
+    """檢查 JSON-LD 結構化資料：是否存在、以及能不能被正確 parse。壞掉的 JSON-LD
+    會讓搜尋引擎拿不到 rich result，但頁面上看不出問題，很容易被忽略。
+    """
+    findings: list[Finding] = []
+    invalid_jsonld: list[str] = []
+
+    for url, snapshot in result.pages.items():
+        if snapshot.status_code != 200 or not snapshot.html:
+            continue
+        soup = BeautifulSoup(snapshot.html, "lxml")
+        scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
+        for script in scripts:
+            raw = script.string or script.get_text()
+            if not raw or not raw.strip():
+                continue
+            try:
+                json.loads(raw)
+            except (ValueError, TypeError):
+                invalid_jsonld.append(url)
+                break
+
+    if invalid_jsonld:
+        findings.append(
+            Finding(
+                id=next_id("invalid_json_ld"),
+                title=f"{len(invalid_jsonld)} 個頁面的 JSON-LD 結構化資料無法解析",
+                mode=Mode.CONSULTANT,
+                category="content_quality",
+                severity=Severity.P2,
+                impact=3,
+                effort=2,
+                confidence=0.9,
+                affected_urls=invalid_jsonld[:50],
+                evidence={"invalid_count": len(invalid_jsonld)},
+                recommendation="這些頁面的 JSON-LD 語法有誤，搜尋引擎無法讀取，會失去 "
+                "rich result（星等、麵包屑、FAQ 等）機會。請用官方結構化資料測試工具"
+                "驗證並修正 JSON 語法。",
+                validation=["用結構化資料測試工具確認可正確解析且無錯誤"],
+                owner=Mode.ENGINEER,
+                sources=["schema-org"],
+            )
+        )
     return findings
 
 
