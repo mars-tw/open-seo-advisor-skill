@@ -115,3 +115,112 @@ def from_content(
         variants=2,
     )
     _run(provider, request, out, debug=debug)
+
+
+@image_app.command("from-ads")
+def from_ads(
+    ads_report: str = typer.Option(..., "--ads-report", help="Meta 廣告診斷產出的 ads-report.json 路徑"),
+    aspect: str = typer.Option("1:1", "--aspect", help="長寬比：1:1/4:5/9:16（廣告常用）"),
+    variants: int = typer.Option(3, "--variants", help="產生幾個素材變體（預設 3：不同創意角度）"),
+    brand: str = typer.Option(None, "--brand", help="品牌名稱（用於視覺一致性）"),
+    angle: str = typer.Option(None, "--angle", help="指定創意角度覆寫（pain_point/benefit_outcome/social_proof）"),
+    generate: bool = typer.Option(
+        False, "--generate", help="真的呼叫 provider 產圖（會花費 API）；預設只產 brief，不花錢"
+    ),
+    confirm_low_confidence: bool = typer.Option(
+        False,
+        "--confirm-low-confidence",
+        help="當主要素材機會信心較低時，仍要真產圖需明確加上此旗標",
+    ),
+    provider: str = typer.Option("openai", "--provider", help="圖像 provider：openai/mock"),
+    out: str = typer.Option("./ad-creative", "--out", help="輸出目錄"),
+    debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
+) -> None:
+    """從廣告診斷報告，把素材疲勞等問題轉成新素材方向 brief。
+
+    預設只產出 brief（image-brief.md/json，不花錢）；加 --generate 才真的產圖。
+    """
+    from seo_advisor.images.ads_bridge import (
+        NoCreativeOpportunityError,
+        build_image_request_from_ads,
+        extract_creative_opportunities,
+    )
+    from seo_advisor.ads.models import AdsReport
+
+    try:
+        data = json.loads(Path(ads_report).read_text(encoding="utf-8"))
+        report = AdsReport.model_validate(data)
+        request, primary = build_image_request_from_ads(
+            report, angle_override=angle, aspect_ratio=aspect, variants=variants, brand=brand
+        )
+        opportunities = extract_creative_opportunities(report)
+    except NoCreativeOpportunityError as exc:
+        console.print(f"[yellow]{exc}[/yellow]")
+        raise typer.Exit(code=1)
+    except Exception as exc:  # noqa: BLE001
+        if debug:
+            raise
+        console.print(f"[red]{translate_exception(exc).render()}[/red]")
+        raise typer.Exit(code=1)
+
+    # 一律先寫出 brief（給人看 + 機器可讀），不花錢。
+    out_path = Path(out)
+    out_path.mkdir(parents=True, exist_ok=True)
+    (out_path / "image-brief.md").write_text(
+        _render_ads_brief(report, primary, opportunities, request), encoding="utf-8"
+    )
+    (out_path / "image-brief.json").write_text(
+        json.dumps(
+            {"request": request.model_dump(mode="json"),
+             "opportunities": [o.model_dump(mode="json") for o in opportunities]},
+            ensure_ascii=False, indent=2,
+        ),
+        encoding="utf-8",
+    )
+    console.print(f"[green]已產生素材方向 brief：{out_path / 'image-brief.md'}[/green]")
+
+    if not generate:
+        console.print(
+            "[cyan]目前只產出 brief，沒有花任何錢。確認方向後，加上 --generate 才會真的產圖"
+            "（會用到 image provider API 費用；或用 --provider mock 免費試玩）。[/cyan]"
+        )
+        return
+
+    # 低信心閘門：若主要機會信心較低（可能根本不是素材問題），真產圖需再明確確認，
+    # 避免使用者白花錢產出無用素材。mock 免費，不受此閘門限制。
+    if primary.needs_human_confirm and provider != "mock" and not confirm_low_confidence:
+        console.print(
+            "[yellow]這份報告的主要素材機會信心較低（可能不是素材問題，或缺乏 frequency/CTR 佐證）。"
+            "為避免白花錢，已停在 brief。若你確認要產圖，請加上 --confirm-low-confidence，"
+            "或先用 --provider mock 免費預覽。[/yellow]"
+        )
+        return
+
+    if provider != "mock":
+        console.print(
+            f"[yellow]即將呼叫 {provider} 產生 {request.variants} 張素材，可能產生 API 費用。[/yellow]"
+        )
+    _run(provider, request, out, debug=debug)
+
+
+def _render_ads_brief(report, primary, opportunities, request) -> str:
+    lines = ["# 廣告素材方向 brief（由廣告診斷自動產生）", ""]
+    lines.append(f"- 廣告帳戶健康分數：{report.account_health_score:.0f}/100")
+    lines.append(f"- 主要素材機會：{primary.fatigue_reason}")
+    if primary.needs_human_confirm:
+        lines.append("- ⚠ 此機會信心較低，請先人工確認是否真的是素材問題。")
+    lines.append("")
+    lines.append("## 建議產出的素材 prompt")
+    lines.append("")
+    lines.append("```")
+    lines.append(request.prompt)
+    lines.append("```")
+    lines.append("")
+    lines.append("## 本次偵測到的所有素材機會（依優先順序）")
+    lines.append("")
+    for o in opportunities:
+        flag = "（需人工確認）" if o.needs_human_confirm else ""
+        lines.append(f"- [{o.severity}] {o.fatigue_reason} {flag}")
+    lines.append("")
+    lines.append("> 產出的是「該測哪些新創意角度」，不是換顏色的微調。上架前務必人工確認廣告政策與法規。")
+    return "\n".join(lines)

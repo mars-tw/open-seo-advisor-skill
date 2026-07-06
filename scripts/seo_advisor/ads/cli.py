@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 from rich.console import Console
 
@@ -122,12 +124,19 @@ def demo(
         console.print(f"[red]{translate_exception(exc).render()}[/red]")
         raise typer.Exit(code=1)
 
+    # 一併輸出 ads-report.json，讓使用者可直接串 image from-ads（找素材問題→產素材）。
+    from seo_advisor.ads.report import render_ads_report_json
+
+    report_json = Path(out) / "ads-report.json"
+    report_json.write_text(render_ads_report_json(outcome.report), encoding="utf-8")
+
     console.print(
         f"[bold green]完成！帳戶健康分數：{outcome.report.account_health_score:.0f}/100，"
         f"產出 {len(outcome.plan.actions)} 個建議動作。[/bold green]"
     )
     console.print(f"報告：{outcome.report_md_path}")
     console.print(f"行動計畫：{outcome.plan_json_path}")
+    console.print(f"機器可讀報告：{report_json}")
 
 
 @ads_app.command("apply")

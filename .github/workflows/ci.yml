@@ -112,6 +112,14 @@ jobs:
         run: |
           python -m seo_advisor.cli ads demo --out ./ci-ads
           test -f ci-ads/action-plan.json
+          test -f ci-ads/ads-report.json
+
+      - name: Creative brief from ads report (image from-ads)
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli image from-ads --ads-report ci-ads/ads-report.json --out ./ci-cre
+          test -f ci-cre/image-brief.md
+          test -f ci-cre/image-brief.json
 
   wheel-install-smoke:
     name: Wheel build + clean install smoke

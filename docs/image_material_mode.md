@@ -60,5 +60,17 @@ manifest 長相；`--provider openai`（預設）呼叫 OpenAI Images API（`gpt
 
 - **Content Writer**：`seo-advisor image from-content` 讀取文章報告的主題，
   產生對應的封面配圖。
-- **Meta 廣告**：素材疲勞的廣告可用這個模式產生新的素材變體；本模式只產
-  素材，實際上架仍由廣告模式（且受 `AdsSafetyPolicy` 約束）處理。
+- **Meta 廣告**：`seo-advisor image from-ads ads-report.json` 讀取廣告診斷
+  報告，把「素材疲勞、CTR 下降」等問題自動轉成新素材方向 brief（建議測試
+  痛點/成果/信任型等不同創意角度，而非換顏色）。本模式只產素材，實際上架
+  仍由廣告模式（且受 `AdsSafetyPolicy` 約束）處理。
+
+  ```bash
+  seo-advisor ads demo --out ./ads               # 產生 ads-report.json
+  seo-advisor image from-ads --ads-report ./ads/ads-report.json
+  ```
+
+  **成本安全**：`from-ads` **預設只產出 brief（image-brief.md/json），不呼叫
+  API、不花錢**。要真的產圖必須明確加 `--generate`；若主要素材機會信心較低
+  （可能不是素材問題，或缺 frequency/CTR 佐證），還需再加 `--confirm-low-confidence`
+  才會產圖，避免白花錢。純技術/預算/受眾/追蹤問題不會被誤轉成產圖任務。

@@ -2,6 +2,43 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.13] - Unreleased
+
+模組串接：廣告 ↔ 產圖。由 NORA 設計萃取邏輯，CLAUDE（CEO/審核端）收斂並
+強化成本安全後實作，經 NORA 第 2 輪複審抓出「低信心仍會花錢」風險後補閘門。
+
+### 新增：`seo-advisor image from-ads`
+
+把廣告診斷發現的素材問題（素材疲勞、CTR 下降）一鍵轉成新素材方向 brief——
+建議測試痛點/成果/信任型等不同創意角度，而非換顏色（延續蒸餾的付費廣告方法論）。
+
+```bash
+seo-advisor ads demo --out ./ads
+seo-advisor image from-ads --ads-report ./ads/ads-report.json
+```
+
+### 成本安全（核心設計）
+
+- **預設只產 brief（image-brief.md/json），不呼叫 API、不花錢**；要真產圖必須
+  明確加 `--generate`。
+- **低信心閘門**：若主要素材機會信心較低（performance/audience 類、或缺
+  frequency/CTR 佐證的 creative_fatigue），加了 `--generate` 也要再加
+  `--confirm-low-confidence` 才產圖，避免白花錢產無用素材。
+- `--provider mock` 永遠免費。
+
+### 保守的萃取邏輯（不誤導產無用素材）
+
+- 只有「產新素材能解決」的問題才納入（creative_fatigue，或含素材訊號的 performance）。
+- tracking / budget / structure 一律排除——這些不是產圖能修的。
+- ROAS 低但無 CTR/素材訊號 → 排除（可能是追蹤/落地頁問題）。
+- performance/audience 納入時一律標「需人工確認」。
+- `ads demo` 一併輸出 `ads-report.json` 供直接串接。
+
+### 測試 / CI
+
+新增 10 個 ads_bridge 測試（含技術問題排除、低信心標記、安全提示），CI 增加
+`image from-ads` 串接 smoke。總計 285 測試全過。
+
 ## [0.1.12] - Unreleased
 
 模組串接：內容 ↔ 顧問。由 NORA 設計萃取邏輯，CLAUDE（CEO/審核端）收斂範圍
