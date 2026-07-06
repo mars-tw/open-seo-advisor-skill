@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
@@ -127,7 +128,10 @@ def audit_consultant(
 
 @app.command("write")
 def write_content(
-    topic: str = typer.Option(..., "--topic", help="文章主題"),
+    topic: str = typer.Option(None, "--topic", help="文章主題（用 --from-report 時可省略，會自動萃取）"),
+    from_report: str = typer.Option(
+        None, "--from-report", help="顧問報告 JSON 路徑，自動把 SEO 缺口轉成寫作 brief"
+    ),
     lang: str = typer.Option("zh-TW", "--lang", help="撰寫語言，例如 zh-TW、en-US"),
     locale: str = typer.Option(None, "--locale", help="地區代碼，例如 TW、US"),
     audience: str = typer.Option(None, "--audience", help="目標讀者描述"),
@@ -151,6 +155,10 @@ def write_content(
     需要對應 provider 的 API 金鑰（例如 ANTHROPIC_API_KEY），或使用
     --llm-provider local 呼叫本機 Ollama 服務（不需要 API 金鑰）。
     """
+    if not topic and not from_report:
+        console.print("[red]錯誤：請提供 --topic 指定主題，或用 --from-report 從顧問報告自動產生。[/red]")
+        raise typer.Exit(code=1)
+
     try:
         parsed_intent = SearchIntent(intent) if intent else None
     except ValueError:
@@ -158,16 +166,49 @@ def write_content(
         console.print(f"[red]錯誤：--intent 只接受以下選項：{valid}[/red]")
         raise typer.Exit(code=1)
 
-    request = ContentRequest(
-        topic=topic,
-        lang=lang,
-        locale=locale,
-        audience=audience,
-        intent=parsed_intent,
-        industry=industry,
-        brand_context=brand_context,
-        auto_revise=auto_revise,
-    )
+    if from_report:
+        # 從顧問報告萃取內容 brief。使用者的 --topic 永遠優先當 override。
+        from seo_advisor.models import Report
+        from seo_advisor.writers.report_bridge import (
+            NoContentOpportunityError,
+            build_content_request_from_report,
+        )
+
+        try:
+            report_data = json.loads(Path(from_report).read_text(encoding="utf-8"))
+            report = Report.model_validate(report_data)
+            request = build_content_request_from_report(
+                report,
+                topic_override=topic,
+                audience=audience,
+                lang=lang,
+                locale=locale,
+                industry=industry,
+                brand_context=brand_context,
+                auto_revise=auto_revise,
+            )
+        except NoContentOpportunityError as exc:
+            console.print(f"[yellow]{exc}[/yellow]")
+            raise typer.Exit(code=1)
+        except Exception as exc:  # noqa: BLE001
+            if debug:
+                raise
+            console.print(f"[red]{translate_exception(exc).render()}[/red]")
+            raise typer.Exit(code=1)
+        if parsed_intent:
+            request.intent = parsed_intent
+        console.print(f"[cyan]已從報告萃取寫作 brief，主題：{request.topic}[/cyan]")
+    else:
+        request = ContentRequest(
+            topic=topic,
+            lang=lang,
+            locale=locale,
+            audience=audience,
+            intent=parsed_intent,
+            industry=industry,
+            brand_context=brand_context,
+            auto_revise=auto_revise,
+        )
 
     try:
         provider = create_provider(llm_provider, model=model)

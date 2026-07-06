@@ -105,3 +105,27 @@ Content Writer Mode 不綁定單一 LLM 供應商。`writers/` 模組定義
 使用者可在 `config/defaults.yaml` 的 `llm.provider` 指定，或透過 CLI
 參數 `--llm-provider` 覆寫。核心邏輯（brief/outline/QA checklist 產生）
 不因供應商而異，只有實際文字生成呼叫走 provider adapter。
+
+## 從顧問報告一鍵產內容（`write --from-report`）
+
+把顧問模式找出的 SEO 缺口，直接轉成寫作 brief——「找到問題 → 直接產內容補洞」：
+
+```bash
+# 1. 先做顧問健檢
+seo-advisor audit consultant --url example.com --out ./report
+# 2. 用報告自動產生針對性內容
+seo-advisor write --from-report ./report/report.json --llm-provider mock
+```
+
+萃取邏輯（見 `writers/report_bridge.py`）刻意保守，避免產出無意義內容：
+
+- **只有內容能解決的缺口才轉成寫作任務**：`content_quality`（缺/薄/重複的
+  title、meta、H1、內容）與 `internal_linking`（孤兒頁、內鏈不足）。
+- **純技術/資安問題一律排除**：4xx、canonical 跨網域、noindex、HTTPS、
+  security 等不會被誤轉成文章。
+- **批次 metadata 任務不寫長文**：多頁重複 metadata 會要求 LLM 只產出各頁的
+  title/meta/H1 清單，而不是硬寫一篇文章。
+- **沒有內容缺口時友善停止**：若報告全是技術問題且未給 `--topic`，會提示改用
+  `--topic` 指定主題，而不是硬產空 brief。
+- 使用者的 `--topic` 永遠優先；`--from-report` 則補上針對性的
+  `source_notes`、`internal_links`、`intent`、`target_url`。

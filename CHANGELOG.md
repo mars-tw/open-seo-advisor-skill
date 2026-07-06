@@ -2,6 +2,40 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.12] - Unreleased
+
+模組串接：內容 ↔ 顧問。由 NORA 設計萃取邏輯，CLAUDE（CEO/審核端）收斂範圍
+後實作，並經 NORA 第 2 輪複審抓出「會產垃圾內容」的風險後修正。
+
+### 新增：`seo-advisor write --from-report`
+
+把顧問模式找出的 SEO 缺口，一鍵轉成針對性的寫作 brief——「找到問題 → 直接產
+內容補洞」，真正把兩個已實作模組串起來。
+
+```bash
+seo-advisor audit consultant --url example.com --out ./report
+seo-advisor write --from-report ./report/report.json --llm-provider mock
+```
+
+萃取邏輯（`writers/report_bridge.py`）刻意保守，避免產出無意義或誤導的內容：
+
+- 只有「內容能解決」的缺口才轉成寫作任務（content_quality / internal_linking），
+  且需含內容訊號詞才納入。
+- 純技術/資安問題（4xx、canonical 跨網域、noindex、HTTPS、security）一律排除，
+  不會被誤轉成文章。
+- **批次 metadata 任務不寫長文**：多頁重複 metadata 會要求只產各頁 title/meta/H1
+  清單，而非硬寫一篇文章（NORA 複審抓到的核心風險）。
+- 內鏈任務要求提供具體錨文字與連結來源，不泛泛說「多加內鏈」。
+- 全 P3 的機會標「低優先」、本地掃描相對路徑標「本地路徑」避免誤導。
+- 沒有內容缺口且未給 `--topic` 時友善停止，不硬產空 brief。
+- 使用者的 `--topic` 永遠優先；`--from-report` 補 source_notes/internal_links/
+  intent/target_url。
+
+### 測試 / CI
+
+新增 11 個 report_bridge 測試（含技術問題排除、無機會停止、metadata 不寫長文、
+severity 排序等），CI 增加 `write --from-report` 串接 smoke。總計 275 測試全過。
+
 ## [0.1.11] - Unreleased
 
 輸出實用度強化。由 NORA 全技能盤點提出優化清單，CLAUDE（CEO/審核端）挑出

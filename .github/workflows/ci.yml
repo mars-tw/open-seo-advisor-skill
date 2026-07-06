@@ -62,6 +62,13 @@ jobs:
           test -f ci-demo/report-beginner.md
           test -f ci-demo/report.json
 
+      - name: Content from consultant report (write --from-report)
+        working-directory: scripts
+        run: |
+          python -m seo_advisor.cli write --from-report ci-demo/report.json \
+            --llm-provider mock --out ./ci-from-report
+          test -f ci-from-report/draft.md
+
       - name: Autopilot demo
         working-directory: scripts
         run: |
