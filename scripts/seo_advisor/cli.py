@@ -39,13 +39,12 @@ from seo_advisor.writers.render import (
 app = typer.Typer(
     help=(
         "Open SEO Advisor - 開源全域行銷營運技能。\n\n"
-        "最快上手：seo-advisor auto <你的網址>（一個指令搞定，全程免費）。\n"
-        "免金鑰試玩：seo-advisor auto-demo。\n"
-        "不想記指令：直接輸入 seo-advisor 進問答精靈。\n\n"
-        "核心 SEO 模式：audit(顧問) / write(文章)。\n"
-        "行銷模組：ads(廣告) / image(產圖) / growth(成長) / ecommerce(電商)。\n"
-        "統籌器：matrix(AI 矩陣) / auto(一鍵代操)。\n"
-        "全貌與各能力實作狀態見 docs/capability-map.md。"
+        "新手只要記這一個：\n"
+        "  seo-advisor auto <你的網址>   （一個指令搞定，預設不花錢）\n\n"
+        "不想記指令？直接輸入 seo-advisor 進問答精靈，一步步引導你。\n"
+        "想先看範例？seo-advisor auto-demo（免金鑰）。\n\n"
+        "（進階使用者：還有 audit/write/ads/image/growth/ecommerce/matrix 等"
+        "指令，完整清單見 docs/capability-map.md。）"
     ),
     invoke_without_command=True,
 )

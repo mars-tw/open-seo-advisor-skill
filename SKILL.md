@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.14
+version: 0.1.15
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,12 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.14）
+## 目前實作狀態（v0.1.15）
 
+- ✅ 新手指令收斂（v0.1.15）：回應「指令太多」的回饋，新手從安裝到看報告全程
+  只需 `seo-advisor auto <網址>`（或 `seo-advisor` 進精靈）。精靈簡化成只問一句
+  網址（空 Enter 看範例）、懶人包零指令、安裝訊息只給一行、完成訊息明說「不需
+  記任何指令」；進階指令保留給熟悉者但不對新手主動展示。經 NORA 傻瓜視角複審。
 - ✅ Autopilot 接真實引擎（v0.1.14）：`seo-advisor auto <網址>` 現在**真的會跑
   一次快速 SEO 健檢**（呼叫 Consultant runner），回報真實健康分數/問題數並產出
   真報告，不再只是 plan-only 摘要。概念分離：唯讀免費的分析真跑、會花錢的動作
@@ -162,8 +166,8 @@ seo-advisor auto https://你的網站.com
 執行。想先看範例就跑 `seo-advisor auto-demo`。
 
 **完全不會寫程式？** 執行 `install.ps1`（Windows）或 `install.sh`
-（Mac/Linux），再執行 `seo-advisor`，會有問答式精靈引導你——第一個選項就是
-一鍵全自動。詳見專案根目錄的 `QUICKSTART.md`。
+（Mac/Linux），再執行 `seo-advisor`，精靈只會問你一句「你的網址」，剩下
+全自動；沒有網址直接按 Enter 就看範例。詳見專案根目錄的 `QUICKSTART.md`。
 
 進階指令：
 

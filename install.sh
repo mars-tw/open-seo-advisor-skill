@@ -69,24 +69,8 @@ else
 fi
 
 echo ""
-success "安裝完成！"
-echo ""
-success "最簡單的用法：直接複製貼上這一行，先看一份範例（不需網址、不花錢）："
+success "安裝完成！接下來只要做一件事：複製貼上這一行，就能看一份範例（不花錢）："
 echo ""
 echo "    \"$VENV_EXE\" auto-demo"
 echo ""
-success "要分析你自己的網站，把網址接在後面就好："
-echo ""
-echo "    \"$VENV_EXE\" auto https://你的網站.com"
-echo ""
-echo "（上面這種寫法不需要先啟動虛擬環境，複製貼上就能跑，最適合新手。）"
-echo ""
-echo "如果你熟悉終端機，也可以先啟動虛擬環境再用短指令："
-if [ -f "$VENV_DIR/bin/activate" ]; then
-    echo "    source $VENV_DIR/bin/activate"
-else
-    echo "    source $VENV_DIR/Scripts/activate"
-fi
-echo "    seo-advisor auto-demo"
-echo ""
-echo "不知道下一步怎麼做？請看 QUICKSTART.md。"
+echo "（要分析自己的網站、或其他進階用法，請看 QUICKSTART.md。）"

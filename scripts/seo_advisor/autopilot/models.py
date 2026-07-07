@@ -77,6 +77,8 @@ class ModuleResult(BaseModel):
     execution_mode: ExecutionMode = "純邏輯"
     report_paths: list[str] = Field(default_factory=list)
     highlights: list[str] = Field(default_factory=list)
+    # 進階指令提示：只在完整報告顯示，不放進給新手看的白話懶人包，避免指令轟炸。
+    advanced_hint: str | None = None
 
 
 class AutoTask(BaseModel):

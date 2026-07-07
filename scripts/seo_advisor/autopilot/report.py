@@ -38,7 +38,8 @@ def render_autopilot_beginner_md(d: AutopilotDeliverable) -> str:
     lines.append("")
     lines.append(
         "> 標示說明：「已產生行動計畫」代表這次已幫你整理出「該做什麼」的具體方向，"
-        "但還沒實際跑完整掃描或動用付費功能——照著上面每項後面的指令就能拿到完整結果。"
+        "但還沒實際跑完整掃描或動用付費功能。你不需要記任何指令——需要更深入時，"
+        "把這份報告交給工程或行銷夥伴即可（完整報告 auto-report.md 裡有進階做法）。"
     )
     lines.append("")
 
@@ -86,6 +87,9 @@ def render_autopilot_md(d: AutopilotDeliverable) -> str:
         lines.append(r.summary)
         for h in r.highlights:
             lines.append(f"- {h}")
+        # 進階指令只出現在完整報告，不打擾新手懶人包
+        if r.advanced_hint:
+            lines.append(f"- 進階：`{r.advanced_hint}`")
         lines.append("")
 
     lines.append("## 成本與影響明細")

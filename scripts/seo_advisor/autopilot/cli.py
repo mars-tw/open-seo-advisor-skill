@@ -106,14 +106,14 @@ def _open_hint(path) -> str:
 
 def _print_done(outcome) -> None:
     console.print()
-    console.print("[bold green]完成！先打開這份最好懂的：[/bold green]")
+    console.print("[bold green]完成！打開這份最好懂的就對了：[/bold green]")
     console.print(f"  {outcome.beginner_path}")
-    console.print(f"  [dim]打開它：{_open_hint(outcome.beginner_path)}[/dim]")
+    console.print(f"  [dim]（打開它：{_open_hint(outcome.beginner_path)}）[/dim]")
     console.print()
-    console.print("其他檔案：")
-    console.print(f"  會不會花錢的明細（給人看）：{outcome.cost_estimate_md_path}")
-    console.print(f"  完整報告（可交給團隊）：{outcome.report_path}")
-    console.print(f"  給自動化用的資料：{outcome.json_path}、{outcome.cost_estimate_path}")
+    console.print(
+        f"[dim]同一個資料夾裡還有：成本明細、完整報告（可交給團隊）、機器可讀資料。"
+        f"位置：{outcome.report_path.parent}[/dim]"
+    )
 
 
 def demo(

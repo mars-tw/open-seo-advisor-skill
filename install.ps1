@@ -84,21 +84,8 @@ Write-Step "驗證安裝"
 $venvExe = Join-Path $venvDir "Scripts\seo-advisor.exe"
 
 Write-Host ""
-Write-Success "安裝完成！"
-Write-Host ""
-Write-Host "最簡單的用法：直接複製貼上這一行，先看一份範例（不需網址、不花錢）：" -ForegroundColor Green
+Write-Success "安裝完成！接下來只要做一件事：複製貼上這一行，就能看一份範例（不花錢）："
 Write-Host ""
 Write-Host "    & `"$venvExe`" auto-demo" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "要分析你自己的網站，把網址接在後面就好：" -ForegroundColor Green
-Write-Host ""
-Write-Host "    & `"$venvExe`" auto https://你的網站.com" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "（上面這種寫法不需要先「啟動虛擬環境」，複製貼上就能跑，最適合新手。）" -ForegroundColor DarkGray
-Write-Host ""
-Write-Host "如果你熟悉 PowerShell，也可以先啟動虛擬環境再用短指令：" -ForegroundColor DarkGray
-Write-Host "    $venvDir\Scripts\Activate.ps1" -ForegroundColor DarkGray
-Write-Host "    seo-advisor auto-demo" -ForegroundColor DarkGray
-Write-Host "  （若出現 Activate.ps1 被封鎖，請改用上面「複製貼上」那種免啟動寫法。）" -ForegroundColor DarkGray
-Write-Host ""
-Write-Host "不知道下一步怎麼做？請看 QUICKSTART.md。"
+Write-Host "（要分析自己的網站、或其他進階用法，請看 QUICKSTART.md。）" -ForegroundColor DarkGray

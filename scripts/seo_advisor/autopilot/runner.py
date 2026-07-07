@@ -220,14 +220,14 @@ def _run_consultant(task: AutoTask, out_dir: str) -> ModuleResult:
             module="consultant",
             summary=(
                 f"已完成 SEO 健檢：健康分數 {report.site_health_score:.0f}/100，"
-                f"發現 {len(report.findings)} 個問題。（這是快速健檢，深掃請用 "
-                f"seo-advisor audit consultant --max-urls 200）"
+                f"發現 {len(report.findings)} 個問題（快速健檢）。"
             ),
             execution_mode=mode,
             highlights=[
                 f"健康分數：{report.site_health_score:.0f}/100",
                 f"問題數：{len(report.findings)}",
             ],
+            advanced_hint="想更深入掃描：seo-advisor audit consultant --max-urls 200",
             # 對外只放相對路徑（相對 out_dir），避免絕對路徑洩漏本機使用者名稱。
             report_paths=[
                 _relpath(outcome.beginner_path, out_dir),
@@ -241,10 +241,8 @@ def _run_consultant(task: AutoTask, out_dir: str) -> ModuleResult:
             module="consultant",
             summary="SEO 健檢沒有完成：網站連線或安全檢查未通過，其他分析已照常進行。",
             execution_mode="failed",
-            highlights=[
-                f"原因：{reason}",
-                "建議：確認網址可開啟，或單獨執行 seo-advisor audit consultant --url ... --debug",
-            ],
+            highlights=[f"原因：{reason}", "建議：先確認這個網址在瀏覽器能正常打開。"],
+            advanced_hint="想看失敗細節：seo-advisor audit consultant --url <你的網址> --debug",
         )
 
 
@@ -256,18 +254,19 @@ def _run_one_module(task: AutoTask, module: str, out_dir: str) -> ModuleResult:
     if module == "ecommerce":
         return ModuleResult(
             module="ecommerce",
-            summary="已規劃電商 listing 檢核方向（標題/賣點/圖片/評論/庫存等）。"
-            "完整健檢請用 seo-advisor ecommerce audit。",
+            summary="已規劃電商 listing 檢核方向（標題/賣點/圖片/評論/庫存等）。",
             execution_mode="plan-only",
             highlights=["列出該檢查的 listing 項目"],
+            advanced_hint="想做完整電商健檢：seo-advisor ecommerce audit",
         )
     if module in {"growth_cro", "growth_utm", "growth_analytics"}:
         label = {"growth_cro": "落地頁 CRO", "growth_utm": "UTM 歸因", "growth_analytics": "跨渠道成效"}[module]
         return ModuleResult(
             module=module,
-            summary=f"已規劃「{label}」方向。完整分析請用 seo-advisor growth。",
+            summary=f"已規劃「{label}」方向。",
             execution_mode="plan-only",
             highlights=[f"{label}建議方向已產出"],
+            advanced_hint="想做完整成長分析：seo-advisor growth",
         )
     if module == "content_plan":
         return ModuleResult(
