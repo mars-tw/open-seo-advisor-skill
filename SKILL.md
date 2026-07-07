@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.13
+version: 0.1.14
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,13 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.13）
+## 目前實作狀態（v0.1.14）
 
+- ✅ Autopilot 接真實引擎（v0.1.14）：`seo-advisor auto <網址>` 現在**真的會跑
+  一次快速 SEO 健檢**（呼叫 Consultant runner），回報真實健康分數/問題數並產出
+  真報告，不再只是 plan-only 摘要。概念分離：唯讀免費的分析真跑、會花錢的動作
+  仍受同意閘門控制。掃描失敗會優雅降級（其他分析照跑）。對外路徑相對化避免洩漏
+  本機使用者名稱。經 NORA 設計 + 複審抓隱私/逾時風險後修正。
 - ✅ 廣告↔產圖串接（v0.1.13）：`seo-advisor image from-ads ads-report.json`
   把廣告診斷的素材疲勞/CTR 問題轉成新素材方向 brief（測試痛點/成果/信任型不同
   角度）。成本安全：預設只產 brief 不花錢，要產圖須 `--generate`，低信心機會

@@ -66,7 +66,7 @@ class CostEstimate(BaseModel):
 
 
 # 模組這次是「怎麼跑出來的」，如實標示避免讓使用者以為 mock 是真實掃描。
-ExecutionMode = Literal["真實掃描", "純邏輯", "mock", "plan-only"]
+ExecutionMode = Literal["真實掃描", "純邏輯", "mock", "plan-only", "failed"]
 
 
 class ModuleResult(BaseModel):

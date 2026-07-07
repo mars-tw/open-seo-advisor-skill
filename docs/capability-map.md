@@ -38,7 +38,7 @@
 | 能力 | 狀態 | CLI | 說明 |
 |---|---|---|---|
 | AI 矩陣營運系統 Matrix | 🧪 | `seo-advisor matrix run/demo/roles` | NORA 派工 26 角色；角色目前走 mock/generic engine（Phase 2 接真實引擎） |
-| 一鍵代操 Autopilot | 🧪 | `seo-advisor auto <url>` / `auto-demo` | 一個指令自動分析 + 成本明細 + 一次同意；真實花錢動作 MVP 停在計畫 |
+| 一鍵代操 Autopilot | ✅（分析）/ 🧪（花錢動作） | `seo-advisor auto <url>` / `auto-demo` | 網址目標會**真的跑一次快速 SEO 健檢**（Consultant）；產圖/產文/廣告等會花錢的動作仍停在計畫，經一次同意閘門 |
 
 ### D. 共用知識庫
 

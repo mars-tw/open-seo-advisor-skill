@@ -59,6 +59,7 @@ def run_consultant_scan(
     out_dir: str,
     max_urls: int = 200,
     max_depth: int = 6,
+    timeout_seconds: float = 15.0,
     on_progress: ProgressCallback = _noop,
 ) -> ScanOutcome:
     """執行 Consultant Mode 掃描並寫出三份報告（beginner/技術版/JSON）。
@@ -76,7 +77,7 @@ def run_consultant_scan(
     if url:
         normalized_url = normalize_url(url)
         on_progress(f"準備掃描網站：{normalized_url}")
-        connector = HTTPConnector(normalized_url)
+        connector = HTTPConnector(normalized_url, timeout_seconds=timeout_seconds)
         target = ReportTarget(source_type="http", identifier=normalized_url)
         seed = normalized_url
     else:

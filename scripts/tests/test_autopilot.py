@@ -175,3 +175,36 @@ def test_run_autopilot_json_round_trips(tmp_path):
     outcome = run_autopilot(AutoTask(target="幫我優化電商", mock=True), out_dir=str(tmp_path))
     data = json.loads(outcome.json_path.read_text(encoding="utf-8"))
     assert data["target"] == "幫我優化電商"
+
+
+# --- 升級：consultant 真接引擎 ---
+
+def test_consultant_actually_runs_and_produces_real_report(tmp_path):
+    """mock 模式下 consultant 應真跑 demo 掃描、標『示範資料』並帶健康分數，
+    不再是空的 plan-only 摘要。"""
+    outcome = run_autopilot(AutoTask(target="https://example.com", mock=True), out_dir=str(tmp_path))
+    consultant = next(r for r in outcome.deliverable.module_results if r.module == "consultant")
+    assert consultant.execution_mode == "mock"
+    assert "健康分數" in consultant.summary
+    assert consultant.report_paths  # 有實際產出報告路徑
+    # 對外報告路徑必須是相對路徑，不得洩漏本機使用者名稱（絕對路徑）
+    for p in consultant.report_paths:
+        assert "Users" not in p and "home" not in p
+        assert not p.startswith(("/", "C:", "c:"))
+
+
+def test_consultant_failure_degrades_gracefully(tmp_path, monkeypatch):
+    """真掃描失敗時 consultant 標 failed，但 autopilot 不崩、仍產出完整報告。"""
+    import seo_advisor.autopilot.runner as runner_mod
+    import seo_advisor.scan_runner as scan_mod
+
+    def _boom(**kwargs):
+        raise RuntimeError("網站連不上 https://user:secret@x.com")
+
+    # _run_consultant 內部 import scan_runner.run_consultant_scan，故 patch 該模組
+    monkeypatch.setattr(scan_mod, "run_consultant_scan", _boom)
+    result = runner_mod._run_consultant(AutoTask(target="https://example.com", mock=False), str(tmp_path))
+    assert result.execution_mode == "failed"
+    # 錯誤訊息不得洩漏 URL 內帳密
+    joined = result.summary + " ".join(result.highlights)
+    assert "secret" not in joined

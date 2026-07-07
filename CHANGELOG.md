@@ -2,6 +2,37 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.14] - Unreleased
+
+升級：autopilot 接真實引擎（consultant 先行）。由 NORA 設計，CLAUDE（CEO/審核端）
+審核後實作，經 NORA 第 2 輪複審抓出成功路徑的隱私與逾時風險後修正。
+
+### 升級：`seo-advisor auto <網址>` 現在真的會跑 SEO 健檢
+
+autopilot 對網址目標不再只給 plan-only 摘要，而是**實際呼叫 Consultant runner
+做一次快速健檢**，回報真實的健康分數、問題數，並產出真的 SEO 報告——旗艦入口
+從「demo 級摘要」升級為「真正可用」。
+
+- 概念分離：`_MVP_FORCE_PLAN_ONLY` 現在只管「會花錢/寫入的動作」（產圖/產文/
+  廣告仍 plan-only）；**唯讀、免費、安全的 consultant 分析本來就該真跑**，不再被
+  一刀擋成 plan-only。安全性不變——花錢動作依然鎖著、成本明細不變、首屏「預設
+  不花錢」仍成立。
+- 快速健檢：預設 max_urls=30、max_depth=3、per-request timeout 8 秒，讓 auto 快速
+  出結果；報告提示深掃請用 `seo-advisor audit consultant --max-urls 200`。
+- 錯誤降級：真掃描失敗（連不上、逾時、被 SSRF 防護擋、被 bot 封鎖）時，consultant
+  標「未完成（可稍後重試）」，**autopilot 不會整體崩潰、其他分析照常進行**。
+
+### 安全 / 隱私
+
+- SSRF 防護在這條新路徑上仍生效（consultant HTTP 一律走 `HTTPConnector._safe_get`）。
+- **對外報告路徑相對化**：module report_paths 改成相對 out_dir 的路徑，避免絕對
+  路徑洩漏本機使用者名稱（如 `C:\Users\姓名`）。失敗原因訊息經 `redact_secrets`。
+
+### 測試 / CI
+
+新增 autopilot 測試（consultant 真跑產真報告、failed 降級不崩且遮蔽帳密、路徑
+相對化不洩漏）。CI 的 auto-demo smoke 現在會實際跑真 consultant。總計 287 測試全過。
+
 ## [0.1.13] - Unreleased
 
 模組串接：廣告 ↔ 產圖。由 NORA 設計萃取邏輯，CLAUDE（CEO/審核端）收斂並

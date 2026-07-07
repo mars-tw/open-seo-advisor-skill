@@ -92,8 +92,8 @@ def run_autopilot(
     modules = select_modules(task)
     on_progress(f"將出動：{', '.join(modules)}")
 
-    on_progress("第 2/5 步：各專家自動分析（免金鑰，用內建示範/純邏輯）")
-    module_results = _run_module_analyses(task, modules)
+    on_progress("第 2/5 步：各專家開始分析（若含網址會實際做一次快速 SEO 健檢）")
+    module_results = _run_module_analyses(task, modules, out_dir)
 
     on_progress("第 3/5 步：彙整成本與影響明細")
     plan_image = 4 if "image_plan" in modules else 0
@@ -179,26 +179,80 @@ def apply_consent(outcome: AutopilotOutcome, out_dir: str) -> AutopilotOutcome:
     return _write_outcome(updated, out_dir)
 
 
-def _run_module_analyses(task: AutoTask, modules: list[str]) -> list[ModuleResult]:
+def _run_module_analyses(task: AutoTask, modules: list[str], out_dir: str) -> list[ModuleResult]:
     results: list[ModuleResult] = []
     for module in modules:
-        results.append(_run_one_module(task, module))
+        results.append(_run_one_module(task, module, out_dir))
     return results
 
 
-def _run_one_module(task: AutoTask, module: str) -> ModuleResult:
-    # MVP 誠實聲明：autopilot 目前提供「該做什麼」的方向摘要與計畫，尚未在內部
-    # 實際呼叫各模組的完整 runner。要拿到某個模組的完整分析，請用它自己的指令
-    # （例如 seo-advisor audit consultant / ecommerce audit / growth ...）。
-    # 因此各模組這裡標為 plan-only，避免讓使用者以為已做完整掃描。
-    if module == "consultant":
+def _relpath(path, out_dir: str) -> str:
+    """把絕對路徑轉成相對 out_dir 的路徑，避免對外報告洩漏本機使用者名稱。"""
+    try:
+        return str(Path(path).relative_to(Path(out_dir)))
+    except ValueError:
+        return Path(path).name
+
+
+def _run_consultant(task: AutoTask, out_dir: str) -> ModuleResult:
+    """真的跑一次 Consultant 健檢（唯讀、免費、安全）。失敗時降級為 failed
+    module 但不讓 autopilot 整體崩潰——其他分析照常。
+    """
+    from seo_advisor.demo import run_demo_scan
+    from seo_advisor.errors import redact_secrets, translate_exception
+    from seo_advisor.scan_runner import run_consultant_scan
+
+    module_out = str(Path(out_dir) / "consultant")
+    try:
+        if task.mock:
+            outcome = run_demo_scan(out_dir=module_out)
+            mode = "mock"
+        else:
+            # autopilot 用較小範圍與較短 timeout 求快速出結果，慢站會快速失敗
+            # 降級而非拖垮整體；要深掃引導用完整指令。
+            outcome = run_consultant_scan(
+                url=task.target, source=None, out_dir=module_out,
+                max_urls=30, max_depth=3, timeout_seconds=8.0,
+            )
+            mode = "真實掃描"
+        report = outcome.report
         return ModuleResult(
             module="consultant",
-            summary="已規劃技術 SEO 健檢方向（狀態碼/robots/sitemap/canonical/title/H1 等）。"
-            "完整掃描請用 seo-advisor audit consultant。",
-            execution_mode="plan-only",
-            highlights=["列出該檢查的技術面項目"],
+            summary=(
+                f"已完成 SEO 健檢：健康分數 {report.site_health_score:.0f}/100，"
+                f"發現 {len(report.findings)} 個問題。（這是快速健檢，深掃請用 "
+                f"seo-advisor audit consultant --max-urls 200）"
+            ),
+            execution_mode=mode,
+            highlights=[
+                f"健康分數：{report.site_health_score:.0f}/100",
+                f"問題數：{len(report.findings)}",
+            ],
+            # 對外只放相對路徑（相對 out_dir），避免絕對路徑洩漏本機使用者名稱。
+            report_paths=[
+                _relpath(outcome.beginner_path, out_dir),
+                _relpath(outcome.technical_path, out_dir),
+                _relpath(outcome.json_path, out_dir),
+            ],
         )
+    except Exception as exc:  # noqa: BLE001 - 單一模組失敗不該讓 autopilot 整體崩
+        reason = redact_secrets(translate_exception(exc).title)
+        return ModuleResult(
+            module="consultant",
+            summary="SEO 健檢沒有完成：網站連線或安全檢查未通過，其他分析已照常進行。",
+            execution_mode="failed",
+            highlights=[
+                f"原因：{reason}",
+                "建議：確認網址可開啟，或單獨執行 seo-advisor audit consultant --url ... --debug",
+            ],
+        )
+
+
+def _run_one_module(task: AutoTask, module: str, out_dir: str) -> ModuleResult:
+    # consultant 是唯讀、免費、安全的分析，直接真跑；其餘模組目前仍提供方向與
+    # 計畫（會花錢/寫入的動作受成本明細與同意閘門控制，見 build_cost_estimate）。
+    if module == "consultant":
+        return _run_consultant(task, out_dir)
     if module == "ecommerce":
         return ModuleResult(
             module="ecommerce",
