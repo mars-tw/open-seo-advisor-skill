@@ -47,6 +47,11 @@ app = typer.Typer(
         "指令，完整清單見 docs/capability-map.md。）"
     ),
     invoke_without_command=True,
+    # 明確關閉（雖然目前 typer 預設也是 False）：--debug 模式會 raise 完整例外
+    # 讓 Rich 印出 traceback，但絕不應該連同每層 stack frame 的區域變數
+    # （可能含 API 金鑰）一起印出。tests/test_cli_debug_safety.py 有 regression
+    # test 鎖住這個設定，避免未來升級 typer 或改動預設值時無聲引入外洩風險。
+    pretty_exceptions_show_locals=False,
 )
 audit_app = typer.Typer(help="執行 SEO 健檢（顧問模式等，進階用法）")
 app.add_typer(audit_app, name="audit")

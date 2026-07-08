@@ -121,6 +121,41 @@ jobs:
           test -f ci-cre/image-brief.md
           test -f ci-cre/image-brief.json
 
+  security-audit:
+    name: Dependency vulnerability scan (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package with dev dependencies
+        working-directory: scripts
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pip-audit
+
+      - name: Record resolved dependency versions
+        working-directory: scripts
+        run: pip freeze > pip-freeze.txt
+
+      - name: Upload resolved dependency versions
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-freeze-${{ github.sha }}
+          path: scripts/pip-freeze.txt
+          retention-days: 90
+
+      - name: Scan for known vulnerabilities (pip-audit)
+        working-directory: scripts
+        # 只掃描已安裝環境是否有已知 CVE，不鎖版本、不動 pyproject.toml 的依賴宣告策略。
+        # 失敗時不擋 PR（--strict 關閉），先讓漏洞可見；之後視雜訊狀況再決定是否轉為必過關卡。
+        run: pip-audit --desc || echo "::warning::pip-audit 發現已知漏洞，請檢視上方輸出"
+
   wheel-install-smoke:
     name: Wheel build + clean install smoke
     runs-on: ubuntu-latest

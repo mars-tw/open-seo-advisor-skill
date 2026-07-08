@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 
+from seo_advisor.env_hints import set_env_var_hint
 from seo_advisor.writers.models import LLMRequest, LLMResponse
 from seo_advisor.writers.providers.base import LLMProvider, LLMProviderError
 
@@ -21,7 +22,7 @@ class OpenAIProvider(LLMProvider):
         if not api_key:
             raise LLMProviderError(
                 f"找不到環境變數 {_API_KEY_ENV_VAR}，無法使用 OpenAI GPT API。"
-                f"請先設定：export {_API_KEY_ENV_VAR}=your-api-key"
+                f"{set_env_var_hint(_API_KEY_ENV_VAR)}"
             )
 
         try:

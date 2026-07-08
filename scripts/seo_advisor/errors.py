@@ -13,10 +13,14 @@ from dataclasses import dataclass
 
 import httpx
 
+from seo_advisor.ads.providers.base import AdsProviderError
+from seo_advisor.growth.providers.base import AnalyticsProviderError
+from seo_advisor.images.providers.base import ImageProviderError
 from seo_advisor.scan_runner import SiteUnreachableError
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError
 from seo_advisor.security.safe_archive import UnsafeArchiveError
 from seo_advisor.url_utils import InvalidUrlError
+from seo_advisor.writers.providers.base import LLMProviderError
 
 # 遮蔽敏感片段：避免錯誤訊息意外洩漏 token、URL 內帳密、或本機使用者路徑。
 _USERINFO_RE = re.compile(r"(https?://)[^/@\s:]+(?::[^/@\s]+)?@")
@@ -158,6 +162,18 @@ def translate_exception(exc: Exception, *, url: str | None = None) -> FriendlyEr
             next_steps=[
                 "確認你有這個資料夾的讀寫權限",
                 "換一個你有權限的資料夾作為報告輸出位置（--out）",
+            ],
+        )
+
+    if isinstance(exc, (LLMProviderError, ImageProviderError, AdsProviderError, AnalyticsProviderError)):
+        # 這類例外的訊息本身已經是為終端機使用者寫的人話（缺金鑰/缺選配套件
+        # 等），不需要再包一層「未預期的問題」，直接原樣呈現即可。
+        return FriendlyError(
+            title=str(exc),
+            reasons=[],
+            next_steps=[
+                "設定好之後，用同一個指令重新執行一次即可",
+                "不想申請 API 金鑰？大多數指令都有 --provider mock（或 --llm-provider mock）可以免金鑰試玩",
             ],
         )
 

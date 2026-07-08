@@ -77,3 +77,36 @@ def test_friendly_error_render_redacts():
     rendered = fe.render()
     assert "deadbeef" not in rendered
     assert "u:p@h" not in rendered
+
+
+# --- provider 例外（缺金鑰/缺選配套件）不該落入「未預期的問題」通用 fallback ---
+# 這是新手第一次沒設 API 金鑰最常見的情境，過去被系統性漏接、且教錯 Windows 指令。
+
+def test_llm_provider_error_is_recognized_not_generic_fallback():
+    from seo_advisor.writers.providers.base import LLMProviderError
+
+    friendly = translate_exception(LLMProviderError("找不到環境變數 ANTHROPIC_API_KEY"))
+    assert friendly.title == "找不到環境變數 ANTHROPIC_API_KEY"
+    assert "未預期的問題" not in friendly.title
+    assert any("mock" in step for step in friendly.next_steps)
+
+
+def test_image_provider_error_is_recognized():
+    from seo_advisor.images.providers.base import ImageProviderError
+
+    friendly = translate_exception(ImageProviderError("找不到環境變數 OPENAI_API_KEY"))
+    assert "未預期的問題" not in friendly.title
+
+
+def test_ads_provider_error_is_recognized():
+    from seo_advisor.ads.providers.base import AdsProviderError
+
+    friendly = translate_exception(AdsProviderError("找不到環境變數 META_ACCESS_TOKEN"))
+    assert "未預期的問題" not in friendly.title
+
+
+def test_analytics_provider_error_is_recognized():
+    from seo_advisor.growth.providers.base import AnalyticsProviderError
+
+    friendly = translate_exception(AnalyticsProviderError("找不到環境變數 GA4_PROPERTY_ID"))
+    assert "未預期的問題" not in friendly.title

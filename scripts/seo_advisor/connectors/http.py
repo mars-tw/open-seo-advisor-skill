@@ -72,6 +72,10 @@ class HTTPConnector(WebsiteConnector):
         self._rate_limiter = RateLimiter(self.policy.rate_limit_per_second)
         self._robots_policy: RobotsPolicy | None = None
         self._max_redirects = max_redirects
+        # 單次掃描內，同一個 URL（robots.txt/sitemap.xml/首頁等）常被 probe()、
+        # 前置檢查、crawl_site、list_urls() 各自呼叫一次；用小型記憶體快取避免
+        # 對同一目標網站重複發送相同請求（省時間、也減少對被掃網站的負擔）。
+        self._response_cache: dict[str, _SafeResponse] = {}
 
         # follow_redirects=False：改由 _safe_get 手動追 redirect，每一跳都重新做
         # SSRF 檢查（ensure_host_allowed）。否則 httpx 自動跟隨 redirect 時，公開
@@ -98,7 +102,9 @@ class HTTPConnector(WebsiteConnector):
         if netloc:
             self._allowed_netlocs.add(netloc)
 
-    def _safe_get(self, url: str, *, max_bytes: int = _MAX_HTML_BYTES) -> _SafeResponse:
+    def _safe_get(
+        self, url: str, *, max_bytes: int = _MAX_HTML_BYTES, use_cache: bool = False
+    ) -> _SafeResponse:
         """發送 GET 並手動跟隨 redirect，每一跳都重新做 SSRF 檢查，且串流讀取
         body 並在超過 max_bytes 時中止，避免超大回應把整個 body 讀進記憶體。
 
@@ -106,7 +112,14 @@ class HTTPConnector(WebsiteConnector):
         - 只允許 http/https scheme（擋掉 file://、ftp:// 等）
         - 呼叫 ensure_host_allowed（擋 private/loopback/metadata IP）
         - 超過 max_redirects 即停止並拋出 httpx.HTTPError
+
+        use_cache=True 時，同一個 url 在本 connector 生命週期內只會真正發送一次
+        請求；只用於 probe()/list_urls() 這類明確會被多處重複呼叫的固定路徑
+        （robots.txt/sitemap.xml/首頁），一般頁面爬取不套用，避免快取到過期內容。
         """
+        if use_cache and url in self._response_cache:
+            return self._response_cache[url]
+
         history: list[str] = []
         current = url
         for _ in range(self._max_redirects + 1):
@@ -138,7 +151,7 @@ class HTTPConnector(WebsiteConnector):
                             truncated = True
                             break
                     body = b"".join(chunks)[:max_bytes] if not truncated else b""
-                return _SafeResponse(
+                result = _SafeResponse(
                     status_code=resp.status_code,
                     final_url=str(resp.url),
                     headers=dict(resp.headers),
@@ -147,6 +160,9 @@ class HTTPConnector(WebsiteConnector):
                     history=history,
                     truncated=truncated,
                 )
+                if use_cache:
+                    self._response_cache[url] = result
+                return result
         raise httpx.RequestError(f"redirect 次數超過上限（{self._max_redirects}）：{url}")
 
     def probe(self) -> ConnectorProfile:
@@ -156,7 +172,7 @@ class HTTPConnector(WebsiteConnector):
         detected_stack: str | None = None
 
         try:
-            robots_resp = self._safe_get(urljoin(self.base_url, "/robots.txt"))
+            robots_resp = self._safe_get(urljoin(self.base_url, "/robots.txt"), use_cache=True)
             has_robots = robots_resp.status_code == 200
             if self.policy.respect_robots_txt:
                 self._robots_policy = RobotsPolicy(
@@ -169,13 +185,15 @@ class HTTPConnector(WebsiteConnector):
             notes.append(f"robots.txt 檢查失敗：{exc}")
 
         try:
-            sitemap_resp = self._safe_get(urljoin(self.base_url, "/sitemap.xml"))
+            sitemap_resp = self._safe_get(
+                urljoin(self.base_url, "/sitemap.xml"), max_bytes=_MAX_SITEMAP_BYTES, use_cache=True
+            )
             has_sitemap = sitemap_resp.status_code == 200
         except (httpx.HTTPError, PrivateNetworkBlockedError) as exc:
             notes.append(f"sitemap.xml 檢查失敗：{exc}")
 
         try:
-            home_resp = self._safe_get(self.base_url)
+            home_resp = self._safe_get(self.base_url, use_cache=True)
             server_header = home_resp.headers.get("server", "")
             powered_by = home_resp.headers.get("x-powered-by", "")
             body_snippet = _decode_body(home_resp)[:5000].lower()
@@ -203,7 +221,7 @@ class HTTPConnector(WebsiteConnector):
         skipped_external: list[str] = []
         sitemap_url = urljoin(self.base_url, "/sitemap.xml")
         try:
-            resp = self._safe_get(sitemap_url, max_bytes=_MAX_SITEMAP_BYTES)
+            resp = self._safe_get(sitemap_url, max_bytes=_MAX_SITEMAP_BYTES, use_cache=True)
             if resp.status_code == 200:
                 records.extend(
                     self._parse_sitemap(
@@ -313,6 +331,24 @@ class HTTPConnector(WebsiteConnector):
                 fetched_at=fetched_at,
                 fetch_error_type="blocked_by_robots_txt",
                 fetch_error_message=f"robots.txt 不允許爬取此 URL：{url}",
+            )
+
+        # 若這個 URL 剛好是 probe()/list_urls() 已快取過的固定路徑（robots.txt/
+        # sitemap.xml/首頁），直接重用結果，不重新發送請求也不用再等 rate limit——
+        # 這是同一份內容，不應該被算成第二次「新的」請求。
+        cached = self._response_cache.get(url)
+        if cached is not None:
+            self._register_final_host(cached.final_url)
+            is_html_cached = "text/html" in cached.headers.get("content-type", "")
+            return PageSnapshot(
+                url=url,
+                status_code=cached.status_code,
+                final_url=cached.final_url,
+                redirect_chain=cached.history,
+                headers=cached.headers,
+                html=_decode_body(cached) if is_html_cached else "",
+                fetched_at=fetched_at,
+                elapsed_ms=0,
             )
 
         self._rate_limiter.wait()

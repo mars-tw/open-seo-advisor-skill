@@ -17,6 +17,7 @@ import os
 
 from seo_advisor.ads.models import AdsAccountProfile, AdsActionPlan, InsightsRow
 from seo_advisor.ads.providers.base import AdsProvider, AdsProviderError
+from seo_advisor.env_hints import set_env_var_hint
 
 _TOKEN_ENV_VAR = "META_ACCESS_TOKEN"
 
@@ -27,7 +28,7 @@ class MetaAdsProvider(AdsProvider):
         if not token:
             raise AdsProviderError(
                 f"找不到環境變數 {_TOKEN_ENV_VAR}，無法連接 Meta Marketing API。"
-                f"請先設定：export {_TOKEN_ENV_VAR}=your-access-token"
+                f"{set_env_var_hint(_TOKEN_ENV_VAR, 'your-access-token')}"
             )
 
         try:

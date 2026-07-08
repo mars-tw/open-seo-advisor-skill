@@ -15,6 +15,7 @@ import base64
 import os
 from pathlib import Path
 
+from seo_advisor.env_hints import set_env_var_hint
 from seo_advisor.images.models import AspectRatio, ImageArtifact, ImageGenerationRequest
 from seo_advisor.images.providers.base import ImageProvider, ImageProviderError
 
@@ -40,7 +41,7 @@ class OpenAIImageProvider(ImageProvider):
         if not api_key:
             raise ImageProviderError(
                 f"找不到環境變數 {_API_KEY_ENV_VAR}，無法使用 OpenAI 圖像生成。"
-                f"請先設定：export {_API_KEY_ENV_VAR}=your-api-key"
+                f"{set_env_var_hint(_API_KEY_ENV_VAR)}"
             )
 
         try:

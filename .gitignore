@@ -46,3 +46,4 @@ id_rsa*
 # OS
 .DS_Store
 Thumbs.db
+.collab-rules.md

@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Python 依賴（scripts/ 下的 pyproject.toml）：每週檢查一次，只開 PR 不自動合併。
+  - package-ecosystem: "pip"
+    directory: "/scripts"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
+  # GitHub Actions 版本更新，避免 CI workflow 用到的 action 版本過舊。
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"

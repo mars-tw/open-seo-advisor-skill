@@ -2,6 +2,57 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.16] - Unreleased
+
+全系統健康度大辯論：多位 CODEX 分別扮演效能派、安全派、新手體驗派、開源治理派
+四種立場，平行深度分析現有系統並交叉質疑彼此的發現（28 項發現、經交叉辯論後
+8 項被裁定「誇大或不成立」而不採納），最後由仲裁者收斂出 3 項應立即修復的項目，
+CLAUDE（CEO/審核端）審核執行，並額外發現並修復第 4 項（`.collab-rules.md`
+誤被公開）。這是「多方交鋒收斂」而非單向派工審核的協作模式首次嘗試。
+
+### 修正
+
+- **供應鏈可追溯性**：新增 `.github/dependabot.yml`（每週檢查 Python 依賴與
+  GitHub Actions 版本）；CI 新增 `security-audit` job，用 `pip-audit` 掃描已知
+  漏洞、並把 `pip freeze` 結果存成 build artifact——過去 CI 綠燈無法回溯「測的
+  是哪個版本組合」，也沒有任何 CVE 示警機制，現在補上。
+- **單次掃描的重複請求**：`HTTPConnector` 對 robots.txt/sitemap.xml/首頁的內容
+  在同一次掃描中會被 `probe()`、`crawl_site`、`list_urls()` 各自重複抓取
+  （sitemap.xml 甚至被抓 3 次），新增請求層級快取後同一路徑只真正發送一次，
+  減少不必要的 HTTP round trip，也減輕對被掃描網站的負擔。
+- **provider 缺金鑰的錯誤處理系統性補強**：`LLMProviderError` /
+  `ImageProviderError` / `AdsProviderError` / `AnalyticsProviderError` 過去
+  未被 `translate_exception` 接住，會落入嚇人的「執行過程中發生未預期的問題」；
+  同時 4 處 provider（Anthropic/OpenAI 文字/OpenAI 圖像/Meta）教使用者用
+  `export FOO=bar` 設定金鑰，這在 Windows PowerShell 完全打不動。新增
+  `env_hints.set_env_var_hint()` 依平台給正確指令（Windows 用 `$env:`，不用
+  會把金鑰持久寫入登錄檔的 `setx`），並把這 4 類例外接進已知錯誤清單。
+- **`--debug` 模式安全設定明確化**：`pretty_exceptions_show_locals=False`
+  明確寫入 CLI 設定（避免依賴 typer 未來版本預設值不變），並加 regression
+  test 鎖住，防止未來無聲引入「traceback 印出每層 stack frame 區域變數
+  （可能含 API 金鑰）」的風險。
+- **`.collab-rules.md` 移出版控**：這份檔案自己聲明「非對外開源文件」卻被
+  commit 進公開 repo，屬於零成本但觀感風險不小的疏漏，已移除並加入 `.gitignore`。
+
+### 文件
+
+- `SECURITY.md` 新增「已知限制」段落，誠實記錄兩項評估後判斷「現階段風險可
+  接受、暫不修復」的項目（SSRF 的 DNS rebinding TOCTOU 窗口、`LocalProvider`
+  未套用 SSRF 檢查），並說明重新評估的觸發條件。
+
+### 未採納（辯論後裁定誇大或不成立，記錄以避免重複提出）
+
+DNS rebinding TOCTOU 需要攻擊者控制惡意網域且精準命中時間窗口，單機 CLI 情境
+操作者與潛在受害者是同一人，投入產出比不成立；`image from-ads` 的低信心閘門
+只在該指令生效，被認為是「防自動化鏈路盲目信任」而非「杜絕使用者主動決定」，
+語意調整即可不需架構調整；全域 i18n、CODEOWNERS、同意閘門改中文確認句、單一
+作者治理模式等，皆屬時間尺度或問題性質判斷後不成立或應緩議的項目。
+
+### 測試
+
+新增 12 個測試（HTTP 請求去重 3 項、provider 例外識別 4 項、跨平台金鑰提示
+4 項、debug 安全設定 1 項），總計 299 個測試全過，ruff lint 乾淨。
+
 ## [0.1.15] - Unreleased
 
 新手指令收斂：一個指令就好。回應「指令太多、很多是新手」的回饋，把新手從頭到尾

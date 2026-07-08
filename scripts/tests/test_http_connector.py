@@ -140,3 +140,75 @@ def test_is_url_in_scope_expands_after_redirect_to_new_host():
 def test_capabilities_are_read_only():
     connector = HTTPConnector("https://example.com")
     assert connector.capabilities() == {"read_urls"}
+
+
+@respx.mock
+def test_probe_then_fetch_url_does_not_repeat_request_for_same_path():
+    """probe() 已經抓過 robots.txt/sitemap.xml/首頁後，fetch_url() 對同樣的路徑
+    應該重用快取結果，而不是重新真正發送請求（避免同一次掃描重複打站）。"""
+    robots_route = respx.get("https://example.com/robots.txt").mock(
+        return_value=httpx.Response(200, text="User-agent: *\n")
+    )
+    sitemap_route = respx.get("https://example.com/sitemap.xml").mock(
+        return_value=httpx.Response(200, text="<urlset/>", headers={"content-type": "application/xml"})
+    )
+    home_route = respx.get("https://example.com/").mock(
+        return_value=httpx.Response(200, text="<html>home</html>", headers={"content-type": "text/html"})
+    )
+
+    connector = HTTPConnector("https://example.com")
+    connector.probe()
+    assert robots_route.call_count == 1
+    assert sitemap_route.call_count == 1
+    assert home_route.call_count == 1
+
+    # 這些呼叫模擬 crawler.py/scan_runner.py 對同一路徑的重複請求；
+    # 都應該命中快取，call_count 維持在 1，不應該真的再打一次。
+    # 首頁 URL 刻意用 connector.base_url（不帶尾斜線），與 probe() 內部一致——
+    # 這正是 scan_runner.py 實際傳入 seed_url 的形式（normalize_url() 的輸出）。
+    connector.fetch_url("https://example.com/robots.txt")
+    connector.fetch_url("https://example.com/sitemap.xml")
+    connector.fetch_url(connector.base_url)
+
+    assert robots_route.call_count == 1
+    assert sitemap_route.call_count == 1
+    assert home_route.call_count == 1
+
+
+@respx.mock
+def test_list_urls_reuses_sitemap_fetched_by_probe():
+    """probe() 抓過 sitemap.xml 後，list_urls() 不該重新抓取同一份 sitemap。"""
+    sitemap_route = respx.get("https://example.com/sitemap.xml").mock(
+        return_value=httpx.Response(
+            200,
+            text='<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            "<url><loc>https://example.com/a</loc></url></urlset>",
+        )
+    )
+    respx.get("https://example.com/robots.txt").mock(return_value=httpx.Response(404))
+    respx.get("https://example.com/").mock(return_value=httpx.Response(200, text="<html></html>"))
+
+    connector = HTTPConnector("https://example.com")
+    connector.probe()
+    assert sitemap_route.call_count == 1
+
+    records = connector.list_urls("https://example.com", limit=10)
+    assert sitemap_route.call_count == 1  # 沒有再打第二次
+    assert any(r.url == "https://example.com/a" for r in records)
+
+
+@respx.mock
+def test_fetch_url_for_uncached_path_still_makes_a_request():
+    """快取只影響 probe()/list_urls() 抓過的固定路徑，一般頁面仍正常發送請求。"""
+    respx.get("https://example.com/robots.txt").mock(return_value=httpx.Response(404))
+    respx.get("https://example.com/sitemap.xml").mock(return_value=httpx.Response(404))
+    respx.get("https://example.com/").mock(return_value=httpx.Response(200, text="<html></html>"))
+    page_route = respx.get("https://example.com/some-other-page").mock(
+        return_value=httpx.Response(200, text="<html>page</html>")
+    )
+
+    connector = HTTPConnector("https://example.com")
+    connector.probe()
+
+    connector.fetch_url("https://example.com/some-other-page")
+    assert page_route.call_count == 1
