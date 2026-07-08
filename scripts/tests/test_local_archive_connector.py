@@ -20,6 +20,21 @@ def test_list_urls_finds_html_files():
     assert "/about.html" in paths
 
 
+def test_list_urls_excludes_engineer_mode_backup_directory(tmp_path):
+    """Engineer Mode 的 .seo-advisor/backups/ 裡若有備份的 .html 檔案，
+    不該被 list_urls 掃到，否則會被誤判成真實網站頁面（進而被誤收進
+    sitemap fixer 產出的 sitemap.xml）。"""
+    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
+    backup_html = tmp_path / ".seo-advisor" / "backups" / "20260101-abcd" / "files" / "robots.html"
+    backup_html.parent.mkdir(parents=True)
+    backup_html.write_text("<html>backup copy</html>", encoding="utf-8")
+
+    connector = LocalArchiveConnector(str(tmp_path))
+    urls = {u.url for u in connector.list_urls(seed="/", limit=100)}
+    assert "/index.html" in urls
+    assert not any(".seo-advisor" in u for u in urls)
+
+
 def test_fetch_url_reads_file_content():
     connector = LocalArchiveConnector(str(FIXTURES / "good_site"))
     snapshot = connector.fetch_url("/index.html")

@@ -20,7 +20,7 @@
 |---|---|---|---|
 | 顧問 Consultant | ✅ | `seo-advisor audit consultant --url <url>` | 技術 SEO 全站健檢，產出 Finding + 健康分數 + 白話報告 |
 | 文章寫手 Content Writer | ✅ | `seo-advisor write --topic <主題>` | LLM brief→outline→draft→QA；免金鑰用 `--llm-provider mock` |
-| 工程師 Engineer | 🚧 | （規劃中） | 自動修復 sitemap/canonical/hreflang 等，dry-run diff |
+| 工程師 Engineer | ✅（robots/sitemap/canonical）/ 🚧（hreflang/結構化資料/redirect/CWV） | `seo-advisor fix engineer/rollback` | 自動修復三種問題，dry-run 預覽 + 二次確認才寫入，有備份/回滾；其餘修復類型仍是規劃中 |
 | 資安 Security | 🚧 | （規劃中） | 被動式資安掃描（暴露檔案/HTTPS/CMS 版本） |
 | 外掛開發 Plugin Dev | 🚧 | （規劃中） | WordPress SEO 外掛 scaffold |
 

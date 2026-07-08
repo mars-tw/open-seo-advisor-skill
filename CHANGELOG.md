@@ -2,6 +2,58 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.0] - Unreleased
+
+**Engineer Mode 正式上線**（`docs/roadmap.md` v0.2.0 第一批）：這是專案第一個
+「真的會寫入使用者檔案」的模式，過去所有模式都是 read-only 或 plan-only。
+由 NORA 設計整體架構與安全機制、CLAUDE（CEO/審核端）審核並落地，NORA 再對
+落地後的實作做一輪批判性複審，逐項修復複審抓到的問題後才發布。
+
+### 新增：Engineer Mode（`seo-advisor fix engineer` / `fix rollback`）
+
+- 自動修復三種技術 SEO 問題：robots.txt 缺失/缺 Sitemap 宣告、sitemap.xml
+  缺失（用已爬取頁面建立）、頁面多重 canonical 標籤衝突。
+- 流程：列出可修復的 Finding →（可選 `--from-report` 讀既有顧問報告，
+  否則就地跑一次快速掃描）→ 產出 PatchPlan（dry-run 預覽 diff/風險等級/
+  警告）→ 人工確認後 `--apply --confirm "APPLY <plan_id>"` 才真的寫入。
+- `--site-url` 提供正式站台網址時，sitemap/robots.txt 產出絕對 URL；
+  不提供時明確警告內容只是相對路徑。
+- 只支援本地原始碼包/目錄（`--source`），不支援直接修改線上網站——網址類
+  的寫入能力（SSH/WordPress API）屬於後續批次。
+
+### 安全機制
+
+- **雙重確認**：`--apply` 加 `--confirm "APPLY <plan_id>"`，plan_id 綁定
+  特定計畫，不是可重複套用的萬用通關密語。
+- **備份與回滾**：套用前自動備份到 `.seo-advisor/backups/<id>/`，`fix
+  rollback` 可還原；**若使用者在套用之後又手動編輯過檔案，rollback 會比對
+  hash 偵測到並跳過該檔案，絕不覆蓋使用者的後續改動**。
+- **寫入範圍白名單**：只允許 `.txt`/`.xml`/`.html`/`.htm`，一律拒絕任何
+  程式邏輯檔案（`.py`/`.php`/`.js`/`.ts`/`.sh`）；黑名單擋下 `.env`/
+  `.git/`/`wp-config.php`/`.ssh/`/Engineer Mode 自己的備份目錄；路徑比對
+  做 Unicode 正規化與 Windows 保留裝置名稱檢查。
+- **atomic write**：寫 temp file（`tempfile.mkstemp` 保證唯一）→ `os.replace`
+  → 寫入後重新讀取驗證 hash，確保沒有半途損毀。
+- **樣板語法偵測**：canonical fixer 若偵測到頁面含 Jinja/Django/PHP 等樣板
+  語法，不自動改寫（重新序列化整份 HTML 有意外改動樣板結構的風險），只
+  警告請手動處理。
+- **partial apply 仍可正確 rollback**：多檔案套用時若中途失敗，已成功寫入
+  的檔案仍可被正確識別並還原（逐檔案增量記錄 hash，而非全部完成才記錄）。
+
+### 過程中的兩輪把關
+
+實作中自行發現並修正 3 個問題（`can_fix()` 誤判邏輯用了粗略分類、rollback
+hash 比對方向錯誤、URL→本地路徑轉換沒處理乾淨網址）。落地後請 NORA 做一輪
+批判性複審，另抓到 9 項問題（partial-apply rollback 缺口、新建檔案 rollback
+完整性、sitemap/canonical 需要正式網址、路徑白名單繞過手法、備份目錄自我
+寫入風險、備份 ID 碰撞、temp file 命名碰撞、樣板語法風險、manifest 路徑
+正規化），全部驗證後修復。
+
+### 測試
+
+新增約 30 個測試（LocalArchiveConnector 寫入安全機制、fixers 各模組、
+runner 端到端流程、rollback 安全判斷），總計 334 個測試全過，ruff lint 乾淨。
+
 ## [0.1.18] - Unreleased
 
 單一 agent 深度稽核新角度：測試品質/邊界情況覆蓋、功能完整度 vs 文件承諾

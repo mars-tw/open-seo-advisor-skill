@@ -74,18 +74,34 @@ Markdown + JSON 雙格式，結構：
 
 ## Engineer Mode
 
-**狀態：v0.2.0 規劃中，本版本先提供介面與 prompt。**
+**狀態：v0.2.0 已上線 robots.txt / sitemap.xml / canonical 三種自動修復；
+hreflang、結構化資料驗證、redirect、CWV 仍是規劃中（見 `docs/roadmap.md`）。**
 
 ### 目標與適用情境
 
-直接修復技術 SEO 問題，產出 patch、diff、部署計畫與驗證結果。適用於修
-`robots.txt`、`sitemap.xml`、canonical、hreflang、schema、CWV、SSR、
-redirect、CMS 模板等。
+直接修復技術 SEO 問題，產出 patch、diff、部署計畫與驗證結果。目前支援修
+`robots.txt`（缺失/缺 Sitemap 宣告）、`sitemap.xml`（缺失時建立）、
+canonical（移除頁面內多餘的重複標籤）；只支援本地原始碼包/目錄
+（`--source`），不支援直接修改線上網站。
 
 ### 觸發方式
 
-- CLI：`seo-advisor fix engineer --source ./site --finding-id SEO-SITEMAP-001 --dry-run`
-- 自然語言：「直接幫我修 sitemap 和 canonical」
+```bash
+# 列出目前可自動修復的問題
+seo-advisor fix engineer --source ./site
+
+# 產出 dry-run 修復計畫（不寫入任何檔案）
+seo-advisor fix engineer --source ./site --finding-id SEO-SITEMAP_MISSING-001 --site-url https://example.com
+
+# 確認無誤後，真的套用（plan_id 從上一步的輸出取得）
+seo-advisor fix engineer --source ./site --finding-id SEO-SITEMAP_MISSING-001 \
+  --site-url https://example.com --apply --confirm "APPLY fix-SEO-SITEMAP_MISSING-001"
+
+# 回滾（不會覆蓋你在套用之後又手動編輯過的檔案）
+seo-advisor fix rollback --source ./site --backup <備份路徑> --apply --confirm "ROLLBACK <backup_id>"
+```
+
+自然語言：「直接幫我修 sitemap 和 canonical」（會被路由到上述指令）。
 
 ### 工作步驟
 

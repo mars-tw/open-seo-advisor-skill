@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.18
+version: 0.2.0
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -49,7 +49,7 @@ triggers:
 | 模式 | 觸發 | 目標 | 詳細規格 |
 |---|---|---|---|
 | 顧問模式 Consultant | `seo-advisor audit consultant` | 全站健檢、產出診斷報告與優先順序 | `docs/modes.md#consultant-mode` |
-| 工程師模式 Engineer | `/seo-fix engineer` | 直接修復技術 SEO 問題（sitemap/canonical/hreflang/schema/CWV） | `docs/modes.md#engineer-mode` |
+| 工程師模式 Engineer | `seo-advisor fix engineer` | 自動修復 robots.txt/sitemap/canonical（dry-run 預覽，確認後才寫入，有備份/回滾） | `docs/modes.md#engineer-mode` |
 | 資安模式 Security | `/seo-security` | 檢查與 SEO 相關的資安風險 | `docs/modes.md#security-mode` |
 | 文章寫手模式 Content Writer | `seo-advisor write` | 依 SEO 權威指導原則產出內容 | `docs/content_writer_guide.md` |
 | 外掛開發模式 Plugin Dev | `/seo-plugin` | 開發 WordPress 等 CMS 的 SEO 外掛 | `docs/modes.md#plugin-dev-mode` |
@@ -71,8 +71,16 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.18）
+## 目前實作狀態（v0.2.0）
 
+- ✅ **Engineer Mode 正式上線（v0.2.0）**：`seo-advisor fix engineer` 自動修復
+  robots.txt 缺失/缺 Sitemap、sitemap.xml 缺失、頁面多重 canonical 衝突三種
+  技術 SEO 問題。專案第一個真的會寫入使用者檔案的模式：預設 dry-run 預覽，
+  `--apply --confirm "APPLY <plan_id>"` 才真的寫入；套用前自動備份，`fix
+  rollback` 可還原，且使用者事後手動編輯過的檔案絕不會被 rollback 覆蓋。
+  寫入範圍嚴格白名單（僅 txt/xml/html，永不碰程式邏輯檔案）。NORA 設計 +
+  落地後複審抓到 9 項問題（partial-apply rollback、樣板語法風險、路徑
+  正規化繞過手法等）全數修復後發布。
 - ✅ 深度稽核新角度修復（v0.1.18）：修正爬蟲漏爬 www 子網域頁面的 bug（與先前
   canonical www↔apex 誤報同一類模式，共用 `url_utils.normalize_host`）；
   `docs/roadmap.md` 補齊到 v0.1.17（原本只記錄到 v0.1.2）；`docs/ai-matrix-os.md`
