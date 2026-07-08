@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.models import PageSnapshot
+from seo_advisor.url_utils import normalize_host
 
 
 @dataclass
@@ -27,7 +28,11 @@ class CrawlResult:
 
 
 def _same_site(base_netloc: str, url: str) -> bool:
-    return urlparse(url).netloc in ("", base_netloc)
+    """判斷 url 是否與 base_netloc 同站；www.example.com 與 example.com
+    視為同站，避免漏爬網站的 www/apex 兩個版本（見 HTTPConnector.is_url_in_scope
+    的同一套正規化邏輯，兩者共用 url_utils.normalize_host）。"""
+    netloc = urlparse(url).netloc
+    return netloc == "" or normalize_host(netloc) == normalize_host(base_netloc)
 
 
 def _extract_links(base_url: str, html: str) -> list[str]:

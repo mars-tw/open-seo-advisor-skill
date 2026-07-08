@@ -22,28 +22,13 @@ from bs4 import BeautifulSoup
 
 from seo_advisor.crawler import CrawlResult, find_orphan_pages
 from seo_advisor.models import Finding, Mode, Severity
+from seo_advisor.url_utils import normalize_host as _normalize_host
 
 _MAX_URLS_PER_SITEMAP_FILE = 50_000
 
 
 def _make_id(category: str, seq: int) -> str:
     return f"SEO-{category.upper()}-{seq:03d}"
-
-
-def _normalize_host(host: str) -> str:
-    """正規化主機名稱以比較是否「實質同站」：lowercase、去掉單層 www.、
-    去掉預設 port。這樣 www.x.com 與 x.com 會被視為同站，避免把最常見的
-    合法 canonicalization（www↔apex）誤判成跨網域問題。
-    """
-    host = host.lower().strip()
-    # 去掉 :80 / :443 等 port（保留非預設 port 以免混淆不同服務）
-    if ":" in host:
-        name, _, port = host.rpartition(":")
-        if port in ("80", "443"):
-            host = name
-    if host.startswith("www."):
-        host = host[4:]
-    return host
 
 
 # 明顯不需要社群分享卡片的路徑片段，缺 OG 不視為問題（降噪）。

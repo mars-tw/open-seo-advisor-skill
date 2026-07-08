@@ -123,7 +123,9 @@ def test_is_url_in_scope_expands_after_redirect_to_new_host():
     connector = HTTPConnector("https://example.com")
     connector.probe()
 
-    assert connector.is_url_in_scope("https://www.example.com/x") is False
+    # www.example.com 與 example.com 視為同站（www↔apex 正規化），一開始
+    # 就在範圍內，不需要等實際發生 redirect 才被納入。
+    assert connector.is_url_in_scope("https://www.example.com/x") is True
 
     respx.get("https://example.com/redirect-source").mock(
         return_value=httpx.Response(

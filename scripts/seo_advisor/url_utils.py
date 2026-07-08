@@ -76,3 +76,24 @@ def looks_like_url(raw: str) -> bool:
         return True
     except InvalidUrlError:
         return False
+
+
+def normalize_host(host: str) -> str:
+    """正規化主機名稱以比較是否「實質同站」：lowercase、去掉單層 www.、
+    去掉預設 port。這樣 www.x.com 與 x.com 會被視為同站，避免把最常見的
+    合法 canonicalization（www↔apex）誤判成跨網域/外部連結。
+
+    這是連接爬取層（connectors/http.py 的爬取範圍判斷、crawler.py 的同站
+    連結判斷）與分析層（analyzers/technical.py 的 canonical 跨網域檢查）
+    共用的正規化邏輯，刻意放在最底層、不依賴任何 seo_advisor 內部模組的
+    url_utils，避免爬取層依賴分析層造成不當耦合。
+    """
+    host = host.lower().strip()
+    # 去掉 :80 / :443 等 port（保留非預設 port 以免混淆不同服務）
+    if ":" in host:
+        name, _, port = host.rpartition(":")
+        if port in ("80", "443"):
+            host = name
+    if host.startswith("www."):
+        host = host[4:]
+    return host

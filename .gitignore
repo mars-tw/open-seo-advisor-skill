@@ -47,3 +47,4 @@ id_rsa*
 .DS_Store
 Thumbs.db
 .collab-rules.md
+.coverage

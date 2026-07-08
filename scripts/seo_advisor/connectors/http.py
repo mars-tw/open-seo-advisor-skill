@@ -14,6 +14,7 @@ from seo_advisor.models import ConnectorProfile, PageSnapshot, SafetyPolicy, Url
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
 from seo_advisor.security.rate_limiter import RateLimiter
 from seo_advisor.security.robots_policy import RobotsPolicy
+from seo_advisor.url_utils import normalize_host
 
 _SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
@@ -93,9 +94,17 @@ class HTTPConnector(WebsiteConnector):
         return {"read_urls"}
 
     def is_url_in_scope(self, url: str) -> bool:
-        """判斷 URL 的 host 是否在允許爬取的範圍內（seed host 或其 redirect 目標）。"""
+        """判斷 URL 的 host 是否在允許爬取的範圍內（seed host、其 redirect 目標，
+        或兩者的 www↔apex 版本）。
+
+        正規化後比較：www.example.com 與 example.com 視為同站，避免網站的
+        www/apex 兩個版本沒有互相 redirect 時，把同站頁面誤判為外部連結而漏爬。
+        """
         netloc = urlparse(url).netloc
-        return netloc in ("", *self._allowed_netlocs)
+        if netloc == "":
+            return True
+        normalized = normalize_host(netloc)
+        return any(normalized == normalize_host(allowed) for allowed in self._allowed_netlocs)
 
     def _register_final_host(self, final_url: str) -> None:
         netloc = urlparse(final_url).netloc

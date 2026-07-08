@@ -51,6 +51,44 @@
       CLI `seo-advisor write` 指令，程式化品質檢查
       （單一 H1、低品質 AI 內容起手式、YMYL 關鍵字偵測）。
 
+## v0.1.3 ～ v0.1.17（已發布，行銷模組、統籌層、深度稽核）
+
+> 以下摘要自 `CHANGELOG.md` 各版本詳細記錄；本節目的是讓 roadmap 反映
+> 真實進度，避免讀者誤以為專案只到 v0.1.2。完整細節請見 CHANGELOG。
+
+- [x] **v0.1.3** Meta 廣告優化模式（`AdsProvider` 抽象層、`AdsSafetyPolicy`
+      多重預算防護、dry-run 行動計畫）+ 產圖素材模式（`ImageProvider`
+      抽象層、合規前置檢查、與 Content Writer 串接）。
+- [x] **v0.1.4** AI 矩陣營運系統（統籌層）：26 個資料驅動角色、NORA 路由器、
+      安全升級規則（高風險任務強制人工審核+plan-only）、mock/generic engine。
+- [x] **v0.1.5** 成長行銷模組：UTM 歸因規劃、CRO 落地頁優化、跨渠道成效分析
+      （`AnalyticsProvider` 抽象層，read-only）；矩陣角色行銷能力擴充。
+- [x] **v0.1.6** 行銷方法論知識庫（中性化蒸餾，50 條檢核原則）+ 電商 Listing
+      健檢模式。
+- [x] **v0.1.7** 一鍵代操機器人（`seo-advisor auto`）：一個指令自動分析、
+      一次知情同意閘門、白名單/黑名單安全邊界。
+- [x] **v0.1.8** 紮實度強化：能力地圖、API 契約文件、CI wheel 打包驗證、
+      依賴版本上限、provider 失敗路徑測試。
+- [x] **v0.1.9** 新手 UX 優化：裸網域 bug 修正、信任文案統一、
+      execution_mode 誠實標示。
+- [x] **v0.1.10** 深度資安強化：SSRF redirect 繞過修復、回應大小上限改真
+      串流防記憶體 DoS、sitemap billion laughs 防護、錯誤訊息 redact。
+- [x] **v0.1.11** SEO 診斷實用度：canonical 跨網域、Open Graph、JSON-LD
+      三項新檢查（含 www↔apex 正規化防誤報）。
+- [x] **v0.1.12** 內容↔顧問串接：`write --from-report` 把顧問報告的 SEO
+      缺口轉成針對性寫作 brief。
+- [x] **v0.1.13** 廣告↔產圖串接：`image from-ads` 把素材疲勞問題轉成新
+      素材方向 brief，含低信心閘門防止白花錢。
+- [x] **v0.1.14** Autopilot 接真實引擎（consultant 先行）：網址目標會真的
+      跑一次快速 SEO 健檢，不再只是 plan-only 摘要。
+- [x] **v0.1.15** 新手指令收斂：精靈簡化為只問網址、懶人包零指令、進階
+      指令保留給熟悉使用者但不對新手主動展示。
+- [x] **v0.1.16** 全系統健康度大辯論：多立場交叉稽核，修正供應鏈可追溯性
+      （Dependabot + pip-audit）、單次掃描重複請求去重、provider 錯誤處理
+      系統性補強。
+- [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
+      方法論知識庫時效性標記、www 子網域漏爬修正。
+
 ## v0.2.0
 
 - [ ] Engineer Mode：`fixers/` 實作 robots.txt / sitemap / canonical /
@@ -61,11 +99,15 @@
 - [ ] `GitRepoConnector`（產出可開 PR 的 branch + diff）。
 - [ ] `WordPressAPIConnector`（唯讀：posts/pages/plugins/site health；
       寫入：需 Application Password）。
-- [ ] Search Console API / GA4 Data API optional adapter。
+- [ ] Search Console API / GA4 Data API optional adapter（`growth/providers/
+      google.py` 目前僅骨架：建構檢查已就緒，實際 API 呼叫需要 OAuth 認證，
+      尚未實作；無憑證時請用 `--provider mock` 試玩）。
 - [ ] 產業 profile 加權邏輯串接進 `technical.py` 與 scoring。
 - [ ] JavaScript SEO 檢查：raw HTML vs rendered HTML 差異比對
       （Playwright，optional dependency）。
-- [ ] 結構化資料驗證（`analyzers/structured_data.py`）。
+- [ ] 結構化資料驗證：v0.1.11 已實作 JSON-LD **存在性與語法正確性**檢查
+      （`_check_structured_data`），本項指更完整的 Schema.org **型別與必要
+      欄位**驗證（例如 `Product` 是否有 `price`/`availability`）。
 
 ## v0.3.0
 

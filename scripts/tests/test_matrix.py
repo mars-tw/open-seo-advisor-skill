@@ -142,3 +142,22 @@ def test_run_matrix_marks_human_review_for_publish_task(tmp_path):
     task = TaskRequest(task_id="pub", user_goal="幫我寫新聞稿並直接發布到媒體")
     outcome = run_matrix(task, out_dir=str(tmp_path), provider_name="mock")
     assert outcome.deliverable.human_review_required is True
+
+
+def test_docs_engine_ratio_matches_actual_roles_yaml():
+    """docs/ai-matrix-os.md 與 docs/capability-map.md 都寫死了「7/26（27%）
+    角色已接真實專屬引擎」這個數字。若未來有人在 roles.yaml 新增/修改
+    default_engine 卻忘記同步更新文件，這條測試會失敗提醒——避免重蹈
+    「文件停留在 v0.1.4 骨架敘述、程式碼早已接線」的 documentation drift。
+    """
+    roles = all_roles()
+    wired = [r for r in roles if r.default_engine != "generic_llm"]
+    assert len(roles) == 26, (
+        f"角色總數變成 {len(roles)}，請同步更新 docs/ai-matrix-os.md 與 "
+        "docs/capability-map.md 裡寫死的角色數。"
+    )
+    assert len(wired) == 7, (
+        f"已接真實引擎的角色數變成 {len(wired)}（{[r.id for r in wired]}），"
+        "請同步更新 docs/ai-matrix-os.md 與 docs/capability-map.md 裡寫死的"
+        "「7/26（27%）」數字與角色對照表。"
+    )

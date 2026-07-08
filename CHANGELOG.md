@@ -2,6 +2,41 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.18] - Unreleased
+
+單一 agent 深度稽核新角度：測試品質/邊界情況覆蓋、功能完整度 vs 文件承諾
+（前兩輪已覆蓋效能/安全/新手體驗/開源治理四立場，這次刻意換不同視角）。
+
+### 修正
+
+- **【P1】爬蟲漏爬 www 子網域頁面**：`HTTPConnector.is_url_in_scope` 與
+  `crawler._same_site` 過去用精確字串比對 host，若目標網站的 www/apex 兩個
+  版本都能直接訪問、沒有互相 redirect，會把同站的 www 頁面誤判為外部連結而
+  完全跳過（漏爬）。這與先前修過的 canonical www↔apex 誤報是同一類 bug 模式，
+  只是換了「連結範圍判斷」這個位置存在。新增共用的 `url_utils.normalize_host`，
+  讓爬取層（`http.py`/`crawler.py`）與分析層（`analyzers/technical.py`）用
+  同一套正規化邏輯比對，並翻正了一條原本斷言「www 版本不在範圍內」的既有
+  測試（那條測試把有缺陷的行為當正確答案鎖住了）。
+
+### 文件
+
+- **`docs/roadmap.md` 補齊到 v0.1.17**：原本只記錄到 v0.1.2，完全沒反映後續
+  15 個版本做出來的 ads/images/growth/ecommerce/matrix/autopilot 六大功能
+  區塊，會讓新讀者/貢獻者誤以為專案還很初期。已用 CHANGELOG 摘要回填，並
+  重新核實 v0.2.0 之後的規劃是否仍準確（結構化資料驗證項目補充說明 v0.1.11
+  已完成語法檢查，本項指更完整的 Schema.org 型別驗證）。
+- **`docs/ai-matrix-os.md` 更新引擎接線現狀**：原文寫「IRIS → 顧問模式引擎
+  （後續版本接上）」，但這件事已經做了——目前 26 角色中 7 個（27%）已接真實
+  專屬引擎（IRIS/MAYA/LUNA/ECHO/CODY/JACK/PIXEL），文件卻還停留在 v0.1.4
+  當時的骨架敘述。已更新為表格呈現實際接線狀態；`docs/capability-map.md`
+  同步更新一致的比例說明。新增測試鎖住這個比例與 `roles.yaml` 一致，未來
+  角色接線變動卻忘記同步文件時會被測試擋下。
+
+### 測試
+
+新增 3 個測試（www/apex 範圍判斷 2 項、matrix 引擎比例與文件一致性 1 項），
+總計 306 個測試全過，ruff lint 乾淨。
+
 ## [0.1.17] - Unreleased
 
 執行全系統健康度辯論（v0.1.16）當時被列入「下一輪」的 4 項建議。
