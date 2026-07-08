@@ -34,6 +34,18 @@ def test_vague_goal_falls_back_to_matrix():
     assert "matrix" in modules
 
 
+def test_matrix_fallback_hints_possible_url_typo(tmp_path):
+    """新手打錯字（例如漏了 .com 導致完全不像網址）時會落入 matrix fallback，
+    過去這裡只給通用骨架文字、用「已由 NORA 總控判斷」這種成功語氣，讓新手
+    誤以為健檢已完成，不會意識到要回頭檢查網址。現在要提醒使用者確認輸入，
+    但不應該對「幫我規劃成長方案」這類合理模糊目標顯得突兀或武斷。"""
+    outcome = run_autopilot(AutoTask(target="exmaple", mock=True), out_dir=str(tmp_path))
+    matrix_result = next(r for r in outcome.deliverable.module_results if r.module == "matrix")
+    hint_text = " ".join(matrix_result.highlights)
+    assert "網址" in hint_text
+    assert "https://" in hint_text or ".com" in hint_text
+
+
 def test_bare_domain_treated_as_url():
     # 新手常直接打 example.com（沒有 https://），要能被當網址、跑顧問類模組
     modules = select_modules(AutoTask(target="example.com"))

@@ -27,6 +27,9 @@ class MethodologyPrinciple(BaseModel):
 class MethodologyDomain(BaseModel):
     label: str
     principles: list[MethodologyPrinciple] = Field(default_factory=list)
+    # 最後一次人工檢視確認這批原則的日期（不代表持續監控更新）。
+    # 舊資料若還沒補上這個欄位，預設為 None，不因此讓載入失敗。
+    last_reviewed: str | None = None
 
 
 @functools.lru_cache(maxsize=1)

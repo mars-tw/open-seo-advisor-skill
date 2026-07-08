@@ -50,6 +50,19 @@ def _normalize_host(host: str) -> str:
 _NON_SOCIAL_PATH_HINTS = ("/api/", "/admin/", "/wp-json/", "/wp-admin/", "/.well-known/")
 
 
+def _parsed_pages(result: CrawlResult) -> dict[str, BeautifulSoup]:
+    """把可分析的頁面（狀態碼 200 且有 HTML）各自解析一次，讓
+    _check_page_metadata/_check_noindex/_check_canonical_target/
+    _check_social_metadata/_check_structured_data 共用同一份 soup，
+    避免同一頁 HTML 被 BeautifulSoup(lxml) 重複解析 5 次。
+    """
+    return {
+        url: BeautifulSoup(snapshot.html, "lxml")
+        for url, snapshot in result.pages.items()
+        if snapshot.status_code == 200 and snapshot.html
+    }
+
+
 def analyze_technical_seo(result: CrawlResult, *, seed_url: str) -> list[Finding]:
     findings: list[Finding] = []
     seq_counter: Counter[str] = Counter()
@@ -58,16 +71,18 @@ def analyze_technical_seo(result: CrawlResult, *, seed_url: str) -> list[Finding
         seq_counter[category] += 1
         return _make_id(category, seq_counter[category])
 
+    parsed = _parsed_pages(result)
+
     findings.extend(_check_status_codes(result, next_id))
     findings.extend(_check_redirect_chains(result, next_id))
     findings.extend(_check_robots_txt(result, next_id))
     findings.extend(_check_sitemap(result, next_id))
     findings.extend(_check_https(result, seed_url, next_id))
-    findings.extend(_check_page_metadata(result, next_id))
-    findings.extend(_check_noindex(result, next_id))
-    findings.extend(_check_canonical_target(result, next_id))
-    findings.extend(_check_social_metadata(result, next_id))
-    findings.extend(_check_structured_data(result, next_id))
+    findings.extend(_check_page_metadata(parsed, next_id))
+    findings.extend(_check_noindex(result, parsed, next_id))
+    findings.extend(_check_canonical_target(parsed, next_id))
+    findings.extend(_check_social_metadata(parsed, next_id))
+    findings.extend(_check_structured_data(parsed, next_id))
     findings.extend(_check_orphan_pages(result, seed_url, next_id))
 
     return findings
@@ -295,7 +310,7 @@ def _check_https(result: CrawlResult, seed_url: str, next_id) -> list[Finding]:
     return findings
 
 
-def _check_page_metadata(result: CrawlResult, next_id) -> list[Finding]:
+def _check_page_metadata(parsed: dict[str, BeautifulSoup], next_id) -> list[Finding]:
     findings: list[Finding] = []
     missing_title: list[str] = []
     missing_meta_description: list[str] = []
@@ -304,12 +319,7 @@ def _check_page_metadata(result: CrawlResult, next_id) -> list[Finding]:
     title_to_urls: dict[str, list[str]] = {}
     canonical_conflicts: list[str] = []
 
-    for url, snapshot in result.pages.items():
-        if snapshot.status_code != 200 or not snapshot.html:
-            continue
-
-        soup = BeautifulSoup(snapshot.html, "lxml")
-
+    for url, soup in parsed.items():
         title_tag = soup.find("title")
         title_text = title_tag.get_text(strip=True) if title_tag else ""
         if not title_text:
@@ -461,7 +471,9 @@ def _metadata_finding(
     )
 
 
-def _check_noindex(result: CrawlResult, next_id) -> list[Finding]:
+def _check_noindex(
+    result: CrawlResult, parsed: dict[str, BeautifulSoup], next_id
+) -> list[Finding]:
     """檢查頁面是否被 <meta name="robots" content="noindex"> 或 HTTP
     X-Robots-Tag 標頭阻擋索引。這類設定容易在模板誤植或 CMS 設定錯誤時
     意外套用到不該阻擋的重要頁面，且不像 robots.txt 那麼顯眼容易發現。
@@ -470,6 +482,9 @@ def _check_noindex(result: CrawlResult, next_id) -> list[Finding]:
     noindex_urls: list[str] = []
 
     for url, snapshot in result.pages.items():
+        # X-Robots-Tag 是 HTTP header，即使頁面沒有 HTML body 也可能存在，
+        # 因此這裡仍需要迭代 result.pages（而非只用 parsed），只有需要看
+        # <meta name="robots"> 時才查詢已解析好的 soup（parsed.get(url)）。
         if snapshot.status_code != 200:
             continue
 
@@ -478,10 +493,10 @@ def _check_noindex(result: CrawlResult, next_id) -> list[Finding]:
             noindex_urls.append(url)
             continue
 
-        if not snapshot.html:
+        soup = parsed.get(url)
+        if soup is None:
             continue
 
-        soup = BeautifulSoup(snapshot.html, "lxml")
         robots_meta = soup.find("meta", attrs={"name": "robots"})
         if robots_meta:
             content = robots_meta.get("content", "").lower()
@@ -513,7 +528,7 @@ def _check_noindex(result: CrawlResult, next_id) -> list[Finding]:
     return findings
 
 
-def _check_canonical_target(result: CrawlResult, next_id) -> list[Finding]:
+def _check_canonical_target(parsed: dict[str, BeautifulSoup], next_id) -> list[Finding]:
     """檢查 canonical 目標是否有問題：指向不同網域（外站）、或指向本站但該
     目標頁其實回傳非 200。這類錯誤會讓搜尋引擎把權重導到錯的地方，比「多個
     canonical」更隱蔽也更常見。
@@ -521,15 +536,12 @@ def _check_canonical_target(result: CrawlResult, next_id) -> list[Finding]:
     findings: list[Finding] = []
     cross_domain: list[str] = []
 
-    for url, snapshot in result.pages.items():
-        if snapshot.status_code != 200 or not snapshot.html:
-            continue
+    for url, soup in parsed.items():
         page_host = urlparse(url).netloc
         # 本地原始碼包掃描時頁面 URL 沒有網域（host 為空），此時無法判斷
         # 「跨網域」，跳過避免誤判。
         if not page_host:
             continue
-        soup = BeautifulSoup(snapshot.html, "lxml")
         link = soup.find("link", rel="canonical")
         if not link or not link.get("href"):
             continue
@@ -564,7 +576,7 @@ def _check_canonical_target(result: CrawlResult, next_id) -> list[Finding]:
     return findings
 
 
-def _check_social_metadata(result: CrawlResult, next_id) -> list[Finding]:
+def _check_social_metadata(parsed: dict[str, BeautifulSoup], next_id) -> list[Finding]:
     """檢查 Open Graph / Twitter Card 是否存在。缺這些不影響索引，但會讓頁面
     被分享到社群時沒有預覽圖與標題，大幅降低點擊率——這是很常被忽略、但補起來
     很划算的呈現優化。
@@ -572,14 +584,11 @@ def _check_social_metadata(result: CrawlResult, next_id) -> list[Finding]:
     findings: list[Finding] = []
     missing_og: list[str] = []
 
-    for url, snapshot in result.pages.items():
-        if snapshot.status_code != 200 or not snapshot.html:
-            continue
+    for url, soup in parsed.items():
         # 降噪：明顯的 API/後台/系統路徑不需要社群分享卡片，缺 OG 不視為問題。
         path = urlparse(url).path.lower()
         if any(hint in path for hint in _NON_SOCIAL_PATH_HINTS):
             continue
-        soup = BeautifulSoup(snapshot.html, "lxml")
         # noindex 頁本來就不打算被搜尋/分享，缺 OG 不報。
         robots_meta = soup.find("meta", attrs={"name": "robots"})
         if robots_meta and "noindex" in (robots_meta.get("content", "").lower()):
@@ -614,17 +623,14 @@ def _check_social_metadata(result: CrawlResult, next_id) -> list[Finding]:
     return findings
 
 
-def _check_structured_data(result: CrawlResult, next_id) -> list[Finding]:
+def _check_structured_data(parsed: dict[str, BeautifulSoup], next_id) -> list[Finding]:
     """檢查 JSON-LD 結構化資料：是否存在、以及能不能被正確 parse。壞掉的 JSON-LD
     會讓搜尋引擎拿不到 rich result，但頁面上看不出問題，很容易被忽略。
     """
     findings: list[Finding] = []
     invalid_jsonld: list[str] = []
 
-    for url, snapshot in result.pages.items():
-        if snapshot.status_code != 200 or not snapshot.html:
-            continue
-        soup = BeautifulSoup(snapshot.html, "lxml")
+    for url, soup in parsed.items():
         scripts = soup.find_all("script", attrs={"type": "application/ld+json"})
         for script in scripts:
             raw = script.string or script.get_text()

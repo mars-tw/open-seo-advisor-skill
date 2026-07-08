@@ -1,5 +1,7 @@
 """測試新增的技術 SEO 檢查：canonical 跨網域、Open Graph、JSON-LD。"""
 
+from unittest.mock import patch
+
 from seo_advisor.analyzers.technical import analyze_technical_seo
 from seo_advisor.crawler import CrawlResult
 from seo_advisor.models import PageSnapshot
@@ -85,3 +87,22 @@ def test_valid_json_ld_not_flagged():
     )
     findings = analyze_technical_seo(_result("https://example.com/x", html), seed_url="https://example.com/x")
     assert not any("INVALID_JSON_LD" in f.id for f in findings)
+
+
+def test_html_parsed_once_per_page_not_five_times():
+    """每頁 HTML 應該只被 BeautifulSoup(lxml) 解析一次，供 _check_page_metadata/
+    _check_noindex/_check_canonical_target/_check_social_metadata/
+    _check_structured_data 這 5 個檢查共用，而不是各自重新解析。"""
+    html = (
+        '<html><head><title>t</title>'
+        '<meta name="description" content="d">'
+        '<link rel="canonical" href="https://example.com/x">'
+        '<meta property="og:title" content="T">'
+        '<meta property="og:image" content="https://example.com/c.jpg">'
+        '</head><body><h1>H</h1></body></html>'
+    )
+    with patch(
+        "seo_advisor.analyzers.technical.BeautifulSoup", wraps=__import__("bs4").BeautifulSoup
+    ) as mock_soup:
+        analyze_technical_seo(_result("https://example.com/x", html), seed_url="https://example.com/x")
+    assert mock_soup.call_count == 1

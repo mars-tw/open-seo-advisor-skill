@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.1.16
+version: 0.1.17
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,13 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.1.16）
+## 目前實作狀態（v0.1.17）
 
+- ✅ 辯論下一輪修復（v0.1.17）：HTML 單次解析收斂（技術面分析每頁從解析 5 次
+  收斂為 1 次）、autopilot 白名單複核的 CI 保險機制（常數改動未接線會讓 CI 失敗）、
+  `methodology.yaml` 加 `last_reviewed` 與時效性免責聲明、auto 對打錯字輸入補
+  中性提示（原設計的 heuristic 會誤傷合理單詞目標，改為對所有 matrix fallback
+  一律提示，記錄於 CHANGELOG 的設計決策）。
 - ✅ 全系統健康度大辯論修復（v0.1.16）：多位 CODEX 分立場（效能/安全/新手體驗/
   開源治理）平行分析並交叉辯論，收斂出供應鏈可追溯性（Dependabot+pip-audit）、
   單次掃描重複請求去重、provider 缺金鑰錯誤處理系統性補強（含跨平台金鑰設定

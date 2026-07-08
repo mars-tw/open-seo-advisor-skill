@@ -6,12 +6,20 @@
 # 避免侵權、不綁單一權威來源）。目的是讓任何人免費就能用這些方法論做檢核，
 # 不需購買課程或代操服務。
 #
-# 資料結構：每個領域一組 principles，每條含 check（檢核點）與 why（為什麼/怎麼做）。
+# 資料結構：每個領域一組 principles，每條含 check（檢核點）與 why（為什麼/怎麼做）；
+# 另有 last_reviewed 標記最後審查/確認日期。
 # ecommerce/Content Writer/Meta Ads/growth/matrix 等模組可載入引用。
+#
+# 免責聲明：以下原則為通用行銷/電商實務的蒸餾整理，效果因產業、市場、時機、
+# 執行細節而異，不構成投資、行銷成效或業績的保證；平台演算法與政策
+# （例如 Amazon、Meta 廣告政策）會隨時間變動，請以官方最新規範為準，
+# last_reviewed 僅代表本檔內容最後一次被人工檢視確認的日期，不代表持續
+# 監控更新。
 
 domains:
   ecommerce:
     label: Amazon / 電商平台 Listing 優化
+    last_reviewed: "2026-07-08"
     principles:
       - check: 標題前 80 字放入核心品類、主要關鍵字、關鍵差異點
         why: 平台搜尋與手機版首屏都依賴前段資訊，避免把品牌口號放在最前面。
@@ -40,6 +48,7 @@ domains:
 
   paid_ads_funnel:
     label: 付費廣告 / 漏斗
+    last_reviewed: "2026-07-08"
     principles:
       - check: 每個廣告素材前 3 秒必須有明確 hook
         why: 先講痛點、結果、反差或強情境，避免用品牌介紹當開場。
@@ -68,6 +77,7 @@ domains:
 
   content_brand:
     label: 內容 / 品牌成長
+    last_reviewed: "2026-07-08"
     principles:
       - check: 內容要先對齊搜尋意圖或平台情境
         why: 資訊型、比較型、購買型、在地型內容需要不同標題、結構與 CTA。
@@ -96,6 +106,7 @@ domains:
 
   growth_hacking:
     label: 轉換 / 成長駭客
+    last_reviewed: "2026-07-08"
     principles:
       - check: 先定義北極星指標
         why: 選一個能代表使用者價值與業務成長的核心指標，避免團隊各追各的數字。

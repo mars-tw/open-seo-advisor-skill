@@ -2,6 +2,44 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.1.17] - Unreleased
+
+執行全系統健康度辯論（v0.1.16）當時被列入「下一輪」的 4 項建議。
+
+### 修正
+
+- **HTML 單次解析收斂**：技術面分析（title/meta/H1/canonical 重複、noindex、
+  canonical 跨網域、Open Graph、JSON-LD）過去對同一頁面各自呼叫
+  `BeautifulSoup(html, "lxml")`，每頁被解析 5 次；新增 `_parsed_pages()` 一次性
+  解析並共用，同一頁現在只解析 1 次，加測試證明。
+- **autopilot 白名單/黑名單複核的 CI 保險機制**：`autopilot/safety.py` 定義的
+  `is_auto_executable()` 目前未被 `_execute_safe_actions()` 呼叫（因
+  `_MVP_FORCE_PLAN_ONLY` 恆為 `True` 而暫無實益），新增機制性測試——一旦有人
+  把這個常數改為 `False` 卻忘記讓 executor 接上複核，CI 會立即失敗並提示原因。
+- **`methodology.yaml` 加 `last_reviewed` 與時效性免責聲明**：四個領域各自標記
+  最後人工審查日期；`docs/methodology.md` 新增段落說明這些方法論「效果因產業/
+  市場/時機而異、不構成成效保證」，並提醒平台政策變動時以官方最新規範為準。
+- **auto 指令對「像是打錯字」輸入的體驗改善**：新手把網址打錯導致完全不像
+  網址（例如漏了 `.com`）時，過去會落入 `matrix` 通用骨架 fallback，且用「已由
+  NORA 總控判斷」這種成功語氣，容易讓人誤以為健檢已完成而不會回頭檢查輸入。
+  現在會額外提示「若你原本想輸入的是網址，請確認網址完整」。
+
+### 設計決策（原方案評估後調整，記錄以避免重複走同一條死路）
+
+原辯論建議是「值測輸入含網域字元特徵但解析失敗時才提示」，實作時發現這個
+heuristic 無法區分「打錯字的網域」與「合理的單詞目標」——任何英文單字加上
+`.com` 都會通過網域格式檢查，若用這個訊號判斷，會連 `growth`、`seo`、`help`
+這類合理的模糊目標都一併誤判成「你是不是網址打錯字」。改為對所有
+`matrix` fallback 一律加上中性提示（不斷言、只提醒使用者自行核對），放在
+`highlights`（完整報告才展開）而非 `summary`（懶人包會直接顯示），避免對
+合理目標的使用者造成不必要的困惑或武斷語氣。
+
+### 測試
+
+新增 6 個測試（HTML 解析次數 1 項、autopilot 安全閘門機制 1 項、
+methodology last_reviewed 格式 1 項、打錯字提示 1 項、既有測試調整 2 項），
+總計 303 個測試全過，ruff lint 乾淨。
+
 ## [0.1.16] - Unreleased
 
 全系統健康度大辯論：多位 CODEX 分別扮演效能派、安全派、新手體驗派、開源治理派

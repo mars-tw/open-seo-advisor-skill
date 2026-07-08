@@ -286,7 +286,11 @@ def _run_one_module(task: AutoTask, module: str, out_dir: str) -> ModuleResult:
         module="matrix",
         summary="已由 NORA 總控判斷並規劃跨領域成長方案骨架。",
         execution_mode="plan-only",
-        highlights=["跨領域任務派工建議"],
+        highlights=[
+            "跨領域任務派工建議",
+            "若你原本想輸入的是網址，這份結果不是網站健檢報告——"
+            "請確認網址完整（例如有沒有漏打 https:// 或 .com），再重新執行一次。",
+        ],
     )
 
 
