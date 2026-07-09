@@ -89,12 +89,15 @@
 - [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
       方法論知識庫時效性標記、www 子網域漏爬修正。
 
-## v0.2.0
+## v0.2.0 ～ v0.2.1
 
-- [ ] Engineer Mode：`fixers/` 實作 robots.txt / sitemap / canonical /
-      hreflang / 基礎 schema 的自動修復，含 dry-run diff 預覽。
-- [ ] Security Mode：`analyzers/security.py` 實作被動式掃描
-      （暴露檔案、目錄列表、HTTPS/TLS 檢查、CMS 版本比對）。
+- [x] **v0.2.0** Engineer Mode：`fixers/` 實作 robots.txt / sitemap /
+      canonical 的自動修復，dry-run 預覽 + 二次確認才寫入，有備份/回滾。
+      hreflang/結構化資料/redirect/CWV 仍是規劃中（見下方）。
+- [x] **v0.2.1** Security Mode：`security_mode/` 實作被動式掃描（暴露檔案/
+      目錄列表/cloaking 粗略比對/HTTPS/HSTS/mixed content/SEO spam/CMS
+      版本暴露提示），探測性檢查需明確授權確認才會執行。惡意重導判斷、
+      Search Console API 整合、CMS CVE 查詢仍是規劃中（見下方）。
 - [ ] `SSHConnector`（唯讀優先，寫入功能需明確開啟）。
 - [ ] `GitRepoConnector`（產出可開 PR 的 branch + diff）。
 - [ ] `WordPressAPIConnector`（唯讀：posts/pages/plugins/site health；
@@ -102,6 +105,12 @@
 - [ ] Search Console API / GA4 Data API optional adapter（`growth/providers/
       google.py` 目前僅骨架：建構檢查已就緒，實際 API 呼叫需要 OAuth 認證，
       尚未實作；無憑證時請用 `--provider mock` 試玩）。
+- [ ] Engineer Mode 擴充：hreflang（三種形式擇一貫徹）、redirect chain 修復、
+      CWV（圖片尺寸/CSS 拆分等，需額外工具鏈）自動修復——目前只做 robots.txt/
+      sitemap/canonical 三種。
+- [ ] Security Mode 擴充：惡意重導跡象判斷（需要模擬搜尋引擎 referrer，
+      涉及較高誤用風險評估）、CMS 已知 CVE/漏洞資料庫查詢（需要維護資料
+      來源，目前只做版本暴露提示不查真實漏洞編號）。
 - [ ] 產業 profile 加權邏輯串接進 `technical.py` 與 scoring。
 - [ ] JavaScript SEO 檢查：raw HTML vs rendered HTML 差異比對
       （Playwright，optional dependency）。

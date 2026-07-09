@@ -132,6 +132,27 @@ class PageSnapshot(BaseModel):
     encoding: str | None = None
 
 
+class ProbeResult(BaseModel):
+    """Security Mode 探測單一路徑（例如 /.env、/.git/HEAD）的結果。
+
+    刻意不包含完整回應內容——只有 status_code、少量安全 header、內容長度、
+    與極短的內容摘要（前 200 字元，且已知敏感副檔名一律不摘錄），確保即使
+    探測到真的存在的敏感檔案，報告本身也不會意外把檔案內容原樣存下來。
+    """
+
+    path: str
+    status_code: int
+    content_type: str = ""
+    content_length: int | None = None
+    body_preview: str = ""  # 極短摘要，且對已知敏感路徑一律留空（見 security_mode/probes.py）
+    truncated: bool = False
+    # 呼叫端提供 signature_check 時，這裡記錄「內容是否符合該路徑該有的特徵」
+    # （例如 .env 該像 KEY=VALUE、.git/HEAD 該以 "ref: refs/" 開頭），True/False；
+    # 沒提供 signature_check 就維持 None。判斷在 connector 內部完成，簽章函式
+    # 本身可以看到內容，但回傳值只有布林，內容本身不會被存進 ProbeResult。
+    content_matches_signature: bool | None = None
+
+
 class FileRecord(BaseModel):
     path: str
     size_bytes: int

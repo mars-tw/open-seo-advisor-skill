@@ -21,7 +21,7 @@
 | 顧問 Consultant | ✅ | `seo-advisor audit consultant --url <url>` | 技術 SEO 全站健檢，產出 Finding + 健康分數 + 白話報告 |
 | 文章寫手 Content Writer | ✅ | `seo-advisor write --topic <主題>` | LLM brief→outline→draft→QA；免金鑰用 `--llm-provider mock` |
 | 工程師 Engineer | ✅（robots/sitemap/canonical）/ 🚧（hreflang/結構化資料/redirect/CWV） | `seo-advisor fix engineer/rollback` | 自動修復三種問題，dry-run 預覽 + 二次確認才寫入，有備份/回滾；其餘修復類型仍是規劃中 |
-| 資安 Security | 🚧 | （規劃中） | 被動式資安掃描（暴露檔案/HTTPS/CMS 版本） |
+| 資安 Security | ✅ | `seo-advisor security audit` | 被動式資安掃描（暴露檔案/目錄列表/cloaking/HTTPS/HSTS/spam/CMS 版本）；暴露檔案/目錄列表/cloaking 需 `--confirm-authorized` 明確授權，不做任何攻擊性測試 |
 | 外掛開發 Plugin Dev | 🚧 | （規劃中） | WordPress SEO 外掛 scaffold |
 
 ### B. 行銷模組（Marketing Modules）

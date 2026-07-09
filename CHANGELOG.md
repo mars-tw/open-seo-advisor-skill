@@ -2,6 +2,46 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.1] - Unreleased
+
+**Security Mode 正式上線**（`docs/roadmap.md` v0.2.0 第二批）：被動式、非
+破壞性的資安風險掃描，不做任何攻擊性測試。由 NORA 設計授權邊界與檢查架構、
+CLAUDE 審核落地，NORA 再對落地後的實作做一輪批判性複審，逐項修復後發布。
+
+### 新增：Security Mode（`seo-advisor security audit`）
+
+- 檢查項目：暴露檔案偵測（.env/.git/備份檔等 17 個內建路徑）、目錄列表偵測、
+  Cloaking 粗略比對（一般 UA vs Googlebot UA 內容差異）、TLS 憑證有效性/
+  到期/版本、HSTS、mixed content、SEO spam 跡象（CSS 隱藏文字/連結）、CMS
+  版本暴露提示（不查真實 CVE，只誠實提示版本號是否公開可見）。
+- 輸出 Severity（S0 危急～S3 低風險）、SEO 影響面向、證據、修復建議、是否
+  需要更換憑證。
+
+### 授權邊界（核心安全設計）
+
+- 暴露檔案/目錄列表/cloaking 比對本質上是對目標網站發送探測性請求，預設
+  需要 `--confirm-authorized "AUDIT <網域>"` 明確確認才會執行；`--passive-only`
+  可跳過確認，但只執行完全不發送額外請求的被動檢查。
+- 只用內建的固定路徑清單，不接受使用者自訂 wordlist，避免被當成通用掃描
+  工具濫用。
+- 暴露檔案內容不下載完整檔案、不存進報告——只有狀態碼/長度/是否符合內容
+  簽章等中性資訊；已知敏感路徑連極短的內容摘要都不保留。
+
+### 過程中的把關
+
+實作中新增 `HTTPConnector.probe_path()`，複用既有的 SSRF 防護與 rate
+limiter。落地後請 NORA 做一輪批判性複審，抓到 8 項問題並全數修復：敏感
+路徑 probe 禁止跨網域追隨 redirect（避免對未授權第三方發送探測）、暴露
+檔案改用內容簽章判斷而非只憑 200 狀態碼（降低 SPA/WAF 造成的高誤報率）、
+多個 HTTPConnector 共享同一個 RateLimiter（避免速率被稀釋）、授權確認字串
+綁定正規化後的網域（www/apex 視為同一目標、非預設 port 明確標示）、
+`--passive-only` 一併跳過 cloaking 比對、全域拒絕含帳密的 URL、補充高
+價值探測路徑。
+
+### 測試
+
+新增約 42 個測試，總計 376 個測試全過，ruff lint 乾淨。
+
 ## [0.2.0] - Unreleased
 
 **Engineer Mode 正式上線**（`docs/roadmap.md` v0.2.0 第一批）：這是專案第一個

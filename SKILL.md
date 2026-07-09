@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.0
+version: 0.2.1
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -50,7 +50,7 @@ triggers:
 |---|---|---|---|
 | 顧問模式 Consultant | `seo-advisor audit consultant` | 全站健檢、產出診斷報告與優先順序 | `docs/modes.md#consultant-mode` |
 | 工程師模式 Engineer | `seo-advisor fix engineer` | 自動修復 robots.txt/sitemap/canonical（dry-run 預覽，確認後才寫入，有備份/回滾） | `docs/modes.md#engineer-mode` |
-| 資安模式 Security | `/seo-security` | 檢查與 SEO 相關的資安風險 | `docs/modes.md#security-mode` |
+| 資安模式 Security | `seo-advisor security audit` | 被動式資安風險掃描（暴露檔案/目錄列表/cloaking/HTTPS/HSTS/spam/CMS 版本），不做攻擊性測試 | `docs/modes.md#security-mode` |
 | 文章寫手模式 Content Writer | `seo-advisor write` | 依 SEO 權威指導原則產出內容 | `docs/content_writer_guide.md` |
 | 外掛開發模式 Plugin Dev | `/seo-plugin` | 開發 WordPress 等 CMS 的 SEO 外掛 | `docs/modes.md#plugin-dev-mode` |
 | Meta 廣告優化 Meta Ads | `seo-advisor ads` | 診斷 Meta 廣告帳戶、產出優化建議與 dry-run 行動計畫 | `docs/meta_ads_mode.md` |
@@ -71,8 +71,17 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.0）
+## 目前實作狀態（v0.2.1）
 
+- ✅ **Security Mode 正式上線（v0.2.1）**：`seo-advisor security audit` 被動式
+  資安掃描——暴露檔案（.env/.git/備份檔等 17 個內建路徑）、目錄列表、
+  Cloaking 粗略比對、TLS 憑證/HSTS/mixed content、SEO spam 跡象、CMS 版本
+  暴露提示（不查真實 CVE）。不做任何攻擊性測試。核心安全設計：暴露檔案/
+  目錄列表/cloaking 檢查需要 `--confirm-authorized "AUDIT <網域>"` 明確
+  授權確認才會執行，`--passive-only` 可跳過確認但只做完全被動的檢查；只用
+  內建固定路徑清單，不接受自訂 wordlist。NORA 設計 + 落地後複審抓到 8 項
+  問題（敏感路徑跨網域 redirect、內容簽章判斷、rate limit 共享、授權字串
+  正規化等）全數修復後發布。
 - ✅ **Engineer Mode 正式上線（v0.2.0）**：`seo-advisor fix engineer` 自動修復
   robots.txt 缺失/缺 Sitemap、sitemap.xml 缺失、頁面多重 canonical 衝突三種
   技術 SEO 問題。專案第一個真的會寫入使用者檔案的模式：預設 dry-run 預覽，

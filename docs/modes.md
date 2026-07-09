@@ -137,30 +137,53 @@ Deployment Steps / Rollback Steps / Remaining Risks。
 
 ## Security Mode
 
-**狀態：v0.2.0 規劃中，本版本先提供介面與 prompt。**
+**狀態：v0.2.1 已上線暴露檔案/目錄列表/cloaking/HTTPS/HSTS/mixed content/
+SEO spam/CMS 版本暴露提示；惡意重導的深度判斷、Search Console Security
+Issues API 整合仍是規劃中（見 `docs/roadmap.md`）。**
 
 ### 目標與適用情境
 
-檢查與 SEO 直接相關的資安風險：被駭內容、垃圾內容注入、惡意重導、
-敏感檔案外洩、過時 CMS、HTTPS 問題。**僅做非破壞性、被動式檢查**，
-不進行任何攻擊性測試。
+檢查與 SEO 直接相關的資安風險：被駭內容、垃圾內容注入、暴露檔案、過時
+CMS、HTTPS 問題。**僅做非破壞性、被動式檢查，不進行任何攻擊性測試。**
+
+**授權邊界（務必先讀）**：暴露檔案/目錄列表探測、Cloaking UA 比較本質上
+是對目標網站發送額外的探測性請求，只能用於你自己管理、或已取得明確授權
+的網站。這些檢查預設需要輸入 `--confirm-authorized "AUDIT <網域>"` 明確
+確認才會執行；`--passive-only` 可跳過確認，但只執行完全不發送額外請求的
+被動檢查（HTTPS/HSTS/mixed content/SEO spam/CMS 版本提示）。
 
 ### 觸發方式
 
-- CLI：`seo-advisor security audit --url https://example.com`
-- 自然語言：「檢查有沒有 SEO spam、被駭重導、.env 外洩」
+```bash
+# 完全被動模式，不需授權確認（涵蓋範圍較小）
+seo-advisor security audit --url https://example.com --passive-only
 
-### 檢查項目
+# 完整檢查（含暴露檔案/目錄列表/cloaking），需明確授權確認
+seo-advisor security audit --url https://example.com --confirm-authorized "AUDIT example.com"
+```
 
-- 暴露檔案：`.env`、`.git/`、備份 zip、SQL dump、debug log 等常見路徑
-  的公開可存取性檢查（僅發 GET 確認狀態碼，不下載/不利用內容）。
+自然語言：「檢查有沒有 SEO spam、.env 外洩」（會被路由到上述指令）。
+
+### 檢查項目（✅ 已上線）
+
+- 暴露檔案：`.env`、`.git/`、備份 zip/tar.gz、SQL dump、debug log、
+  phpinfo.php 等 17 個內建路徑的公開可存取性檢查（僅發 GET 確認狀態碼與
+  內容簽章特徵，不下載完整內容/不利用內容；已知敏感路徑連內容摘要都不
+  保留）。
 - 目錄列表：Apache/nginx directory index 是否對外開放。
-- CMS 版本與已知過時風險（WordPress core/plugin/theme 版本比對公開資訊）。
+- CMS 版本暴露：只誠實提示版本號是否公開可見（不查真實 CVE 資料庫）。
 - SEO spam 跡象：隱藏文字/連結、與 Google 垃圾內容政策相符的可疑模式。
-- Cloaking 跡象：一般 User-Agent 與 Googlebot/Bingbot 模擬請求的內容差異。
-- 惡意重導跡象：從搜尋結果點入才觸發的重導、行動裝置限定重導。
-- HTTPS/TLS：憑證有效性、mixed content、HSTS、建議 TLS 1.2/1.3。
+- Cloaking 粗略比對：一般 User-Agent 與 Googlebot 模擬請求的最終網址/主要
+  文字內容差異（差異可能來自響應式設計等合理原因，非斷言一定是 cloaking）。
+- HTTPS/TLS：憑證有效性/到期日/版本、mixed content、HSTS。
+
+### 檢查項目（🚧 規劃中）
+
+- 惡意重導跡象：從搜尋結果點入才觸發的重導、行動裝置限定重導（需要模擬
+  搜尋引擎 referrer，涉及較高的誤用風險評估，這輪先不做）。
 - Search Console 的 Security Issues / Manual Actions（optional，需 API）。
+- CMS 已知 CVE/漏洞資料庫查詢（需要維護漏洞資料來源，這輪只做版本暴露
+  提示，不查真實漏洞編號，避免給出過時或不準確的資訊）。
 
 ### 輸出格式
 

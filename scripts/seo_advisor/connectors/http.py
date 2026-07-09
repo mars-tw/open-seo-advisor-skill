@@ -10,11 +10,16 @@ from xml.etree import ElementTree
 import httpx
 
 from seo_advisor.connectors.base import WebsiteConnector
-from seo_advisor.models import ConnectorProfile, PageSnapshot, SafetyPolicy, UrlRecord
+from seo_advisor.models import ConnectorProfile, PageSnapshot, ProbeResult, SafetyPolicy, UrlRecord
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
 from seo_advisor.security.rate_limiter import RateLimiter
 from seo_advisor.security.robots_policy import RobotsPolicy
 from seo_advisor.url_utils import normalize_host
+
+# probe_path() 讀取內容的上限：只需要極少量內容判斷特徵（例如 ".env" 檔案開頭
+# 幾行是否像環境變數格式），完全不需要下載整個檔案。
+_MAX_PROBE_BYTES = 4096
+_PROBE_PREVIEW_CHARS = 200
 
 _SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
@@ -56,6 +61,7 @@ class HTTPConnector(WebsiteConnector):
         timeout_seconds: float = 15.0,
         max_redirects: int = 10,
         policy: SafetyPolicy | None = None,
+        rate_limiter: RateLimiter | None = None,
     ) -> None:
         self.policy = policy or SafetyPolicy(allowed_capabilities={"read_urls"})
         self._user_agent = user_agent
@@ -70,7 +76,12 @@ class HTTPConnector(WebsiteConnector):
         # 發生 redirect（例如 example.com -> www.example.com），會把新 host
         # 加入這個集合，避免爬蟲把「正確的最終網域」誤判為外部連結而漏爬。
         self._allowed_netlocs: set[str] = {parsed.netloc}
-        self._rate_limiter = RateLimiter(self.policy.rate_limit_per_second)
+        # rate_limiter 可由呼叫端注入共用實例：Security Mode 對同一個目標
+        # 網站可能會建立多個 HTTPConnector（例如 cloaking 檢查切換 User-Agent
+        # 需要獨立的 connector），若各自建立獨立的 RateLimiter，總請求速率會
+        # 隨 connector 數量而倍增，等於讓「對目標網站友善」這個防護名存實亡。
+        # 傳入同一個 RateLimiter 實例即可讓多個 connector 共享同一個節流時鐘。
+        self._rate_limiter = rate_limiter or RateLimiter(self.policy.rate_limit_per_second)
         self._robots_policy: RobotsPolicy | None = None
         self._max_redirects = max_redirects
         # 單次掃描內，同一個 URL（robots.txt/sitemap.xml/首頁等）常被 probe()、
@@ -112,7 +123,12 @@ class HTTPConnector(WebsiteConnector):
             self._allowed_netlocs.add(netloc)
 
     def _safe_get(
-        self, url: str, *, max_bytes: int = _MAX_HTML_BYTES, use_cache: bool = False
+        self,
+        url: str,
+        *,
+        max_bytes: int = _MAX_HTML_BYTES,
+        use_cache: bool = False,
+        same_origin_only: bool = False,
     ) -> _SafeResponse:
         """發送 GET 並手動跟隨 redirect，每一跳都重新做 SSRF 檢查，且串流讀取
         body 並在超過 max_bytes 時中止，避免超大回應把整個 body 讀進記憶體。
@@ -125,16 +141,33 @@ class HTTPConnector(WebsiteConnector):
         use_cache=True 時，同一個 url 在本 connector 生命週期內只會真正發送一次
         請求；只用於 probe()/list_urls() 這類明確會被多處重複呼叫的固定路徑
         （robots.txt/sitemap.xml/首頁），一般頁面爬取不套用，避免快取到過期內容。
+
+        same_origin_only=True 時，一旦 redirect 目標的 host 與初始請求不同站
+        （用 normalize_host 正規化後比較，www/apex 視為同站），立刻停止並回傳
+        redirect 當下的回應（不追過去）。用於 Security Mode 對敏感路徑
+        （如 /.env）探測時：使用者只授權掃描自己的網站，若該路徑意外 redirect
+        到第三方網域，繼續追下去等於對未授權的第三方主機發送敏感路徑探測。
         """
         if use_cache and url in self._response_cache:
             return self._response_cache[url]
 
+        origin_host = urlparse(url).netloc
         history: list[str] = []
         current = url
         for _ in range(self._max_redirects + 1):
             parsed = urlparse(current)
             if parsed.scheme not in ("http", "https"):
                 raise httpx.RequestError(f"不允許的 redirect scheme：{parsed.scheme!r}")
+            if same_origin_only and normalize_host(parsed.netloc) != normalize_host(origin_host):
+                return _SafeResponse(
+                    status_code=0,
+                    final_url=current,
+                    headers={},
+                    body=b"",
+                    encoding="utf-8",
+                    history=history,
+                    truncated=False,
+                )
             ensure_host_allowed(current, allow_private_network=self.policy.allow_private_network)
 
             with self._client.stream("GET", current) as resp:
@@ -432,6 +465,64 @@ class HTTPConnector(WebsiteConnector):
                 fetch_error_message=str(exc),
                 elapsed_ms=int((time.monotonic() - start) * 1000),
             )
+
+    def probe_path(
+        self,
+        path: str,
+        *,
+        redact_preview: bool = False,
+        signature_check=None,
+    ) -> ProbeResult:
+        """對 base_url 底下的單一路徑發送一次性 GET 探測，供 Security Mode 的
+        暴露檔案/目錄列表檢查使用。與一般頁面爬取共用同一套 SSRF 防護
+        （_safe_get 內的 ensure_host_allowed）與 rate limiter，不繞過。
+
+        刻意只回傳極簡化的 ProbeResult（見 models.py 的欄位說明），不回傳
+        完整 PageSnapshot：body 上限只有 4KB，且 redact_preview=True 時
+        （呼叫端判斷這是已知敏感路徑，如 .env/.git/wp-config 備份）連這一小段
+        摘要都不保留，避免任何情況下把可能含密碼/金鑰的檔案內容存進報告。
+
+        redact_preview=True 的路徑一律以 same_origin_only=True 發送：使用者
+        只授權掃描這一個網站，若該路徑意外 redirect 到第三方網域，不會追過去
+        對未授權的第三方主機發送敏感路徑探測（見 _safe_get 的 same_origin_only）。
+
+        signature_check：可選的 `Callable[[bytes], bool]`，用來判斷內容是否
+        真的符合該路徑該有的特徵（例如 .env 該像 KEY=VALUE、.git/HEAD 該以
+        "ref: refs/" 開頭），而不是只憑 200 狀態碼就認定「真的洩漏了」——很多
+        SPA/WAF 對任何路徑都回 200 的自訂錯誤頁，會讓純看狀態碼的判斷高誤報。
+        這個函式在這裡（body 尚未離開 connector 前）被呼叫，回傳值只有布林，
+        存進 ProbeResult.content_matches_signature，內容本身不會外流。
+        """
+        url = urljoin(self.base_url + "/", path.lstrip("/"))
+        self._rate_limiter.wait()
+        try:
+            resp = self._safe_get(url, max_bytes=_MAX_PROBE_BYTES, same_origin_only=redact_preview)
+        except (httpx.HTTPError, PrivateNetworkBlockedError) as exc:
+            return ProbeResult(path=path, status_code=0, content_type=str(exc)[:200])
+
+        preview = ""
+        if not redact_preview and resp.status_code == 200:
+            try:
+                preview = _decode_body(resp)[:_PROBE_PREVIEW_CHARS]
+            except Exception:  # noqa: BLE001 - 摘要是 best-effort，解碼失敗就留空
+                preview = ""
+
+        matches_signature = None
+        if signature_check is not None and resp.status_code == 200:
+            try:
+                matches_signature = bool(signature_check(resp.body))
+            except Exception:  # noqa: BLE001 - 簽章判斷失敗視為不符合，不因此中斷探測
+                matches_signature = False
+
+        return ProbeResult(
+            path=path,
+            status_code=resp.status_code,
+            content_type=resp.headers.get("content-type", ""),
+            content_length=len(resp.body) if not resp.truncated else None,
+            body_preview=preview,
+            truncated=resp.truncated,
+            content_matches_signature=matches_signature,
+        )
 
     def close(self) -> None:
         self._client.close()

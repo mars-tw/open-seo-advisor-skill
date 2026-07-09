@@ -64,6 +64,7 @@ from seo_advisor.fixers.cli import fix_app  # noqa: E402 - 延後匯入避免循
 from seo_advisor.growth.cli import growth_app  # noqa: E402 - 延後匯入避免循環相依
 from seo_advisor.images.cli import image_app  # noqa: E402 - 延後匯入避免循環相依
 from seo_advisor.matrix.cli import matrix_app  # noqa: E402 - 延後匯入避免循環相依
+from seo_advisor.security_mode.cli import security_app  # noqa: E402 - 延後匯入避免循環相依
 
 app.add_typer(image_app, name="image")
 app.add_typer(ads_app, name="ads")
@@ -71,6 +72,7 @@ app.add_typer(matrix_app, name="matrix")
 app.add_typer(growth_app, name="growth")
 app.add_typer(ecommerce_app, name="ecommerce")
 app.add_typer(fix_app, name="fix")
+app.add_typer(security_app, name="security")
 
 # 一鍵代操機器人：頂層指令，新手最推薦的入口
 app.command("auto")(_auto_command)

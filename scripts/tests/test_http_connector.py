@@ -214,3 +214,35 @@ def test_fetch_url_for_uncached_path_still_makes_a_request():
 
     connector.fetch_url("https://example.com/some-other-page")
     assert page_route.call_count == 1
+
+
+@respx.mock
+def test_probe_path_sensitive_does_not_follow_cross_origin_redirect():
+    """Security Mode 對敏感路徑（如 /.env）探測時，若該路徑意外 redirect 到
+    第三方網域，不該追過去對未授權的第三方主機發送敏感路徑探測。"""
+    respx.get("https://example.com/.env").mock(
+        return_value=httpx.Response(302, headers={"location": "https://third-party.example.net/.env"})
+    )
+    third_party_route = respx.get("https://third-party.example.net/.env").mock(
+        return_value=httpx.Response(200, text="leaked")
+    )
+
+    connector = HTTPConnector("https://example.com")
+    result = connector.probe_path(".env", redact_preview=True)
+
+    assert result.status_code == 0
+    assert third_party_route.call_count == 0  # 第三方主機完全沒被打到
+
+
+@respx.mock
+def test_probe_path_sensitive_still_follows_same_origin_www_redirect():
+    """同站的 www<->apex redirect 仍應正常追隨，不因 same_origin_only 而誤擋合法情況。"""
+    respx.get("https://example.com/.env").mock(
+        return_value=httpx.Response(301, headers={"location": "https://www.example.com/.env"})
+    )
+    respx.get("https://www.example.com/.env").mock(return_value=httpx.Response(404))
+
+    connector = HTTPConnector("https://example.com")
+    result = connector.probe_path(".env", redact_preview=True)
+
+    assert result.status_code == 404
