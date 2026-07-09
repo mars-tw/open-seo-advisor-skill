@@ -125,12 +125,6 @@ class SSHConnector(WebsiteConnector):
         allow_private_network: bool = False,
         timeout_seconds: float = 15.0,
     ) -> None:
-        if paramiko is None:
-            raise SSHConnectorError(
-                "SSHConnector 需要安裝 paramiko，請執行："
-                "pip install \"open-seo-advisor-skill[ssh]\""
-            )
-
         self.policy = policy or SafetyPolicy(allowed_capabilities={"read_files"})
         self._host = host
         self._user = user
@@ -142,6 +136,9 @@ class SSHConnector(WebsiteConnector):
         # 任何封包都是一次網路接觸，在使用者還沒明確確認授權之前就這麼做
         # 不符合「先同意才動作」的原則（Grok 在複審時抓到這個順序問題：
         # 原本的實作是先完成 DNS 解析+TCP 連線，才驗證確認字串）。
+        # 這個檢查刻意放在 paramiko 是否安裝的檢查之前：即使呼叫端根本沒
+        # 安裝 optional extra，這一層純邏輯驗證也該先執行完畢——paramiko
+        # 只有在真的要建立 SSH session 時才需要用到（見 _connect()）。
         expected_confirm = self.build_connect_confirmation()
         if confirm_connect is None or confirm_connect.strip().upper() != expected_confirm.upper():
             raise SSHConnectorError(
@@ -231,6 +228,13 @@ class SSHConnector(WebsiteConnector):
 
     def _connect(self, *, sock, key_path: str | None, known_hosts_path: str | None,
                  timeout_seconds: float) -> str:
+        if paramiko is None:
+            sock.close()
+            raise SSHConnectorError(
+                "SSHConnector 需要安裝 paramiko，請執行："
+                "pip install \"open-seo-advisor-skill[ssh]\""
+            )
+
         client = paramiko.SSHClient()
 
         host_keys_path = known_hosts_path or str(Path.home() / ".ssh" / "known_hosts")
