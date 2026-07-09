@@ -2,6 +2,51 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.2] - Unreleased
+
+**GitRepoConnector 正式上線**（`docs/roadmap.md` v0.2.0 第三批）：Engineer
+Mode 新增 `--write-mode git-branch` 選項，讓修復結果產出可直接 `git push`
+開 PR 的分支+commit，而不觸碰使用者目前的 working tree。由 NORA 設計、
+CLAUDE 審核落地，NORA 再對落地後的實作做一輪批判性複審，逐項修復後發布。
+
+### 新增：`seo-advisor fix engineer --write-mode git-branch`
+
+- 在使用者已存在的本機 git repo 建立新分支（`seo-advisor/fix-<finding_id>`），
+  把修復內容 commit 進去（commit message 含 finding_id/plan_id 方便追溯），
+  不自動 push、不自動開 PR——完成後留在新分支上，由使用者自行 review 並
+  `git push -u origin <branch>`。
+- 只支援本機已存在的 git repo，不涉及任何遠端連線、SSH key 或 HTTPS 認證。
+
+### 安全機制
+
+- **要求 working tree 完全乾淨**才會建立新分支，比 direct 模式更保守，
+  避免把使用者尚未提交的變更意外混進 commit。
+- **暫存區內容驗證**：commit 前確認 staged 的檔案精確等於這次修復的目標
+  清單，不符就自動中止並復原，避免任何非預期檔案被一併提交。
+- **失敗自動復原**：任何步驟失敗都會把 repo 恢復到套用前的狀態（reset
+  到 base commit、切回原分支、刪除新分支），只在「這個分支是本次操作
+  剛建立」的前提下執行，不影響使用者既有的任何分支。
+- **未完成 session 偵測**：若前一次操作中途被中斷（例如 Ctrl+C），下一次
+  執行會偵測到殘留狀態並拒絕繼續，避免在不確定的狀態上疊加操作。
+- **.gitignore 保護**：若修復目標剛好是被 `.gitignore` 忽略的既有檔案，
+  拒絕整個操作——這種檔案就算失敗復原，git 也無法恢復其原始內容（沒有
+  版本歷史可還原），避免造成無法挽回的資料遺失。
+- **拒絕 submodule 內的檔案、拒絕 detached HEAD 狀態**。
+
+### 過程中的把關
+
+落地後請 NORA 做一輪批判性複審，抓到 9 項問題並全數修復：中斷後的殘留
+session 偵測、`.gitignore` 檔案覆寫後無法回滾的資料遺失風險、detached
+HEAD 誤判、暫存區路徑比對的 NUL 字元處理、並行操作的 repo-level lock、
+submodule 路徑拒絕、`.git` 目錄位置改用 `git rev-parse --git-dir` 取得
+（而非硬編碼假設）、`LocalArchiveConnector` 掃描排除 `.git/`/`node_modules/`、
+分支已存在時的錯誤訊息補充明確的處理指引（詳見 CHANGELOG 開發記錄）。
+
+### 測試
+
+新增約 18 個測試（GitRepoConnector 安全邊界、runner 整合、
+LocalArchiveConnector 工具目錄排除），總計 395 個測試全過，ruff lint 乾淨。
+
 ## [0.2.1] - Unreleased
 
 **Security Mode 正式上線**（`docs/roadmap.md` v0.2.0 第二批）：被動式、非

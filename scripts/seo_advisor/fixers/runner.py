@@ -5,13 +5,16 @@
 2. 呼叫端把 PatchPlan 完整呈現給使用者（含 diff、風險等級、警告）。
 3. 使用者輸入 fixers.safety.build_apply_confirmation(plan.plan_id) 對應的
    確認字串，呼叫端驗證通過後才呼叫 apply_plan()。
-4. apply_plan() 內部：先 backup() → 逐一 write_file(dry_run=False)，每寫入
-   一個檔案就立刻把該檔案的 hash 增量寫進 applied-manifest.json → 回傳
-   FixResult。任何一步失敗就停止，不繼續寫剩下的檔案；但已成功寫入的
-   部分因為 applied-manifest 已經即時記錄，rollback 仍能正確識別並還原
-   （這是與早期版本的關鍵差異：早期版本只在「全部」檔案都寫完才一次性
-   寫 applied-manifest，若中途失敗，已寫入的檔案會因為缺少 manifest 記錄
-   而被 rollback 保守地整批跳過，變成「寫了一半又救不回來」）。
+4. apply_plan() 內部：若 connector 支援 begin_patch_session（目前只有
+   GitRepoConnector）就先呼叫它建立新 branch → backup() → 逐一
+   write_file(dry_run=False)，每寫入一個檔案就立刻把該檔案的 hash 增量
+   寫進 applied-manifest.json → 若支援則呼叫 finalize_patch_session()
+   commit 變更 → 回傳 FixResult。任何一步失敗就停止：LocalArchiveConnector
+   模式下已成功寫入的部分因為 applied-manifest 已經即時記錄，rollback
+   仍能正確識別並還原；GitRepoConnector 模式下則呼叫 abort_patch_session()
+   把整個 session 復原（reset 到套用前的 commit、切回原 branch、刪除新
+   branch），因為半途而廢的 commit 沒有意義——PR 應該是一個完整的修復，
+   不是「寫了一半的檔案」。
 """
 
 from __future__ import annotations
@@ -93,6 +96,10 @@ def apply_plan(plan: PatchPlan, *, connector: WebsiteConnector) -> FixResult:
     plan.plan_id 相符（見 fixers/safety.py），這裡不重複驗證確認字串本身，
     只負責安全地執行寫入。
     """
+    supports_git_session = hasattr(connector, "begin_patch_session")
+    if supports_git_session:
+        connector.begin_patch_session(plan)
+
     backup_result = connector.backup([target.path for target in plan.targets])
 
     written_paths: list[str] = []
@@ -109,11 +116,24 @@ def apply_plan(plan: PatchPlan, *, connector: WebsiteConnector) -> FixResult:
             # 失敗，這個檔案仍然可以被正確 rollback（見模組 docstring）。
             if backup_result.backup_path:
                 _record_applied_hash(backup_result.backup_path, plan.plan_id, target)
+
+        git_result = None
+        if supports_git_session:
+            # git 模式下，半途而廢的 commit 沒有意義，finalize 失敗（例如
+            # 暫存區內容與預期不符）一律視為整個 apply 失敗並復原。
+            git_result = connector.finalize_patch_session(plan)
     except Exception as exc:
-        validation_notes.append(
-            f"套用中斷：{exc}。已寫入 {len(written_paths)}/{len(plan.targets)} 個檔案，"
-            f"其餘檔案未變動。已寫入的部分可用 backup_id={backup_result.backup_path} 回滾。"
-        )
+        if supports_git_session:
+            connector.abort_patch_session(plan)
+            validation_notes.append(
+                f"套用中斷：{exc}。GitRepoConnector 已自動復原（reset 新 branch、"
+                "切回原本的 branch 並刪除新 branch），working tree 沒有任何殘留變更。"
+            )
+        else:
+            validation_notes.append(
+                f"套用中斷：{exc}。已寫入 {len(written_paths)}/{len(plan.targets)} 個檔案，"
+                f"其餘檔案未變動。已寫入的部分可用 backup_id={backup_result.backup_path} 回滾。"
+            )
         return FixResult(
             plan_id=plan.plan_id,
             applied=False,
@@ -123,7 +143,14 @@ def apply_plan(plan: PatchPlan, *, connector: WebsiteConnector) -> FixResult:
             validation_notes=validation_notes,
         )
 
-    validation_notes.append(f"已寫入 {len(written_paths)} 個檔案：{', '.join(written_paths)}")
+    if git_result is not None:
+        validation_notes.append(
+            f"已建立分支 {git_result.branch} 並 commit（{git_result.commit_sha[:8]}），"
+            f"包含 {len(git_result.committed_paths)} 個檔案。"
+            f"請自行 review 後執行：git push -u origin {git_result.branch}"
+        )
+    else:
+        validation_notes.append(f"已寫入 {len(written_paths)} 個檔案：{', '.join(written_paths)}")
 
     return FixResult(
         plan_id=plan.plan_id,

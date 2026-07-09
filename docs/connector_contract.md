@@ -67,7 +67,7 @@ v0.1.0 只要求實作 `id()`、`capabilities()`、`probe()`、`list_urls()`、
 | `HTTPConnector` | v0.1.0 已實作 | `read_urls` | 純公開 HTTP 爬取，任何網站都可用，不需帳密 |
 | `LocalArchiveConnector` | v0.1.0 已實作 | `read_urls`, `read_files` | 本地原始碼包（zip/目錄），掃描但不執行任何程式 |
 | `SSHConnector` | v0.2.0 規劃 | `read_files`, `read_logs`, 選配 `write_files`/`run_commands` | 需使用者提供 host/key，預設唯讀 |
-| `GitRepoConnector` | v0.2.0 規劃 | `read_files`, `write_files`（走 branch+diff） | 產出可直接開 PR 的 patch |
+| `GitRepoConnector` | v0.2.2 已實作 | `read_files`, `write_files`（走 branch+commit） | 繼承 `LocalArchiveConnector`，操作本機已存在的 git repo，產出可開 PR 的分支+commit；不涉及遠端連線 |
 | `WordPressAPIConnector` | v0.2.0 規劃 | `read_urls`, 選配 `write_files`（透過 REST） | 需 Application Password 或 OAuth |
 | `CloudflareConnector` | v0.3.0 規劃 | `read_urls`, 選配 `deploy`（redirect/cache rules） | 需 API Token，最小權限範圍 |
 | `CPanelConnector` | v0.3.0 規劃 | `read_files`, 選配 `write_files` | 有限度的部署能力 |

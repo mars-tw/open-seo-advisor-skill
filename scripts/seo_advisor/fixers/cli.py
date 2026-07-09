@@ -10,6 +10,11 @@
   --url 選項，避免誤以為能直接修改線上網站。
 - --rollback 走同樣的二次確認機制，且絕不覆蓋使用者套用後又手動修改過的
   檔案（見 fixers/rollback.py）。
+- --write-mode direct（預設）直接修改 --source 目錄裡的檔案；
+  --write-mode git-branch 改成在該目錄（須為已存在的 git repo）建立新
+  branch + commit，不觸碰目前 working tree，方便直接 push 開 PR review。
+  git-branch 模式要求 working tree 完全乾淨，否則會拒絕執行（見
+  connectors/git_repo.py 的 GitRepoConnector）。
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
+from seo_advisor.connectors.git_repo import GitRepoConnector
 from seo_advisor.connectors.local_archive import LocalArchiveConnector
 from seo_advisor.crawler import crawl_site
 from seo_advisor.errors import translate_exception
@@ -68,6 +74,12 @@ def engineer(
     site_url: str = typer.Option(
         None, "--site-url", help="正式站台網址（例如 https://example.com），用於產生 sitemap/robots.txt 裡的絕對 URL"
     ),
+    write_mode: str = typer.Option(
+        "direct", "--write-mode",
+        help='寫入方式："direct"（預設，直接改 --source 目錄）或 "git-branch"'
+        "（在 --source 這個 git repo 建立新分支+commit，不動目前 working tree，"
+        "要求 working tree 完全乾淨）",
+    ),
     apply: bool = typer.Option(False, "--apply", help="真的寫入檔案（預設為 dry-run 預覽）"),
     confirm: str = typer.Option(None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'),
     out: str = typer.Option("./fix-plan", "--out", help="輸出目錄"),
@@ -75,6 +87,10 @@ def engineer(
 ) -> None:
     """產出修復計畫（預設 dry-run）；加 --apply --confirm 才會真的寫入檔案。"""
     try:
+        if write_mode not in ("direct", "git-branch"):
+            console.print(f'[red]--write-mode 只接受 "direct" 或 "git-branch"，收到 {write_mode!r}。[/red]')
+            raise typer.Exit(code=1)
+
         findings, crawl_result = _load_findings(source, from_report, finding_id)
         fixable = runner.list_fixable_findings(findings)
 
@@ -96,7 +112,10 @@ def engineer(
         write_policy = SafetyPolicy(
             dry_run=not apply, allowed_capabilities={"read_urls", "read_files", "write_files"}
         )
-        connector = LocalArchiveConnector(source, policy=write_policy)
+        if write_mode == "git-branch":
+            connector = GitRepoConnector(source, policy=write_policy)
+        else:
+            connector = LocalArchiveConnector(source, policy=write_policy)
 
         fixer_module = runner.find_fixer(target_finding)
         if fixer_module.__name__.rsplit(".", 1)[-1] in ("robots", "sitemap") and not site_url:
@@ -122,11 +141,12 @@ def engineer(
             console.print(target.diff_preview or "（無文字 diff）")
 
         if not apply:
+            write_mode_flag = f" --write-mode {write_mode}" if write_mode != "direct" else ""
             console.print(
                 f"\n[cyan]這是 dry-run 預覽，尚未寫入任何檔案。[/cyan]\n"
                 f"確認無誤後執行：\n"
-                f'  seo-advisor fix engineer --source {source} --finding-id {target_finding.id} '
-                f'--apply --confirm "{build_apply_confirmation(plan.plan_id)}"'
+                f'  seo-advisor fix engineer --source {source} --finding-id {target_finding.id}'
+                f'{write_mode_flag} --apply --confirm "{build_apply_confirmation(plan.plan_id)}"'
             )
             raise typer.Exit(code=0)
 
@@ -141,11 +161,16 @@ def engineer(
         (out_path / "fix-result.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
 
         if result.applied:
-            console.print(f"[bold green]已套用！寫入 {len(result.written_paths)} 個檔案。[/bold green]")
-            console.print(f"備份位置：{result.backup_id}")
-            console.print(
-                f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}"
-            )
+            if write_mode == "git-branch":
+                console.print("[bold green]已套用！變更已 commit 到新分支。[/bold green]")
+                for note in result.validation_notes:
+                    console.print(note)
+            else:
+                console.print(f"[bold green]已套用！寫入 {len(result.written_paths)} 個檔案。[/bold green]")
+                console.print(f"備份位置：{result.backup_id}")
+                console.print(
+                    f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}"
+                )
         else:
             console.print("[red]套用中斷，未完全成功。[/red]")
             for note in result.validation_notes:

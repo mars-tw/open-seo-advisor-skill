@@ -89,7 +89,7 @@
 - [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
       方法論知識庫時效性標記、www 子網域漏爬修正。
 
-## v0.2.0 ～ v0.2.1
+## v0.2.0 ～ v0.2.2
 
 - [x] **v0.2.0** Engineer Mode：`fixers/` 實作 robots.txt / sitemap /
       canonical 的自動修復，dry-run 預覽 + 二次確認才寫入，有備份/回滾。
@@ -98,8 +98,11 @@
       目錄列表/cloaking 粗略比對/HTTPS/HSTS/mixed content/SEO spam/CMS
       版本暴露提示），探測性檢查需明確授權確認才會執行。惡意重導判斷、
       Search Console API 整合、CMS CVE 查詢仍是規劃中（見下方）。
+- [x] **v0.2.2** `GitRepoConnector`：`--write-mode git-branch` 讓 Engineer
+      Mode 的修復產出可開 PR 的 branch+commit，要求 working tree 乾淨、
+      拒絕 `.gitignore`/submodule/detached HEAD 等不安全情境，未完成
+      session 偵測與 repo-level lock。不支援自動 push/開 PR/遠端連線。
 - [ ] `SSHConnector`（唯讀優先，寫入功能需明確開啟）。
-- [ ] `GitRepoConnector`（產出可開 PR 的 branch + diff）。
 - [ ] `WordPressAPIConnector`（唯讀：posts/pages/plugins/site health；
       寫入：需 Application Password）。
 - [ ] Search Console API / GA4 Data API optional adapter（`growth/providers/

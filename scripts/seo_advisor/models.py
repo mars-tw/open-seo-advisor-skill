@@ -189,3 +189,14 @@ class DeployResult(BaseModel):
 class BackupResult(BaseModel):
     targets: list[str]
     backup_path: str | None = None
+
+
+class GitPatchResult(BaseModel):
+    """GitRepoConnector 完成一次 patch session 後的結果（見
+    connectors/git_repo.py）：把哪些檔案 commit 到了哪個新 branch。"""
+
+    plan_id: str
+    branch: str
+    base_commit: str
+    commit_sha: str
+    committed_paths: list[str] = Field(default_factory=list)

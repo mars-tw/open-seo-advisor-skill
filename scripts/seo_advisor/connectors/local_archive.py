@@ -31,6 +31,15 @@ from seo_advisor.security.safe_archive import resolve_inside_root, safe_extract_
 # 的呼叫端（見 fixers/runner.py）才可能真的走到寫入路徑，且仍受 dry_run 約束。
 _BACKUP_DIR_NAME = ".seo-advisor/backups"
 
+# 工具/版控目錄：掃描網站內容時一律跳過，避免把版控中繼資料、依賴套件或
+# 備份目錄誤判為真實網站頁面（進而被 sitemap fixer 誤收進 sitemap.xml，
+# 或讓 probe() 的 has_robots/has_sitemap 偵測到誤導性的結果）。
+_TOOLING_DIR_PREFIXES = (".git/", ".seo-advisor/", "node_modules/")
+
+
+def _is_inside_tooling_dir(rel_path: str) -> bool:
+    return any(rel_path.startswith(prefix) for prefix in _TOOLING_DIR_PREFIXES)
+
 # 單一本地檔案讀入記憶體的大小上限，避免超大檔案造成 OOM。
 _MAX_LOCAL_FILE_BYTES = 25 * 1024 * 1024  # 25 MB
 
@@ -84,6 +93,11 @@ class LocalArchiveConnector(WebsiteConnector):
         else:
             raise ValueError(f"不支援的來源類型（需為目錄或 .zip 檔）：{source_path}")
 
+        # 備份實際落地的根目錄：預設在 self.root 之內（.seo-advisor/backups），
+        # 子類別（例如 GitRepoConnector）可以覆寫成 repo 之外的位置，避免備份
+        # 產生的檔案讓 `git status` 誤判 working tree 不乾淨。
+        self._backup_root = self.root
+
     def id(self) -> str:
         return f"local_archive:{self.root}"
 
@@ -103,14 +117,14 @@ class LocalArchiveConnector(WebsiteConnector):
                 detected_stack = stack
                 break
 
-        def _exists_outside_backups(filename: str) -> bool:
+        def _exists_outside_tooling_dirs(filename: str) -> bool:
             return any(
-                not p.relative_to(self.root).as_posix().startswith(f"{_BACKUP_DIR_NAME}/")
+                not _is_inside_tooling_dir(p.relative_to(self.root).as_posix())
                 for p in self.root.rglob(filename)
             )
 
-        has_robots = (self.root / "robots.txt").exists() or _exists_outside_backups("robots.txt")
-        has_sitemap = (self.root / "sitemap.xml").exists() or _exists_outside_backups("sitemap.xml")
+        has_robots = (self.root / "robots.txt").exists() or _exists_outside_tooling_dirs("robots.txt")
+        has_sitemap = (self.root / "sitemap.xml").exists() or _exists_outside_tooling_dirs("sitemap.xml")
 
         if detected_stack is None:
             notes.append("未偵測到已知技術棧標記，將以純靜態 HTML 掃描處理。")
@@ -127,9 +141,10 @@ class LocalArchiveConnector(WebsiteConnector):
         records: list[UrlRecord] = []
         for html_file in self.root.rglob("*.html"):
             rel_path = html_file.relative_to(self.root).as_posix()
-            if rel_path.startswith(f"{_BACKUP_DIR_NAME}/"):
-                # Engineer Mode 自己的備份目錄不該被當成網站內容爬取/收進
-                # sitemap，否則備份的舊版 HTML 會被誤判成真實頁面。
+            if _is_inside_tooling_dir(rel_path):
+                # 版控/備份/依賴套件目錄不該被當成網站內容爬取/收進 sitemap，
+                # 否則這些目錄裡的 HTML（備份的舊版頁面、node_modules 裡
+                # 套件文件等）會被誤判為真實網站頁面。
                 continue
             records.append(UrlRecord(url=f"/{rel_path}", source="crawl", discovered_depth=0))
             if len(records) >= limit:
@@ -200,10 +215,14 @@ class LocalArchiveConnector(WebsiteConnector):
         return file_path.read_bytes()
 
     def backup(self, targets: list[str]) -> BackupResult:
-        """把即將被修改的檔案複製到 `<root>/.seo-advisor/backups/<backup_id>/`，
+        """把即將被修改的檔案複製到 `<_backup_root>/.seo-advisor/backups/<backup_id>/`，
         並寫入 manifest.json 記錄原始路徑與 sha256，供 rollback 比對「使用者
         是否事後又改過檔案」。備份是寫入前的必要步驟，備份失敗必須讓呼叫端
         看到例外、不得靜默略過。
+
+        _backup_root 預設等於 self.root（備份留在 repo/掃描目錄內）；
+        GitRepoConnector 會覆寫成 repo 之外的路徑，避免備份檔案讓
+        `git status` 誤判 working tree 不乾淨。
 
         安全細節：
         - backup_id 用 mkdir(exist_ok=False) 確保不會靜默覆蓋既有備份（碰撞
@@ -217,7 +236,7 @@ class LocalArchiveConnector(WebsiteConnector):
 
         timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
         backup_id = f"{timestamp}-{os.urandom(4).hex()}"
-        backup_dir = self.root / _BACKUP_DIR_NAME / backup_id
+        backup_dir = self._backup_root / _BACKUP_DIR_NAME / backup_id
         backup_dir.mkdir(parents=True, exist_ok=False)
 
         manifest: dict[str, dict] = {}

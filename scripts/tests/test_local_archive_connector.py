@@ -35,6 +35,23 @@ def test_list_urls_excludes_engineer_mode_backup_directory(tmp_path):
     assert not any(".seo-advisor" in u for u in urls)
 
 
+def test_list_urls_excludes_git_and_node_modules_directories(tmp_path):
+    """.git/（GitRepoConnector 場景常見）與 node_modules/ 裡若剛好有 .html
+    檔案（版控中繼資料、套件文件範例等），不該被當成網站內容爬取。"""
+    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
+    git_html = tmp_path / ".git" / "hooks" / "sample.html"
+    git_html.parent.mkdir(parents=True)
+    git_html.write_text("<html>not a real page</html>", encoding="utf-8")
+    node_modules_html = tmp_path / "node_modules" / "some-package" / "docs.html"
+    node_modules_html.parent.mkdir(parents=True)
+    node_modules_html.write_text("<html>package docs</html>", encoding="utf-8")
+
+    connector = LocalArchiveConnector(str(tmp_path))
+    urls = {u.url for u in connector.list_urls(seed="/", limit=100)}
+    assert "/index.html" in urls
+    assert not any(".git" in u or "node_modules" in u for u in urls)
+
+
 def test_fetch_url_reads_file_content():
     connector = LocalArchiveConnector(str(FIXTURES / "good_site"))
     snapshot = connector.fetch_url("/index.html")

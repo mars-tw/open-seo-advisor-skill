@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.1
+version: 0.2.2
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,17 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.1）
+## 目前實作狀態（v0.2.2）
 
+- ✅ **GitRepoConnector 正式上線（v0.2.2）**：`seo-advisor fix engineer
+  --write-mode git-branch` 讓修復結果在使用者已存在的本機 git repo 建立
+  新分支+commit（不觸碰目前 working tree），完成後留在新分支上供人工
+  review 並自行 push 開 PR，不自動 push、不涉及任何遠端連線或憑證。核心
+  安全機制：要求 working tree 完全乾淨才建立分支、暫存區內容嚴格驗證、
+  失敗自動復原（reset+切回原分支+刪新分支）、拒絕 `.gitignore` 忽略的
+  目標（避免無法回滾的資料遺失）、拒絕 submodule/detached HEAD、未完成
+  session 偵測與 repo-level lock。NORA 設計 + 落地後複審抓到 9 項問題
+  （中斷後殘留狀態、資料遺失風險、並行操作競爭等）全數修復後發布。
 - ✅ **Security Mode 正式上線（v0.2.1）**：`seo-advisor security audit` 被動式
   資安掃描——暴露檔案（.env/.git/備份檔等 17 個內建路徑）、目錄列表、
   Cloaking 粗略比對、TLS 憑證/HSTS/mixed content、SEO spam 跡象、CMS 版本

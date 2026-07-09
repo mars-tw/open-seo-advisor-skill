@@ -75,7 +75,8 @@ Markdown + JSON 雙格式，結構：
 ## Engineer Mode
 
 **狀態：v0.2.0 已上線 robots.txt / sitemap.xml / canonical 三種自動修復；
-hreflang、結構化資料驗證、redirect、CWV 仍是規劃中（見 `docs/roadmap.md`）。**
+v0.2.2 新增 `--write-mode git-branch`（產出可開 PR 的分支）；hreflang、
+結構化資料驗證、redirect、CWV 仍是規劃中（見 `docs/roadmap.md`）。**
 
 ### 目標與適用情境
 
@@ -83,6 +84,11 @@ hreflang、結構化資料驗證、redirect、CWV 仍是規劃中（見 `docs/ro
 `robots.txt`（缺失/缺 Sitemap 宣告）、`sitemap.xml`（缺失時建立）、
 canonical（移除頁面內多餘的重複標籤）；只支援本地原始碼包/目錄
 （`--source`），不支援直接修改線上網站。
+
+寫入方式有兩種：`--write-mode direct`（預設，直接改 `--source` 目錄裡的
+檔案）或 `--write-mode git-branch`（`--source` 須為已存在的本機 git repo，
+建立新分支+commit，不觸碰目前 working tree，方便直接 push 開 PR review；
+要求 working tree 完全乾淨，且不支援遠端連線/自動 push）。
 
 ### 觸發方式
 
@@ -97,7 +103,12 @@ seo-advisor fix engineer --source ./site --finding-id SEO-SITEMAP_MISSING-001 --
 seo-advisor fix engineer --source ./site --finding-id SEO-SITEMAP_MISSING-001 \
   --site-url https://example.com --apply --confirm "APPLY fix-SEO-SITEMAP_MISSING-001"
 
-# 回滾（不會覆蓋你在套用之後又手動編輯過的檔案）
+# git-branch 模式：產出可開 PR 的分支+commit（--source 須為已存在的 git repo）
+seo-advisor fix engineer --source ./site --write-mode git-branch \
+  --finding-id SEO-SITEMAP_MISSING-001 --site-url https://example.com \
+  --apply --confirm "APPLY fix-SEO-SITEMAP_MISSING-001"
+
+# 回滾（direct 模式；不會覆蓋你在套用之後又手動編輯過的檔案）
 seo-advisor fix rollback --source ./site --backup <備份路徑> --apply --confirm "ROLLBACK <backup_id>"
 ```
 
