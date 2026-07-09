@@ -2,6 +2,67 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.3] - Unreleased
+
+**SSHConnector 正式上線**（`docs/roadmap.md` v0.2.0 最後一個新 connector）：
+透過 SFTP 唯讀存取使用者已授權的遠端伺服器，讀取網站靜態檔案以支援 SEO
+診斷。這是專案首次引入**雙 AI 模型交叉辯論**流程——除了既有的 NORA
+（Codex）設計/複審，這次同時讓 Grok（獨立 CLI，grok-4.5）加入直接交互
+辯論，兩個獨立模型互相質疑對方論點，CLAUDE 在中間轉發並最終裁決。
+
+### 新增：`SSHConnector`
+
+- 透過 SFTP 讀取遠端網站的靜態檔案（`list_files`/`read_file`），
+  `capabilities()` 誠實只回報 `{"read_files"}`。
+- **這輪刻意不做**：`read_logs`（log 路徑天然常在授權範圍外，經雙模型
+  辯論後判斷「不做」比「補一套白名單機制」更安全）、`write_files`/
+  `run_commands`（完全不 override，維持 base class 的 `NotImplementedError`，
+  避免「保留 gate 但邏輯是空殼」的半套實作）、密碼認證、jump host/
+  ProxyCommand/agent forwarding、sudo。
+- 新增 `ssh` optional extra（`paramiko>=3.4,<4`）。
+
+### 安全機制（三輪辯論 + 兩階段複審定案）
+
+- **連線前置**：確認字串驗證（`CONNECT <host>:<port>`）必須在任何 DNS
+  解析/TCP 連線之前完成；metadata IP（雲端 metadata endpoint）永遠拒絕、
+  不提供任何 override；private/loopback 網段預設拒絕，需明確
+  `allow_private_network=True`。
+- **DNS rebinding 防護**：只對 host 做一次 DNS 解析，對解析出的每個候選
+  IP 都做網段檢查，全部通過後才用該 IP 建立 TCP socket，再把已連線的
+  socket 交給 paramiko（`hostname` 仍傳原始字串供 host key 驗證）——避免
+  「檢查網段」與「實際連線」是兩次獨立 DNS 解析造成的 TOCTOU 缺口。
+- **Host key 驗證**：使用本機 `known_hosts`，不提供自動信任未知主機的
+  選項（不設定 `AutoAddPolicy`）。
+- **路徑安全**：遠端路徑一律用 component-wise walk 逐層 `lstat` 拒絕
+  symlink（防止 jail escape），不對使用者輸入呼叫 `normalize`/`realpath`；
+  拒絕 `..`/控制字元/反斜線；拒絕過寬的 `remote_root`（如 `/`、`/var`、
+  `/etc` 等）。
+- **讀取白名單/denylist**：只允許 `.html`/`.htm`/`.xml`/`.txt`/`.json`/
+  `.css`（已排除 `.conf`/`.log`/`.env`/`.ini`/`.yml`）；即使副檔名合法，
+  敏感 basename（`config`/`secrets`/`credentials`/`token`/`service-account`/
+  `wp-config`/`.netrc` 等）一律拒絕；10MB 大小上限。
+- `errors.py::redact_secrets` 新增 SSH 私鑰 PEM 區塊、password/passphrase
+  欄位、`ssh://user:pass@host` 的遮蔽規則。
+
+### 雙模型交叉辯論的過程
+
+三輪設計辯論：Grok 首輪即抓出 NORA 原始設計裡「唯讀 allowlist 過寬會洩密」
+「HTTP/SSH 對 private 網段的 override 語意不一致」等問題；第二輪 Grok
+明確拒絕「進入落地階段」，要求把「拒絕 symlink」的文字描述改成可實作的
+component-wise walk 演算法，並指出 `get_logs()` 與 `remote_root` jail 的
+關係未定義；第三輪雙方對齊後 Grok 才正式放行。
+
+落地後兩階段複審：NORA 複審抓到 DNS rebinding TOCTOU（檢查與連線是兩次
+獨立解析），提出並驗證了「單次解析 + 預建 socket」修法；Grok 複審該修法
+時再抓到一個順序問題——確認字串驗證發生在 TCP 連線之後，即使使用者最終
+未確認，程式已對目標主機發送過封包，修正為確認字串驗證必須在任何網路
+操作之前完成。
+
+### 測試
+
+新增約 65 個測試（symlink jail escape 核心防護、DNS rebinding 防護、
+denylist 涵蓋範圍、確認字串順序等），總計 444 個測試全過，ruff lint 乾淨。
+
 ## [0.2.2] - Unreleased
 
 **GitRepoConnector 正式上線**（`docs/roadmap.md` v0.2.0 第三批）：Engineer

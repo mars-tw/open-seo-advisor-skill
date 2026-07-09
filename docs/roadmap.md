@@ -89,7 +89,7 @@
 - [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
       方法論知識庫時效性標記、www 子網域漏爬修正。
 
-## v0.2.0 ～ v0.2.2
+## v0.2.0 ～ v0.2.3
 
 - [x] **v0.2.0** Engineer Mode：`fixers/` 實作 robots.txt / sitemap /
       canonical 的自動修復，dry-run 預覽 + 二次確認才寫入，有備份/回滾。
@@ -102,7 +102,16 @@
       Mode 的修復產出可開 PR 的 branch+commit，要求 working tree 乾淨、
       拒絕 `.gitignore`/submodule/detached HEAD 等不安全情境，未完成
       session 偵測與 repo-level lock。不支援自動 push/開 PR/遠端連線。
-- [ ] `SSHConnector`（唯讀優先，寫入功能需明確開啟）。
+- [x] **v0.2.3** `SSHConnector`（唯讀，MVP 只做 `read_files`）：透過 SFTP
+      讀取遠端網站靜態檔案，component-wise walk 拒絕 symlink jail escape，
+      DNS rebinding 防護，讀取白名單/denylist。不做 `read_logs`/`write_files`/
+      `run_commands`/密碼認證/jump host。首次引入 NORA×Grok 雙模型交叉辯論
+      流程定案設計。尚未接進任何 CLI 指令（只有 connector 本身，見下方
+      CLI 整合仍待規劃）。
+- [ ] SSHConnector 接進 CLI（例如 `seo-advisor audit consultant --source ssh://...`）；
+      `read_logs`（需要獨立設計 `allowed_log_paths` 白名單機制）；
+      `write_files`/`run_commands`（需要另一輪設計與審查，風險與 Engineer
+      Mode 的 direct 模式相當甚至更高）。
 - [ ] `WordPressAPIConnector`（唯讀：posts/pages/plugins/site health；
       寫入：需 Application Password）。
 - [ ] Search Console API / GA4 Data API optional adapter（`growth/providers/

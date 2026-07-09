@@ -20,13 +20,33 @@ class PrivateNetworkBlockedError(ValueError):
     """目標主機解析為私有網段/loopback/metadata IP，且政策不允許時拋出。"""
 
 
+# 各大雲端服務商的 metadata endpoint，即使不落在標準私有網段也要擋。這組
+# IP 永遠拒絕、不提供任何 allow_private_network 之類的 override（見
+# is_cloud_metadata_host），跟「私有網段可在使用者明確同意後允許」是
+# 不同等級的封鎖。
+_CLOUD_METADATA_IPS = frozenset({"169.254.169.254", "fd00:ec2::254"})
+
+
 def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast:
         return True
-    # 各大雲端服務商的 metadata endpoint，即使不落在標準私有網段也要擋。
-    if str(ip) in {"169.254.169.254", "fd00:ec2::254"}:
+    if str(ip) in _CLOUD_METADATA_IPS:
         return True
     return False
+
+
+def is_cloud_metadata_host(hostname: str) -> bool:
+    """判斷主機名稱是否直接是雲端 metadata IP（不含 DNS 解析，只判斷字面
+    IP）。這組位址任何情境下都不該被允許連線，呼叫端不應該提供任何開關
+    讓使用者覆寫這個判斷——跟「私有網段可在明確同意後允許」是不同等級的
+    封鎖，因此獨立成公開函式，不與 is_private_or_blocked_host 混用同一組
+    override 語意。
+    """
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+    return str(ip) in _CLOUD_METADATA_IPS
 
 
 def is_private_or_blocked_host(hostname: str) -> bool:

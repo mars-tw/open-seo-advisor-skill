@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-seo-advisor"
-version = "0.2.2"
+version = "0.2.3"
 description = "開源、可攜、不綁定單一廠商的全域 SEO 顧問技能"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
@@ -42,6 +42,9 @@ image-openai = [
 ]
 ads-meta = [
     "facebook-business>=19.0",
+]
+ssh = [
+    "paramiko>=3.4,<4",
 ]
 
 [project.scripts]

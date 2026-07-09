@@ -32,11 +32,21 @@ _WIN_HOME_RE = re.compile(r"[Cc]:\\Users\\[^\\/\s]+")
 _NIX_HOME_RE = re.compile(r"/(?:home|Users)/[^/\s]+")
 # OpenAI / Anthropic 風格的金鑰前綴，即使沒有 key= 也能被抓到。
 _KEY_PREFIX_RE = re.compile(r"\b(sk-ant-[A-Za-z0-9_-]{6,}|sk-[A-Za-z0-9_-]{6,})")
+# SSHConnector 相關：SSH 私鑰的 PEM 區塊、密碼/passphrase 欄位、known_hosts 裡的
+# IdentityFile 設定，這些即使不小心被印進例外訊息也絕不能外洩內容本身。
+_PRIVATE_KEY_PEM_RE = re.compile(
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.DOTALL
+)
+_PASSWORD_FIELD_RE = re.compile(r"(?i)\b(password|passphrase)\s*[=:]\s*[^\s,;'\"]+")
+_SSH_USERINFO_RE = re.compile(r"(ssh://)[^/@\s:]+(?::[^/@\s]+)?@")
 
 
 def redact_secrets(text: str) -> str:
     """把可能的敏感片段遮蔽掉，用於任何要顯示給使用者或寫入報告的錯誤訊息。"""
     text = _USERINFO_RE.sub(r"\1[已遮蔽]@", text)
+    text = _SSH_USERINFO_RE.sub(r"\1[已遮蔽]@", text)
+    text = _PRIVATE_KEY_PEM_RE.sub("[已遮蔽的私鑰內容]", text)
+    text = _PASSWORD_FIELD_RE.sub(lambda m: f"{m.group(1)}=[已遮蔽]", text)
     text = _TOKEN_RE.sub(lambda m: f"{m.group(1)}=[已遮蔽]", text)
     text = _KEY_PREFIX_RE.sub("[已遮蔽]", text)
     text = _WIN_HOME_RE.sub(r"C:\\Users\\[使用者]", text)

@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.2
+version: 0.2.3
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,19 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.2）
+## 目前實作狀態（v0.2.3）
 
+- ✅ **SSHConnector 正式上線（v0.2.3）**：透過 SFTP 唯讀讀取使用者已授權
+  的遠端伺服器網站檔案，`capabilities()` 只回報 `{"read_files"}`；不做
+  log/write/command（避免半套實作）。專案首次引入雙 AI 模型交叉辯論
+  流程——除了既有的 NORA（Codex）之外，同時讓 Grok（獨立 CLI）加入直接
+  交互辯論，兩個獨立模型互相質疑對方設計，三輪收斂後才進入落地。核心
+  安全機制：連線前確認字串驗證必須在任何網路操作之前完成；DNS
+  rebinding 防護（單次解析＋預建 socket，避免檢查與連線是兩次獨立解析
+  的 TOCTOU）；metadata IP 永遠拒絕；private 網段需明確確認；遠端路徑
+  用 component-wise walk 逐層拒絕 symlink（防 jail escape）；讀取白名單
+  + 敏感檔名 denylist。落地後兩階段複審（NORA + Grok）各自抓到問題並
+  修復（DNS TOCTOU、確認字串發生在連線之後等）。
 - ✅ **GitRepoConnector 正式上線（v0.2.2）**：`seo-advisor fix engineer
   --write-mode git-branch` 讓修復結果在使用者已存在的本機 git repo 建立
   新分支+commit（不觸碰目前 working tree），完成後留在新分支上供人工

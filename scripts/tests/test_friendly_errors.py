@@ -1,6 +1,6 @@
 import httpx
 
-from seo_advisor.errors import translate_exception
+from seo_advisor.errors import redact_secrets, translate_exception
 from seo_advisor.url_utils import InvalidUrlError
 
 
@@ -110,3 +110,25 @@ def test_analytics_provider_error_is_recognized():
 
     friendly = translate_exception(AnalyticsProviderError("找不到環境變數 GA4_PROPERTY_ID"))
     assert "未預期的問題" not in friendly.title
+
+
+def test_redact_secrets_removes_private_key_pem_block():
+    text = (
+        "連線失敗：-----BEGIN OPENSSH PRIVATE KEY-----\n"
+        "b3BlbnNzaC1rZXktdjEAAAAABG5vbmU\n"
+        "-----END OPENSSH PRIVATE KEY-----"
+    )
+    redacted = redact_secrets(text)
+    assert "b3BlbnNzaC1rZXktdjEAAAAABG5vbmU" not in redacted
+    assert "[已遮蔽的私鑰內容]" in redacted
+
+
+def test_redact_secrets_removes_password_and_passphrase_fields():
+    assert "hunter2" not in redact_secrets("password=hunter2")
+    assert "s3cr3t" not in redact_secrets("passphrase: s3cr3t")
+
+
+def test_redact_secrets_removes_ssh_url_userinfo():
+    redacted = redact_secrets("ssh://deploy:hunter2@example.com/var/www")
+    assert "hunter2" not in redacted
+    assert "deploy" not in redacted
