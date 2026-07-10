@@ -39,6 +39,11 @@ _PRIVATE_KEY_PEM_RE = re.compile(
 )
 _PASSWORD_FIELD_RE = re.compile(r"(?i)\b(password|passphrase)\s*[=:]\s*[^\s,;'\"]+")
 _SSH_USERINFO_RE = re.compile(r"(ssh://)[^/@\s:]+(?::[^/@\s]+)?@")
+# WordPressAPIConnector 相關：HTTP Basic Auth header、WordPress Application
+# Password 格式（"xxxx xxxx xxxx xxxx xxxx xxxx"，六組四字元）即使不小心被印進
+# 例外訊息或 httpx 的 request repr 裡也不能外洩。
+_BASIC_AUTH_HEADER_RE = re.compile(r"(?i)\bAuthorization\s*[=:]\s*Basic\s+[A-Za-z0-9+/=]+")
+_WP_APP_PASSWORD_RE = re.compile(r"\b[a-zA-Z0-9]{4}(?: [a-zA-Z0-9]{4}){5}\b")
 
 
 def redact_secrets(text: str) -> str:
@@ -47,6 +52,8 @@ def redact_secrets(text: str) -> str:
     text = _SSH_USERINFO_RE.sub(r"\1[已遮蔽]@", text)
     text = _PRIVATE_KEY_PEM_RE.sub("[已遮蔽的私鑰內容]", text)
     text = _PASSWORD_FIELD_RE.sub(lambda m: f"{m.group(1)}=[已遮蔽]", text)
+    text = _BASIC_AUTH_HEADER_RE.sub("Authorization: Basic [已遮蔽]", text)
+    text = _WP_APP_PASSWORD_RE.sub("[已遮蔽的應用程式密碼]", text)
     text = _TOKEN_RE.sub(lambda m: f"{m.group(1)}=[已遮蔽]", text)
     text = _KEY_PREFIX_RE.sub("[已遮蔽]", text)
     text = _WIN_HOME_RE.sub(r"C:\\Users\\[使用者]", text)

@@ -2,6 +2,91 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.4] - Unreleased
+
+**WordPressAPIConnector 正式上線**（`docs/roadmap.md` v0.2.0 規劃項目）：
+透過 WordPress REST API 唯讀盤點網站內容（posts/pages），並用一般公開
+HTTP 請求（無認證）抓取實際渲染後的頁面供既有 SEO 分析器使用。這是
+NORA×Grok 雙模型交叉辯論流程第二次應用（延續 v0.2.3 SSHConnector 的模式）。
+
+### 新增：`WordPressAPIConnector`
+
+- `capabilities()` 誠實只回報 `{"read_urls"}`；不 override
+  `write_file`/`read_file`/`run_command`/`get_logs`。
+- 只支援 Application Password 認證（WordPress 5.6+ 內建），可選匿名唯讀
+  模式（不提供帳密僅讀取站台公開的 REST 資料）；不做 OAuth。
+- 未引入任何新的第三方依賴（httpx 已是核心依賴）。
+
+### 安全機制（兩輪設計辯論 + 落地後複審定案）
+
+- **REST 回傳的 `link` 視為 attacker-controlled 輸入**：資料庫被注入或
+  惡意外掛都可能竄改 `posts[].link`/`pages[].link`，因此新增
+  `security/wp_url_scope.py::is_url_in_scope()`，在 `list_urls()` 出口與
+  `fetch_url()` 入口做雙重 scope allowlist 檢查，不合格的一律丟棄、絕不
+  進入爬取流程；授權範圍（scheme/host/port/path prefix）在 `__init__`
+  時完全鎖定，不會因任何 REST 回傳資料或 redirect 而動態擴大。
+- **Path scope 用 segment 邊界比對**：拒絕裸字串 `startswith`（否則
+  `/blog` 會誤放行 `/blogevil/...`）；URL-decode 後以 `/` 切分 segment，
+  拒絕 `..`，忽略 `.`。
+- **www/apex 只允許單層 pair**：不遞迴剝除（`www.www.example.com` 不會
+  被誤判等於 `example.com`），不做後綴比對（`notexample.com` 不會被誤判
+  等於 `example.com`），不允許任意子網域。
+- **認證 REST 請求零 redirect**：`follow_redirects=False`，收到 3xx 直接
+  報錯提示確認 `base_url`，絕不手動追蹤——避免 Basic Auth 憑證在模糊的
+  redirect 規則下洩漏。公開頁面 fetch（不帶認證）才手動追蹤 redirect，
+  且每一跳都重新做 scope + SSRF 檢查，不擴大授權範圍。
+- **公開前台內容契約**：REST 查詢固定用 `status=publish` + `context=view`；
+  Application Password 只用於驗證與讀取 posts/pages 清單，`fetch_url()`
+  永遠不帶認證，不會被用來抓取 draft/private/需要登入的頁面。
+- **分頁與大小上限**：不信任 WordPress 回傳的 `X-WP-TotalPages`（可能被
+  惡意站台誇大造成請求放大），迴圈上限完全由呼叫端的 `limit`/`max_items`
+  驅動；回傳數量少於 `per_page` 時提早停止分頁。REST response 與公開
+  HTML fetch 都有位元組數硬上限（`_fields` 參數不是安全邊界）。
+- **TLS**：預設強制 HTTPS（Application Password 透過 Basic Auth 傳輸，
+  明文 HTTP 會讓密碼在網路上飄）；本機/內網開發環境需同時設定
+  `allow_private_network=True` 與 `allow_insecure_local_dev=True` 才允許
+  明文 HTTP。
+- **`probe()` 認證驗證不綁死 `/wp/v2/users/me`**：改用
+  `GET /wp/v2/posts?per_page=1&status=publish&_fields=id` 驗證認證是否
+  有效，403/404 時降級記錄 note 而非致命錯誤——避免部分安全外掛/WAF 對
+  `/users/` 端點特別敏感，以及 `users/me` 回應可能夾帶 email/roles 的
+  外洩風險。
+- `errors.py::redact_secrets` 新增 `Authorization: Basic ...` 與
+  Application Password 格式（六組四字元）的遮蔽規則。
+
+### 雙模型交叉辯論的過程
+
+第一輪：NORA 提出唯讀 MVP 設計後，Grok 指出最嚴重的疏漏——REST 回傳的
+`link` 欄位完全沒有 scope 檢查，理論上可被竄改指向雲端 metadata IP 或
+任意第三方網站造成 SSRF/授權範圍逃逸；同時「same-origin redirect 可跟
+一次或少量次」的描述在有 Basic Auth 時「現文案不可實作」，`GET /wp/v2/
+users/me` 驗證身份的方式也可能過重。Grok 列出 10 條 MUST（M1-M10），
+結論「設計未收斂，不同意寫碼」。
+
+第二輪：NORA 針對每一條 MUST 提出具體演算法（scope allowlist、path
+segment 比對、www/apex pair 判斷、認證 REST 零 redirect 等）。Grok 評估
+後同意大方向已收斂，但指出 path prefix 與 www/apex 判斷仍需要用「可測
+偽碼級」的精確定義（避免 `/blog` vs `/blogevil` 這類 bypass），並要求
+REST/HTML response 都要有大小硬上限。NORA 採納後，Grok 明確表態「同意
+進入落地實作階段」。
+
+落地後複審：NORA 複審程式碼後指出兩個效能/整潔面的小修正（分頁應在
+回傳數量少於 `per_page` 時提早停止；建議中期把手動重建的 `httpx.Response`
+改成自家 DTO），CLAUDE 採納並補測試驗證。Grok 對落地程式碼的最終複審因
+CLI 工具呼叫顯示異常（連續兩次回應在執行驗證腳本後即中斷、未能取得完整
+文字結論）而未能完整走完；CLAUDE 手動重現並驗證了 Grok 原本要跑的驗證
+腳本（確認 `/blog` scope 下 `/blogevil/x` 正確拒絕、`/blog/x` 正確放行），
+在 NORA 完整複審通過、程式碼經其餘測試與人工審查驗證的基礎上完成發布。
+
+### 測試
+
+新增 71 個測試（`test_wp_url_scope.py` 38 個，涵蓋 path segment 邊界
+bypass、www 遞迴剝除誤判、子網域/後綴誤判、scheme 降級、encoded path
+traversal 等；`test_wordpress_connector.py` 33 個，涵蓋 capabilities
+誠實回報、建構子驗證、probe 認證降級路徑、REST redirect 拒絕、
+list_urls 對 metadata IP/外部網域的 link 過濾、fetch_url 的 scope 檢查
+與 redirect 追蹤、redaction），總計 516 個測試全過，ruff lint 乾淨。
+
 ## [0.2.3] - Unreleased
 
 **SSHConnector 正式上線**（`docs/roadmap.md` v0.2.0 最後一個新 connector）：

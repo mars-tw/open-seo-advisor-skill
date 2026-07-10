@@ -89,7 +89,7 @@
 - [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
       方法論知識庫時效性標記、www 子網域漏爬修正。
 
-## v0.2.0 ～ v0.2.3
+## v0.2.0 ～ v0.2.4
 
 - [x] **v0.2.0** Engineer Mode：`fixers/` 實作 robots.txt / sitemap /
       canonical 的自動修復，dry-run 預覽 + 二次確認才寫入，有備份/回滾。
@@ -112,8 +112,15 @@
       `read_logs`（需要獨立設計 `allowed_log_paths` 白名單機制）；
       `write_files`/`run_commands`（需要另一輪設計與審查，風險與 Engineer
       Mode 的 direct 模式相當甚至更高）。
-- [ ] `WordPressAPIConnector`（唯讀：posts/pages/plugins/site health；
-      寫入：需 Application Password）。
+- [x] **v0.2.4** `WordPressAPIConnector`（唯讀：posts/pages + 公開頁面
+      fetch）：透過 REST API 盤點內容，`capabilities()` 只回報
+      `{"read_urls"}`。只支援 Application Password（可選匿名唯讀），
+      REST 回傳的 `link` 一律視為 attacker-controlled，經 scope
+      allowlist（path segment 邊界、www/apex 單層 pair）雙重過濾才能
+      進入爬取流程；認證請求零 redirect；分頁/回應大小皆有硬上限。第二次
+      NORA×Grok 雙模型交叉辯論。尚未接進 CLI；`plugins`/`site health`
+      盤點、寫入（未來規劃獨立的 `write_content` capability，只做
+      draft/revision，不直接 publish）留待後續版本。
 - [ ] Search Console API / GA4 Data API optional adapter（`growth/providers/
       google.py` 目前僅骨架：建構檢查已就緒，實際 API 呼叫需要 OAuth 認證，
       尚未實作；無憑證時請用 `--provider mock` 試玩）。

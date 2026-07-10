@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.3
+version: 0.2.4
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,18 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.3）
+## 目前實作狀態（v0.2.4）
 
+- ✅ **WordPressAPIConnector 正式上線（v0.2.4）**：透過 WordPress REST API
+  唯讀盤點 posts/pages，並用無認證的公開請求抓取實際渲染後的頁面。
+  `capabilities()` 只回報 `{"read_urls"}`；只支援 Application Password
+  認證（可選匿名唯讀模式），不做 OAuth/寫入。核心安全機制：REST 回傳的
+  `link` 欄位視為 attacker-controlled，`list_urls()`/`fetch_url()` 都做
+  scope allowlist 雙重檢查（path 用 segment 邊界比對、www/apex 僅允許
+  單層 pair）；認證 REST 請求零 redirect 避免 Basic Auth 洩漏；分頁上限
+  不信任伺服器回報的 `X-WP-TotalPages`；預設強制 HTTPS。第二次應用
+  NORA×Grok 雙模型交叉辯論流程，兩輪設計辯論後 Grok 同意進入落地，
+  落地後由 NORA 複審修正。
 - ✅ **SSHConnector 正式上線（v0.2.3）**：透過 SFTP 唯讀讀取使用者已授權
   的遠端伺服器網站檔案，`capabilities()` 只回報 `{"read_files"}`；不做
   log/write/command（避免半套實作）。專案首次引入雙 AI 模型交叉辯論
