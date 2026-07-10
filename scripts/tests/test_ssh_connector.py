@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from seo_advisor.connectors.base import ConnectorCapabilityError
 from seo_advisor.connectors.ssh import SSHConnector, SSHConnectorError, _is_read_target_allowed
 from seo_advisor.security.ssh_path_safety import UnsafeRemotePathError
 
@@ -156,7 +157,9 @@ def test_rejects_forbidden_remote_root(mock_paramiko, mock_getaddrinfo, mock_soc
 @patch("socket.socket")
 @patch("socket.getaddrinfo")
 @patch("seo_advisor.connectors.ssh.paramiko")
-def test_capabilities_only_reports_read_files(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+def test_capabilities_reports_read_files_and_read_urls_by_default(
+    mock_paramiko, mock_getaddrinfo, mock_socket_class
+):
     mock_client, mock_sftp = _make_mock_client()
     mock_paramiko.SSHClient.return_value = mock_client
     mock_paramiko.ssh_exception.SSHException = Exception
@@ -166,7 +169,27 @@ def test_capabilities_only_reports_read_files(mock_paramiko, mock_getaddrinfo, m
         "example.com", user="deploy", remote_root="/var/www/site",
         confirm_connect="CONNECT example.com:22",
     )
-    assert connector.capabilities() == {"read_files"}
+    assert connector.capabilities() == {"read_files", "read_urls"}
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_capabilities_includes_read_logs_only_when_configured(
+    mock_paramiko, mock_getaddrinfo, mock_socket_class
+):
+    mock_client, mock_sftp = _make_mock_client()
+    mock_paramiko.SSHClient.return_value = mock_client
+    mock_paramiko.ssh_exception.SSHException = Exception
+    _patch_dns_resolves_to_public_ip(mock_getaddrinfo, mock_socket_class)
+
+    connector = SSHConnector(
+        "example.com", user="deploy", remote_root="/var/www/site",
+        confirm_connect="CONNECT example.com:22",
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    assert connector.capabilities() == {"read_files", "read_urls", "read_logs"}
     connector.close()
 
 
@@ -189,8 +212,30 @@ def test_write_file_and_run_command_are_not_implemented(mock_paramiko, mock_geta
         connector.write_file("robots.txt", b"content", dry_run=False)
     with pytest.raises(NotImplementedError):
         connector.run_command(["ls"])
-    with pytest.raises(NotImplementedError):
-        connector.get_logs("access", "1h")
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_get_logs_without_allowed_log_paths_raises_capability_error(
+    mock_paramiko, mock_getaddrinfo, mock_socket_class
+):
+    """未設定 allowed_log_paths 時，get_logs() 應丟出 ConnectorCapabilityError
+    （代表「這個 connector 實例根本沒有這個能力」），而不是先撞到
+    SafetyPolicy 的 PermissionError（那個代表「policy 沒開放這個能力」，
+    語意不同，使用者應該一眼看出差異）。"""
+    mock_client, mock_sftp = _make_mock_client()
+    mock_paramiko.SSHClient.return_value = mock_client
+    mock_paramiko.ssh_exception.SSHException = Exception
+    _patch_dns_resolves_to_public_ip(mock_getaddrinfo, mock_socket_class)
+
+    connector = SSHConnector(
+        "example.com", user="deploy", remote_root="/var/www/site",
+        confirm_connect="CONNECT example.com:22",
+    )
+    with pytest.raises(ConnectorCapabilityError):
+        connector.get_logs("access")
     connector.close()
 
 
@@ -357,3 +402,398 @@ def test_known_hosts_missing_raises_clear_error(
             confirm_connect="CONNECT example.com:22",
             known_hosts_path=str(tmp_path / "nonexistent_known_hosts"),
         )
+
+
+# --- list_urls() / fetch_url()：接進 Consultant CLI 的 read_urls 能力 ---
+
+
+def _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=None, **kwargs):
+    from seo_advisor.models import SafetyPolicy
+
+    mock_client, sftp = _make_mock_client()
+    if mock_sftp is not None:
+        mock_client.open_sftp.return_value = mock_sftp
+        sftp = mock_sftp
+        sftp.normalize.return_value = "/var/www/site"
+    mock_paramiko.SSHClient.return_value = mock_client
+    mock_paramiko.ssh_exception.SSHException = Exception
+    _patch_dns_resolves_to_public_ip(mock_getaddrinfo, mock_socket_class)
+
+    # 測試預設開通 read_files/read_urls/read_logs：這裡驗證的是 connector
+    # 本身的行為（capabilities 誠實回報、log 白名單邏輯），不是
+    # SafetyPolicy 的權限閘門本身（那由 test_capabilities_* 系列覆蓋）。
+    kwargs.setdefault(
+        "policy",
+        SafetyPolicy(allowed_capabilities={"read_files", "read_urls", "read_logs"}),
+    )
+    connector = SSHConnector(
+        "example.com", user="deploy", remote_root="/var/www/site",
+        confirm_connect="CONNECT example.com:22",
+        **kwargs,
+    )
+    return connector, sftp
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_list_urls_recurses_into_subdirectories(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    import stat
+
+    mock_sftp = MagicMock()
+
+    def _listdir_attr(remote_dir):
+        if remote_dir == "/var/www/site":
+            return [
+                _FakeSFTPAttr(stat.S_IFREG | 0o644, size=10, filename="index.html"),
+                _FakeSFTPAttr(stat.S_IFDIR | 0o755, size=0, filename="blog"),
+            ]
+        if remote_dir == "/var/www/site/blog":
+            return [_FakeSFTPAttr(stat.S_IFREG | 0o644, size=20, filename="post-1.html")]
+        raise FileNotFoundError(remote_dir)
+
+    mock_sftp.listdir_attr.side_effect = _listdir_attr
+
+    def _lstat(path):
+        if path in ("/var/www/site/blog", "/var/www/site/blog/post-1.html", "/var/www/site/index.html"):
+            mode = stat.S_IFDIR | 0o755 if path.endswith("blog") else stat.S_IFREG | 0o644
+            return _FakeSFTPAttr(mode)
+        raise FileNotFoundError(path)
+
+    mock_sftp.lstat.side_effect = _lstat
+
+    connector, _ = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp)
+    records = connector.list_urls(seed="/", limit=100)
+    urls = {r.url for r in records}
+    assert urls == {"/index.html", "/blog/post-1.html"}
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_list_urls_skips_tooling_directories(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    import stat
+
+    mock_sftp = MagicMock()
+
+    def _listdir_attr(remote_dir):
+        if remote_dir == "/var/www/site":
+            return [
+                _FakeSFTPAttr(stat.S_IFDIR | 0o755, size=0, filename="node_modules"),
+                _FakeSFTPAttr(stat.S_IFDIR | 0o755, size=0, filename=".git"),
+                _FakeSFTPAttr(stat.S_IFREG | 0o644, size=10, filename="index.html"),
+            ]
+        raise AssertionError(f"不應該遞迴進入 tooling 目錄，卻嘗試列舉：{remote_dir}")
+
+    mock_sftp.listdir_attr.side_effect = _listdir_attr
+
+    def _lstat(path):
+        if path == "/var/www/site/index.html":
+            return _FakeSFTPAttr(stat.S_IFREG | 0o644)
+        raise FileNotFoundError(path)
+
+    mock_sftp.lstat.side_effect = _lstat
+
+    connector, _ = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp)
+    records = connector.list_urls(seed="/", limit=100)
+    assert {r.url for r in records} == {"/index.html"}
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_list_urls_respects_limit(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    import stat
+
+    mock_sftp = MagicMock()
+    mock_sftp.listdir_attr.return_value = [
+        _FakeSFTPAttr(stat.S_IFREG | 0o644, size=10, filename=f"page-{i}.html") for i in range(20)
+    ]
+
+    def _lstat(path):
+        return _FakeSFTPAttr(stat.S_IFREG | 0o644)
+
+    mock_sftp.lstat.side_effect = _lstat
+
+    connector, _ = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp)
+    records = connector.list_urls(seed="/", limit=5)
+    assert len(records) == 5
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_fetch_url_rejects_query_string(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    connector, mock_sftp = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class)
+    snapshot = connector.fetch_url("/index.html?ver=1.2")
+    assert snapshot.fetch_error_type == "unsafe_remote_path"
+    # 核心斷言：query string 應在任何 sftp 操作之前就被拒絕，不應該被
+    # 靜默 strip 掉再嘗試讀取（那會讓行為看起來像成功但其實不是使用者
+    # 以為的目標）。
+    mock_sftp.lstat.assert_not_called()
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_fetch_url_rejects_fragment(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    connector, mock_sftp = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class)
+    snapshot = connector.fetch_url("/index.html#section")
+    assert snapshot.fetch_error_type == "unsafe_remote_path"
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_fetch_url_rejects_http_scheme(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    connector, mock_sftp = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class)
+    snapshot = connector.fetch_url("http://169.254.169.254/evil")
+    assert snapshot.fetch_error_type == "unsafe_remote_path"
+    mock_sftp.lstat.assert_not_called()
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_fetch_url_accepts_plain_path(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    import stat
+
+    mock_sftp = MagicMock()
+    mock_sftp.lstat.return_value = _FakeSFTPAttr(stat.S_IFREG | 0o644, size=13)
+    mock_file = MagicMock()
+    mock_file.__enter__.return_value.read.return_value = b"<h1>Hi</h1>"
+    mock_sftp.open.return_value = mock_file
+
+    connector, _ = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp)
+    snapshot = connector.fetch_url("/index.html")
+    assert snapshot.status_code == 200
+    assert "Hi" in snapshot.html
+    connector.close()
+
+
+# --- allowed_log_paths 驗證（建構子階段，不觸碰遠端） ---
+
+
+def test_allowed_log_paths_rejects_invalid_log_type_key():
+    from seo_advisor.security.ssh_log_safety import InvalidLogConfigError
+
+    with pytest.raises(InvalidLogConfigError):
+        SSHConnector(
+            "example.com", user="deploy", remote_root="/var/www/site",
+            confirm_connect="CONNECT example.com:22",
+            allowed_log_paths={"Access-Log!": "/var/log/nginx/access.log"},
+        )
+
+
+def test_allowed_log_paths_rejects_relative_path():
+    from seo_advisor.security.ssh_log_safety import InvalidLogConfigError
+
+    with pytest.raises(InvalidLogConfigError):
+        SSHConnector(
+            "example.com", user="deploy", remote_root="/var/www/site",
+            confirm_connect="CONNECT example.com:22",
+            allowed_log_paths={"access": "var/log/nginx/access.log"},
+        )
+
+
+def test_allowed_log_paths_rejects_glob():
+    from seo_advisor.security.ssh_log_safety import InvalidLogConfigError
+
+    with pytest.raises(InvalidLogConfigError):
+        SSHConnector(
+            "example.com", user="deploy", remote_root="/var/www/site",
+            confirm_connect="CONNECT example.com:22",
+            allowed_log_paths={"access": "/var/log/nginx/*.log"},
+        )
+
+
+def test_allowed_log_paths_rejects_forbidden_root_as_entry():
+    with pytest.raises(UnsafeRemotePathError):
+        SSHConnector(
+            "example.com", user="deploy", remote_root="/var/www/site",
+            confirm_connect="CONNECT example.com:22",
+            allowed_log_paths={"everything": "/var"},
+        )
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_allowed_log_paths_accepts_var_log_path(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    """/var/log/nginx/access.log 這種常見 log 路徑必須放行——log jail 的
+    過寬根檢查針對的是「條目本身等於過寬根目錄」，不是「任何位於 /var
+    之下的路徑」（與網站 remote_root 的過寬檢查刻意不同語意）。"""
+    connector, _ = _connect_ssh(
+        mock_paramiko, mock_getaddrinfo, mock_socket_class,
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    assert connector.capabilities() == {"read_files", "read_urls", "read_logs"}
+    connector.close()
+
+
+def _make_log_path_lstat(final_path: str, final_attr):
+    """建立一個 lstat side_effect：final_path 之前的每一層中間目錄都回傳
+    一個合法的目錄 stat（component-wise walk 需要逐層 lstat 成功才能繼續
+    往下走），只有 final_path 本身回傳呼叫端指定的 final_attr。"""
+    import stat
+
+    components = final_path.strip("/").split("/")
+    intermediate_paths = {
+        "/" + "/".join(components[: i + 1]) for i in range(len(components) - 1)
+    }
+
+    def _lstat(path):
+        if path == final_path:
+            return final_attr
+        if path in intermediate_paths:
+            return _FakeSFTPAttr(stat.S_IFDIR | 0o755)
+        raise FileNotFoundError(path)
+
+    return _lstat
+
+
+# --- get_logs()：tail 讀取、symlink 拒絕、since 不支援 ---
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_get_logs_returns_tail_lines(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    import stat
+
+    mock_sftp = MagicMock()
+    log_content = b"line-1\nline-2\nline-3\n"
+    mock_sftp.lstat.side_effect = _make_log_path_lstat(
+        "/var/log/nginx/access.log",
+        _FakeSFTPAttr(stat.S_IFREG | 0o644, size=len(log_content)),
+    )
+    mock_file = MagicMock()
+    mock_file.__enter__.return_value.read.return_value = log_content
+    mock_sftp.open.return_value = mock_file
+
+    connector, _ = _connect_ssh(
+        mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp,
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    entries = connector.get_logs("access")
+    messages = [e.message for e in entries]
+    assert messages == ["line-1", "line-2", "line-3"]
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_get_logs_rejects_unknown_log_type(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    connector, _ = _connect_ssh(
+        mock_paramiko, mock_getaddrinfo, mock_socket_class,
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    with pytest.raises(SSHConnectorError):
+        connector.get_logs("nonexistent-log-type")
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_get_logs_rejects_since_parameter(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    connector, _ = _connect_ssh(
+        mock_paramiko, mock_getaddrinfo, mock_socket_class,
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    with pytest.raises(SSHConnectorError, match="since"):
+        connector.get_logs("access", since="1h")
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_get_logs_rejects_symlinked_log_file(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    """log 路徑最終節點若是 symlink，一律拒絕——與 read_file() 的
+    component-wise walk 使用同一套規則，沒有「log 例外 follow」。"""
+    import stat
+
+    mock_sftp = MagicMock()
+    mock_sftp.lstat.side_effect = _make_log_path_lstat(
+        "/var/log/nginx/access.log", _FakeSFTPAttr(stat.S_IFLNK | 0o777, size=0)
+    )
+
+    connector, _ = _connect_ssh(
+        mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp,
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    with pytest.raises(UnsafeRemotePathError):
+        connector.get_logs("access")
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_get_logs_tail_reads_only_last_n_bytes(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    """驗證 tail 讀取邏輯：檔案很大時，只 seek 到尾端附近讀取，不會把
+    整個檔案內容讀進記憶體（用超過 max_tail_bytes 上限的檔案大小驗證
+    read() 呼叫的參數量級受 cap 限制，而非等於檔案總大小）。"""
+    import stat
+
+    huge_size = 50 * 1024 * 1024  # 50 MB，遠超過 256KB 預設 tail 上限
+    mock_sftp = MagicMock()
+    mock_sftp.lstat.side_effect = _make_log_path_lstat(
+        "/var/log/nginx/access.log", _FakeSFTPAttr(stat.S_IFREG | 0o644, size=huge_size)
+    )
+    mock_file = MagicMock()
+    mock_file.__enter__.return_value.read.return_value = b"partial-garbage\nline-a\nline-b\n"
+    mock_sftp.open.return_value = mock_file
+
+    connector, _ = _connect_ssh(
+        mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp,
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    entries = connector.get_logs("access")
+    # 讀取起點落在檔案中段，第一個不完整片段（"partial-garbage"）應被丟棄。
+    messages = [e.message for e in entries]
+    assert "partial-garbage" not in messages
+    assert messages == ["line-a", "line-b"]
+
+    # 驗證 seek 被呼叫到接近尾端的位置（不是從 0 開始讀）。
+    seek_call_args = mock_file.__enter__.return_value.seek.call_args
+    assert seek_call_args is not None
+    seek_position = seek_call_args[0][0]
+    assert seek_position > 0
+    assert seek_position >= huge_size - (256 * 1024) - 1
+    connector.close()
+
+
+@patch("socket.socket")
+@patch("socket.getaddrinfo")
+@patch("seo_advisor.connectors.ssh.paramiko")
+def test_get_logs_redacts_secrets_in_lines(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+    import stat
+
+    mock_sftp = MagicMock()
+    log_line = b"GET /page?token=SUPERSECRET123 - password=hunter2\n"
+    mock_sftp.lstat.side_effect = _make_log_path_lstat(
+        "/var/log/nginx/access.log", _FakeSFTPAttr(stat.S_IFREG | 0o644, size=len(log_line))
+    )
+    mock_file = MagicMock()
+    mock_file.__enter__.return_value.read.return_value = log_line
+    mock_sftp.open.return_value = mock_file
+
+    connector, _ = _connect_ssh(
+        mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp,
+        allowed_log_paths={"access": "/var/log/nginx/access.log"},
+    )
+    entries = connector.get_logs("access")
+    assert len(entries) == 1
+    assert "hunter2" not in entries[0].message
+    connector.close()
+
+

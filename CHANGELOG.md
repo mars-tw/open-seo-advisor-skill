@@ -2,6 +2,67 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.5] - Unreleased
+
+**SSHConnector 接進 Consultant CLI + 新增 `read_logs`**：`seo-advisor audit
+consultant --source ssh` 現在可以直接對遠端伺服器跑全站 SEO 健檢；同時
+新增選配的 log 讀取能力（`allowed_log_paths` 白名單）。落地過程中發現並
+修正了既有 `list_urls()`/`fetch_url()` 實作的缺陷（未遞迴掃描、未過濾
+不安全輸入、`capabilities()` 未誠實回報）。
+
+### `list_urls()` / `fetch_url()` 修正與強化
+
+- `list_urls()` 改為 BFS 遞迴掃描 remote_root 下的 `.html`/`.htm`，
+  `max_depth`（5）/`max_files_scanned`（2000）/`max_dirs_scanned`（500）
+  三重上限，跳過 `.git`/`node_modules`/`vendor` 等 tooling 目錄。
+- `fetch_url()` 新增輸入驗證：只接受 path-like 輸入，明確拒絕
+  query/fragment/scheme/userinfo（不靜默 strip，避免行為看似成功但實際
+  讀到非預期目標）。
+- `capabilities()` 修正為誠實回報 `{"read_files", "read_urls"}`（先前
+  已實作對應方法卻未回報）。
+
+### 新增：`read_logs`（`allowed_log_paths` 白名單）
+
+- 建構子新增 `allowed_log_paths: dict[str, str]` 參數（`log_type` → 絕對
+  路徑），只有明確設定才會讓 `capabilities()` 回報 `read_logs`。
+- log 路徑走獨立於網站 `remote_root` 的白名單機制（`security/
+  ssh_log_safety.py`），因為 log 天然常在網站目錄之外；但底層仍複用
+  `read_file()` 同一套 component-wise walk，最終節點與父鏈上任一層是
+  symlink 一律拒絕，只允許 regular file——log jail 的「過寬根」判斷語意
+  刻意與網站 root 不同：拒絕的是「白名單條目本身等於過寬根目錄」，不是
+  「任何位於 `/var/...` 之下的路徑」（否則 `/var/log/nginx/access.log`
+  這種常見路徑會被誤擋）。
+- `get_logs(log_type, since=None)`：MVP 不解析各種 log format 的時間戳記，
+  `since` 若提供非 None 值直接拋出例外而非靜默忽略；讀取一律從檔案尾端
+  tail（`seek(size - cap)`），讀取量固定受位元組數上限（256KB 預設，
+  2MB 硬上限）約束，不管伺服器回報的檔案大小多誇張都不會超讀；讀取
+  起點非零時丟棄第一個不完整行。回傳內容一律套用 `redact_secrets()`。
+
+### CLI
+
+- `audit consultant` 新增 `--source ssh` + `--ssh-host`/`--ssh-port`/
+  `--ssh-user`/`--ssh-key`/`--ssh-known-hosts`/`--ssh-remote-root`/
+  `--ssh-confirm`/`--allow-private-network`，缺少必要參數時一次列出所有
+  缺少的項目。
+
+### 雙模型交叉辯論的過程
+
+延續 NORA×Grok 交叉辯論模式：Grok 第一輪審查同意方向正確（BFS 掃描、
+獨立 log 白名單、tail 讀取），但要求把「log 路徑必須與 read_file 用
+同一套拒絕 symlink 規則」「fetch_url 拒絕而非靜默 strip 不安全輸入」
+「log jail 過寬根判斷不能誤擋 /var/log/... 常見路徑」等原則寫成可驗收
+的具體規格（L1-L9），確認後同意進入落地。落地後 NORA 複審確認可以發布，
+並提出兩個小優化：`list_urls()` 的 BFS 佇列改用 `collections.deque`
+避免 `list.pop(0)` 的 O(n) 開銷、新增 `SSHSourceOptions.
+missing_required_fields()` 讓 CLI 與 scan_runner 共用必要欄位檢查規則，
+均已採納。
+
+### 測試
+
+新增約 51 個測試（`test_ssh_log_safety.py` 21 個、`test_cli_ssh_source.py`
+4 個、`test_scan_runner.py` 新增 6 個、`test_ssh_connector.py` 新增約 20
+個），全專案 566 個測試通過，ruff 乾淨。
+
 ## [0.2.4] - Unreleased
 
 **WordPressAPIConnector 正式上線**（`docs/roadmap.md` v0.2.0 規劃項目）：

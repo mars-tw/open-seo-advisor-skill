@@ -89,7 +89,7 @@
 - [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
       方法論知識庫時效性標記、www 子網域漏爬修正。
 
-## v0.2.0 ～ v0.2.4
+## v0.2.0 ～ v0.2.5
 
 - [x] **v0.2.0** Engineer Mode：`fixers/` 實作 robots.txt / sitemap /
       canonical 的自動修復，dry-run 預覽 + 二次確認才寫入，有備份/回滾。
@@ -108,10 +108,14 @@
       `run_commands`/密碼認證/jump host。首次引入 NORA×Grok 雙模型交叉辯論
       流程定案設計。尚未接進任何 CLI 指令（只有 connector 本身，見下方
       CLI 整合仍待規劃）。
-- [ ] SSHConnector 接進 CLI（例如 `seo-advisor audit consultant --source ssh://...`）；
-      `read_logs`（需要獨立設計 `allowed_log_paths` 白名單機制）；
-      `write_files`/`run_commands`（需要另一輪設計與審查，風險與 Engineer
-      Mode 的 direct 模式相當甚至更高）。
+- [x] **v0.2.5** SSHConnector 接進 CLI（`seo-advisor audit consultant
+      --source ssh --ssh-host ... --ssh-confirm "CONNECT host:port"`）+
+      `read_logs`（`allowed_log_paths` 白名單，與 `read_file()` 共用
+      component-wise walk 防 symlink，log 讀取從尾端 tail 且有位元組數
+      上限，`since` 時間篩選 MVP 尚未支援）。修正了既有 `list_urls()`/
+      `fetch_url()` 的缺陷（未遞迴、未過濾不安全輸入、capabilities 未
+      誠實回報 read_urls）。`write_files`/`run_commands` 仍不做（風險與
+      Engineer Mode 的 direct 模式相當甚至更高，需要另一輪設計與審查）。
 - [x] **v0.2.4** `WordPressAPIConnector`（唯讀：posts/pages + 公開頁面
       fetch）：透過 REST API 盤點內容，`capabilities()` 只回報
       `{"read_urls"}`。只支援 Application Password（可選匿名唯讀），

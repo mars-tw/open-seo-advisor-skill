@@ -4,10 +4,13 @@
 這份設計經過 NORA（Codex）與 Grok 兩個獨立模型三輪交叉審查定案，MVP 範圍
 刻意收得比最初規劃更窄：
 
-- 只做 `read_files`（`list_files`/`read_file`），capabilities() 只回報
-  `{"read_files"}`。
-- 不做 `read_logs`：log 路徑天然常在 remote_root 之外，若要支援等於要
-  再設計一套獨立的白名單機制，這輪判斷「不做」比「做一半」更安全。
+- 做 `read_files`（`list_files`/`read_file`）與 `read_urls`
+  （`list_urls`/`fetch_url`，把遠端檔案系統包裝成 URL 爬取介面供
+  `crawl_site()` 使用），capabilities() 誠實回報實際支援的能力。
+- `read_logs`（`get_logs`）為選配能力：只有建構時明確提供
+  `allowed_log_paths` 才會回報這個能力，log 走獨立於 remote_root 的
+  檔案白名單機制（見 security/ssh_log_safety.py），因為 log 路徑天然
+  常在網站 remote_root 之外。
 - 不做 `write_files`/`run_commands`：完全不 override，維持
   WebsiteConnector base class 的 NotImplementedError，避免「保留 gate
   但邏輯是空殼」的半套實作在未來被誤接上。
@@ -27,17 +30,42 @@
   denylist 的模式（例如 secrets.json）也一律拒絕讀取。
 - 讀到的內容若要進報告，一律經過 redact_secrets() 處理；預設報告只放
   path/size/hash 等 metadata，不嵌入檔案原始內容。
+- `fetch_url()` 只接受 path-like 輸入（`/a/b.html` 或 `a/b.html`），一律
+  拒絕帶 query/fragment/scheme/userinfo 的輸入——SSH 路徑是 SFTP 檔案
+  路徑，不是 HTTP URL，把 query 靜默 strip 掉再讀檔會讓行為看起來像成功
+  但其實不是使用者以為的目標，因此選擇直接拒絕而非寬容解析。
+- `list_urls()` 遞迴掃描 remote_root 下的 `.html`/`.htm` 檔案，有
+  `max_depth`/`max_files_scanned`/`max_dirs_scanned` 三重上限（SFTP 每次
+  往返都有延遲，不能無上限遞迴），遇到 symlink 目錄或檔案一律跳過
+  （不 follow）。
+- `get_logs()` 的 log 檔案讀取一律從尾端 tail 讀取（不從頭讀整檔），且
+  讀取量固定受位元組數上限限制；`since` 時間篩選參數在 MVP 尚未支援時間
+  解析，提供了會直接拋出例外而非靜默忽略造成誤導。
 """
 
 from __future__ import annotations
 
 import fnmatch
 import hashlib
+from collections import deque
 from pathlib import Path
+from urllib.parse import urlparse
 
-from seo_advisor.connectors.base import WebsiteConnector
-from seo_advisor.models import ConnectorProfile, FileRecord, PageSnapshot, SafetyPolicy, UrlRecord
+from seo_advisor.connectors.base import ConnectorCapabilityError, WebsiteConnector
+from seo_advisor.models import (
+    ConnectorProfile,
+    FileRecord,
+    LogEntry,
+    PageSnapshot,
+    SafetyPolicy,
+    UrlRecord,
+)
 from seo_advisor.security.network_policy import is_cloud_metadata_host, is_private_or_blocked_host
+from seo_advisor.security.ssh_log_safety import (
+    resolve_log_path,
+    tail_log_content,
+    validate_allowed_log_paths,
+)
 from seo_advisor.security.ssh_path_safety import (
     RemotePathNotFoundError,
     UnsafeRemotePathError,
@@ -78,6 +106,25 @@ _DENYLIST_PATTERNS = (
 # 單一檔案讀取大小上限，避免超大檔案吃爆記憶體或造成過長的連線佔用。
 _MAX_READ_BYTES = 10 * 1024 * 1024  # 10 MB
 
+# list_urls() 遞迴掃描 remote_root 的三重上限：SFTP 每次 listdir_attr()
+# 往返都有網路延遲，不能無上限遞迴，避免對遠端伺服器造成過度負擔或讓單次
+# 掃描耗時失控。
+_MAX_SCAN_DEPTH = 5
+_MAX_FILES_SCANNED = 2000
+_MAX_DIRS_SCANNED = 500
+
+# 掃描時跳過的目錄名稱（版控/依賴套件/暫存/備份），避免把這些目錄內的
+# .html 檔案誤判為真實網站頁面。
+_SKIPPED_DIR_NAMES = frozenset({
+    ".git", ".svn", ".seo-advisor", "node_modules", "vendor",
+    "dist", "cache", "tmp", "backup",
+})
+
+# get_logs() 的 tail 讀取上限：預設值與硬上限，即使呼叫端要求更大的
+# tail 範圍也不能超過硬上限。
+_DEFAULT_LOG_TAIL_BYTES = 256 * 1024  # 256 KB
+_MAX_LOG_TAIL_BYTES = 2 * 1024 * 1024  # 2 MB
+
 # 過寬 root 以外，還要對常見「其實是系統/共用主機根目錄」的情況多一層警告；
 # 這裡沿用 security/ssh_path_safety.py 的 ensure_remote_root_allowed()。
 
@@ -88,6 +135,31 @@ class SSHConnectorError(RuntimeError):
 
 class UnknownHostKeyError(SSHConnectorError):
     """目標主機不在使用者的 known_hosts 內，且未提供的信任来源時拋出。"""
+
+
+def _reject_unsafe_fetch_url(url: str) -> str | None:
+    """檢查 fetch_url() 收到的 url 是否為合法的 path-like 輸入。
+
+    SSH 路徑是 SFTP 檔案路徑，不是 HTTP URL：只接受 `/a/b.html` 或
+    `a/b.html` 這種純路徑，明確拒絕 query/fragment/scheme/userinfo。
+    刻意不用 urlparse 後只取 `.path` 再讀檔——那等於靜默丟棄 query，
+    行為看起來像成功但其實不是使用者以為的目標，比直接拒絕更危險。
+
+    回傳 None 代表通過檢查；否則回傳給使用者看的錯誤說明文字。
+    """
+    if "?" in url or "#" in url:
+        return (
+            f"{url!r} 含有 query string 或 fragment（'?'/'#'），"
+            "SSHConnector 的 fetch_url() 只接受純路徑（不支援 HTTP 查詢字串語意），已拒絕。"
+        )
+
+    parsed = urlparse(url)
+    if parsed.scheme:
+        return f"{url!r} 含有 scheme（{parsed.scheme}:），SSHConnector 只接受相對路徑，已拒絕。"
+    if parsed.username or parsed.password:
+        return f"{url!r} 含有帳號密碼資訊，已拒絕。"
+
+    return None
 
 
 def _is_read_target_allowed(path: str) -> bool:
@@ -124,12 +196,19 @@ class SSHConnector(WebsiteConnector):
         confirm_connect: str | None = None,
         allow_private_network: bool = False,
         timeout_seconds: float = 15.0,
+        allowed_log_paths: dict[str, str] | None = None,
     ) -> None:
-        self.policy = policy or SafetyPolicy(allowed_capabilities={"read_files"})
+        self.policy = policy or SafetyPolicy(allowed_capabilities={"read_files", "read_urls"})
         self._host = host
         self._user = user
         self._port = port
         self._remote_root_input = remote_root
+
+        # 語法層驗證放在任何網路操作之前完成（跟確認字串驗證同樣的原則：
+        # 不需要遠端連線就能判斷合法性的檢查，應該儘早失敗）。
+        self._allowed_log_paths = (
+            validate_allowed_log_paths(allowed_log_paths) if allowed_log_paths else {}
+        )
 
         # 確認字串驗證必須在任何網路操作（含 DNS 解析、TCP 連線）之前完成
         # ——即使 DNS 解析/socket 建立本身看起來「無害」，對目標主機發送
@@ -282,28 +361,76 @@ class SSHConnector(WebsiteConnector):
         return f"ssh:{self._user}@{self._host}:{self._port}"
 
     def capabilities(self) -> set[str]:
-        return {"read_files"}
+        caps = {"read_files", "read_urls"}
+        if self._allowed_log_paths:
+            caps.add("read_logs")
+        return caps
 
     def probe(self) -> ConnectorProfile:
         notes = [
             f"已連線：{self._user}@{self._host}:{self._port}（認證方式：{self._auth_method}）",
             f"授權範圍（remote_root）：{self._remote_root_real}",
         ]
+        if self._allowed_log_paths:
+            notes.append(f"已設定 log 白名單：{sorted(self._allowed_log_paths.keys())}")
         return ConnectorProfile(source_type="ssh", detected_stack=None, notes=notes)
 
     def list_urls(self, seed: str, limit: int) -> list[UrlRecord]:
+        """遞迴掃描 remote_root 下的 .html/.htm 檔案，包裝成 URL 爬取介面。
+
+        受 max_depth/max_files_scanned/max_dirs_scanned 三重上限約束——SFTP
+        每次 listdir_attr() 往返都有網路延遲，不能無上限遞迴；遇到 symlink
+        目錄或檔案一律跳過（list_files() 已經先過濾掉 symlink），版控/依賴
+        套件/暫存目錄也一律跳過，避免誤判為真實網站頁面。
+        """
         records: list[UrlRecord] = []
-        for record in self.list_files(""):
-            if record.is_dir or not record.path.lower().endswith((".html", ".htm")):
-                continue
-            records.append(UrlRecord(url=f"/{record.path}", source="crawl", discovered_depth=0))
-            if len(records) >= limit:
+        dirs_scanned = 0
+        # (相對路徑, 深度) 的 BFS 佇列，用 deque 讓 popleft() 是 O(1)
+        # （list.pop(0) 是 O(n)，雖有 _MAX_DIRS_SCANNED 上限但仍值得用
+        # 正確的資料結構）。
+        queue: deque[tuple[str, int]] = deque([("", 0)])
+
+        while queue and len(records) < limit:
+            rel_dir, depth = queue.popleft()
+            if dirs_scanned >= _MAX_DIRS_SCANNED:
                 break
-        return records
+            dirs_scanned += 1
+
+            try:
+                entries = self.list_files(rel_dir)
+            except (RemotePathNotFoundError, UnsafeRemotePathError):
+                continue
+
+            for entry in entries:
+                if len(records) >= limit:
+                    break
+                basename = entry.path.rsplit("/", 1)[-1]
+                if entry.is_dir:
+                    if basename in _SKIPPED_DIR_NAMES:
+                        continue
+                    if depth + 1 <= _MAX_SCAN_DEPTH:
+                        queue.append((entry.path, depth + 1))
+                    continue
+
+                if entry.path.lower().endswith((".html", ".htm")):
+                    records.append(
+                        UrlRecord(url=f"/{entry.path}", source="crawl", discovered_depth=depth)
+                    )
+                    if len(records) >= _MAX_FILES_SCANNED:
+                        break
+
+        return records[:limit]
 
     def fetch_url(self, url: str, *, render: bool = False, fetched_at: str = "") -> PageSnapshot:
         if render:
             raise NotImplementedError("SSHConnector 不支援 render=True（無 headless browser）。")
+
+        rejection = _reject_unsafe_fetch_url(url)
+        if rejection is not None:
+            return PageSnapshot(
+                url=url, status_code=0, final_url=url, headers={}, html="", fetched_at=fetched_at,
+                fetch_error_type="unsafe_remote_path", fetch_error_message=rejection,
+            )
 
         rel_path = url.lstrip("/")
         try:
@@ -374,6 +501,69 @@ class SSHConnector(WebsiteConnector):
         if len(content) > _MAX_READ_BYTES:
             raise SSHConnectorError(f"{path!r} 讀取內容超過大小上限，已中止讀取。")
         return content
+
+    # --- read_logs capability（選配，只有提供 allowed_log_paths 才可用）---
+
+    def get_logs(self, log_type: str, since: str | None = None) -> list[LogEntry]:
+        """從 `allowed_log_paths` 白名單指定的 log 檔案尾端讀取內容。
+
+        MVP 不解析各種 log format 的時間戳記（nginx/apache 格式差異很大，
+        硬解析容易誤判），因此：
+        - `since` 若提供非 None 值，直接拋出例外，而不是靜默忽略——忽略
+          會讓使用者誤以為真的做了時間篩選，篩選結果卻是全部內容，這種
+          「看似成功但語意不對」的行為比明確拒絕更危險。
+        - 每一行對應一個 `LogEntry`，`timestamp` 固定為空字串（沒有可靠
+          解析出時間戳記），`source` 記錄 log_type，`message` 是該行內容
+          （已套用 redact_secrets 與 log 專用的 query/auth 參數遮蔽）。
+
+        讀取一律從檔案尾端 tail（不從頭讀整檔），受位元組數上限約束；
+        檔案在讀取期間持續被寫入/rotate 屬於已知的正確性層面殘餘風險
+        （見 security/ssh_log_safety.py::tail_log_content 的說明），
+        不是安全層面的 jail escape。
+
+        未提供 allowed_log_paths 時直接拋出 ConnectorCapabilityError
+        （與 capabilities() 不含 "read_logs" 一致），而不是先撞到
+        SafetyPolicy 的 PermissionError——這裡的根本原因是「這個 connector
+        實例根本沒有這個能力」，不是「policy 沒開放這個能力」，錯誤訊息
+        應該讓使用者一眼看出差異。
+        """
+        if not self._allowed_log_paths:
+            raise ConnectorCapabilityError(
+                f"{self.id()} 未設定 allowed_log_paths，get_logs() 無法使用。"
+                "請在建立 SSHConnector 時明確傳入 allowed_log_paths 白名單。"
+            )
+
+        self.policy.require_capability("read_logs", connector_id=self.id())
+
+        if log_type not in self._allowed_log_paths:
+            raise SSHConnectorError(
+                f"log_type {log_type!r} 不在允許的白名單內，可用的 log_type："
+                f"{sorted(self._allowed_log_paths.keys())}"
+            )
+        if since is not None:
+            raise SSHConnectorError(
+                "get_logs() 的 since 時間篩選在目前版本尚未支援（不同 log format 的"
+                "時間戳記解析差異很大，尚未實作），請省略此參數以讀取檔案尾端內容。"
+            )
+
+        log_path = self._allowed_log_paths[log_type]
+        resolved_path = resolve_log_path(self._sftp, log_path)
+        raw_content = tail_log_content(
+            self._sftp, resolved_path, max_tail_bytes=_DEFAULT_LOG_TAIL_BYTES
+        )
+
+        # 延後匯入：errors.py 匯入 scan_runner（取得 SiteUnreachableError），
+        # 而 scan_runner 需要匯入 SSHConnector 才能建立 SSH 來源的掃描，
+        # 在模組頂層互相匯入會形成循環 import，因此改在使用時才匯入。
+        from seo_advisor.errors import redact_secrets
+
+        text = raw_content.decode("utf-8", errors="replace")
+        entries: list[LogEntry] = []
+        for line in text.splitlines():
+            if not line:
+                continue
+            entries.append(LogEntry(timestamp="", source=log_type, message=redact_secrets(line)))
+        return entries
 
     def close(self) -> None:
         sftp = getattr(self, "_sftp", None)

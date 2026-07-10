@@ -108,15 +108,33 @@ def demo(
 @audit_app.command("consultant")
 def audit_consultant(
     url: str = typer.Option(None, "--url", help="要檢查的網站 URL（與 --source 擇一，可省略 https://）"),
-    source: str = typer.Option(None, "--source", help="本地原始碼包或目錄路徑（與 --url 擇一）"),
+    source: str = typer.Option(
+        None, "--source", help="本地原始碼包或目錄路徑，或填 'ssh' 搭配 --ssh-* 參數（與 --url 擇一）"
+    ),
     out: str = typer.Option("./report", "--out", help="報告輸出目錄"),
     max_urls: int = typer.Option(200, "--max-urls", help="最多爬取的 URL 數量"),
     max_depth: int = typer.Option(6, "--max-depth", help="最大爬取深度"),
+    ssh_host: str = typer.Option(None, "--ssh-host", help="[--source ssh] 遠端伺服器主機名稱"),
+    ssh_port: int = typer.Option(22, "--ssh-port", help="[--source ssh] SSH 連接埠"),
+    ssh_user: str = typer.Option(None, "--ssh-user", help="[--source ssh] SSH 使用者名稱"),
+    ssh_key: str = typer.Option(None, "--ssh-key", help="[--source ssh] SSH 私鑰檔案路徑（省略則使用 SSH agent）"),
+    ssh_known_hosts: str = typer.Option(
+        None, "--ssh-known-hosts", help="[--source ssh] known_hosts 檔案路徑（預設 ~/.ssh/known_hosts）"
+    ),
+    ssh_remote_root: str = typer.Option(None, "--ssh-remote-root", help="[--source ssh] 遠端網站根目錄"),
+    ssh_confirm: str = typer.Option(
+        None, "--ssh-confirm", help="[--source ssh] 連線確認字串，格式為 'CONNECT <host>:<port>'"
+    ),
+    allow_private_network: bool = typer.Option(
+        False, "--allow-private-network", help="[--source ssh] 允許連線到私有網段/本機（例如內網伺服器）"
+    ),
     debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
 ) -> None:
     """執行顧問模式（Consultant Mode）全站 SEO 健檢（進階指令，新手建議改用 `seo-advisor start`）。"""
 
     ensure_implemented(Mode.CONSULTANT)
+
+    is_ssh_source = source == "ssh"
 
     if not url and not source:
         console.print("[red]錯誤：必須提供 --url 或 --source 其中之一。[/red]")
@@ -126,9 +144,37 @@ def audit_consultant(
         console.print("[red]錯誤：--url 與 --source 不可同時提供，請擇一使用。[/red]")
         raise typer.Exit(code=1)
 
+    ssh_options = None
+    if is_ssh_source:
+        from seo_advisor.scan_runner import SSHSourceOptions
+
+        missing = SSHSourceOptions.missing_required_fields(
+            host=ssh_host, user=ssh_user, remote_root=ssh_remote_root, confirm_connect=ssh_confirm
+        )
+        if missing:
+            console.print(f"[red]錯誤：--source ssh 需要同時提供：{', '.join(missing)}[/red]")
+            raise typer.Exit(code=1)
+
+        ssh_options = SSHSourceOptions(
+            host=ssh_host,
+            user=ssh_user,
+            remote_root=ssh_remote_root,
+            confirm_connect=ssh_confirm,
+            port=ssh_port,
+            key_path=ssh_key,
+            known_hosts_path=ssh_known_hosts,
+            allow_private_network=allow_private_network,
+        )
+
     _run_scan(
         lambda progress: run_consultant_scan(
-            url=url, source=source, out_dir=out, max_urls=max_urls, max_depth=max_depth, on_progress=progress
+            url=url,
+            source=source,
+            out_dir=out,
+            max_urls=max_urls,
+            max_depth=max_depth,
+            on_progress=progress,
+            ssh_options=ssh_options,
         ),
         debug=debug,
     )

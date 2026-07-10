@@ -147,3 +147,24 @@ def ensure_remote_root_allowed(remote_root_real: str) -> None:
             "SSHConnector 拒絕以此作為授權範圍（風險：等同整台機器可讀）。"
             "請指定實際的網站目錄，例如 /var/www/your-site。"
         )
+
+
+def ensure_log_path_allowed(log_path_real: str) -> None:
+    """拒絕把過寬路徑本身當成 allowed_log_paths 的條目（例如把 `/var/log`
+    整個目錄當成「檔案」填進白名單）。
+
+    這與 `ensure_remote_root_allowed` 的語意刻意不同（Grok 交叉審查定案，
+    詳見 SSHConnector 接進 CLI + read_logs 的雙模型辯論記錄）：
+    - `ensure_remote_root_allowed` 針對的是網站根目錄，任何位於 `/var/...`
+      之下的路徑都可能是合法網站目錄，不該因為前綴含 `/var` 就拒絕。
+    - log 白名單條目本身必須是「具體檔案」，`/var/log/nginx/access.log`
+      這種路徑完全合法；但如果條目本身就等於 `_FORBIDDEN_ROOTS` 這類過寬
+      根目錄（代表使用者可能誤把目錄當成檔案路徑填入設定），才需要拒絕。
+    """
+    normalized = log_path_real.rstrip("/") or "/"
+    if normalized in _FORBIDDEN_ROOTS:
+        raise UnsafeRemotePathError(
+            f"log 路徑 {log_path_real!r} 是系統層級目錄或過寬的根目錄，"
+            "allowed_log_paths 的條目必須是具體的 log 檔案路徑，"
+            "例如 /var/log/nginx/access.log。"
+        )

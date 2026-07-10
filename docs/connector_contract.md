@@ -66,7 +66,7 @@ v0.1.0 只要求實作 `id()`、`capabilities()`、`probe()`、`list_urls()`、
 |---|---|---|---|
 | `HTTPConnector` | v0.1.0 已實作 | `read_urls` | 純公開 HTTP 爬取，任何網站都可用，不需帳密 |
 | `LocalArchiveConnector` | v0.1.0 已實作 | `read_urls`, `read_files` | 本地原始碼包（zip/目錄），掃描但不執行任何程式 |
-| `SSHConnector` | v0.2.3 已實作（MVP：唯讀） | `read_files` | 透過 SFTP 讀取遠端網站靜態檔案；`read_logs`/`write_files`/`run_commands` 刻意不做（見 docs/roadmap.md），避免半套實作；DNS rebinding 防護 + component-wise symlink jail 防護 |
+| `SSHConnector` | v0.2.5 已實作（MVP：唯讀，已接進 CLI） | `read_files`, `read_urls`, 選配 `read_logs` | 透過 SFTP 讀取遠端網站靜態檔案；`list_urls`/`fetch_url` 把遠端檔案系統包裝成 URL 爬取介面供 `seo-advisor audit consultant --source ssh` 使用；`read_logs` 需明確提供 `allowed_log_paths` 白名單，與 `read_file` 共用 component-wise walk 防 symlink；`write_files`/`run_commands` 刻意不做（見 docs/roadmap.md），避免半套實作；DNS rebinding 防護 + component-wise symlink jail 防護 |
 | `GitRepoConnector` | v0.2.2 已實作 | `read_files`, `write_files`（走 branch+commit） | 繼承 `LocalArchiveConnector`，操作本機已存在的 git repo，產出可開 PR 的分支+commit；不涉及遠端連線 |
 | `WordPressAPIConnector` | v0.2.4 已實作（MVP：唯讀） | `read_urls` | 透過 REST API 盤點 posts/pages + 無認證公開頁面 fetch；只支援 Application Password（可選匿名唯讀）；REST 回傳的 `link` 視為 attacker-controlled，經 scope allowlist 過濾；`write_files`（未來改用獨立的 `write_content` capability）刻意未做 |
 | `CloudflareConnector` | v0.3.0 規劃 | `read_urls`, 選配 `deploy`（redirect/cache rules） | 需 API Token，最小權限範圍 |

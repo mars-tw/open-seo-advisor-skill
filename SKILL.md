@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.4
+version: 0.2.5
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,16 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.4）
+## 目前實作狀態（v0.2.5）
 
+- ✅ **SSHConnector 接進 Consultant CLI + `read_logs`（v0.2.5）**：
+  `seo-advisor audit consultant --source ssh --ssh-host ... --ssh-confirm
+  "CONNECT host:port"` 可直接對遠端伺服器跑全站 SEO 健檢；`list_urls()`
+  改為 BFS 遞迴掃描（三重上限防止過度請求），`fetch_url()` 拒絕
+  query/fragment/scheme 等不安全輸入。新增選配的 `read_logs`
+  能力：`allowed_log_paths` 白名單 + 與 `read_file()` 相同的
+  component-wise walk 防 symlink，log 讀取一律從尾端 tail、有位元組數
+  上限，`since` 時間篩選 MVP 尚未支援會直接報錯而非靜默忽略。
 - ✅ **WordPressAPIConnector 正式上線（v0.2.4）**：透過 WordPress REST API
   唯讀盤點 posts/pages，並用無認證的公開請求抓取實際渲染後的頁面。
   `capabilities()` 只回報 `{"read_urls"}`；只支援 Application Password
