@@ -106,3 +106,33 @@ def test_run_security_audit_with_correct_confirmation_runs_probes():
     )
     assert "exposed_file" not in report.skipped_checks
     assert "directory_listing" not in report.skipped_checks
+
+
+@respx.mock
+def test_passive_only_also_skips_referrer_redirect_check():
+    """惡意重導的 Referer 比較跟 cloaking 一樣是探測性請求，passive_only
+    時應自動跳過。"""
+    respx.get("https://example.com/").mock(
+        return_value=httpx.Response(200, text="<html><body>Hi</body></html>", headers={"content-type": "text/html"})
+    )
+    respx.get(url__regex=r".*").mock(return_value=httpx.Response(404))
+
+    report = run_security_audit("https://example.com", passive_only=True)
+    assert "referrer_redirect" in report.skipped_checks
+
+
+@respx.mock
+def test_skip_bot_compare_does_not_skip_referrer_redirect_check():
+    """skip_bot_compare 只控制 cloaking UA 比較（既有 --no-bot-compare
+    參數的既有語意），惡意重導的 Referer 比較是獨立的檢查項目，不受這個
+    旗標影響——只受 passive_only 控制。"""
+    respx.get("https://example.com/").mock(
+        return_value=httpx.Response(200, text="<html><body>Hi</body></html>", headers={"content-type": "text/html"})
+    )
+    respx.get(url__regex=r".*").mock(return_value=httpx.Response(404))
+
+    report = run_security_audit(
+        "https://example.com", confirm_authorized="AUDIT example.com", skip_bot_compare=True
+    )
+    assert "cloaking" in report.skipped_checks
+    assert "referrer_redirect" not in report.skipped_checks

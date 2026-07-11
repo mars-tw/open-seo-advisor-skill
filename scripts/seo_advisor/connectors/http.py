@@ -28,6 +28,17 @@ _MAX_HTML_BYTES = 10 * 1024 * 1024  # 10 MB
 _MAX_SITEMAP_BYTES = 20 * 1024 * 1024  # 20 MB（sitemap 可能較大但仍需上限）
 _MAX_SITEMAP_FILES = 50  # sitemap index 最多追蹤的子 sitemap 數，避免請求放大
 
+# extra_headers 建構子參數只允許這些不涉及認證/身分的 header，避免這個
+# 參數被誤用成通用的任意 header 注入口（例如塞入 Authorization/Cookie
+# 讓 HTTPConnector 變成可以代打認證請求的工具，遠超出「唯讀公開爬取」的
+# 定位）。目前唯一的使用場景是 Security Mode 的 referrer-based redirect
+# 檢查（見 security_mode/cloaking.py），只需要 Referer。
+_ALLOWED_EXTRA_HEADER_NAMES = frozenset({"referer", "accept-language"})
+
+
+class DisallowedExtraHeaderError(ValueError):
+    """extra_headers 包含不在允許清單內的 header 名稱時拋出。"""
+
 
 @dataclass
 class _SafeResponse:
@@ -62,9 +73,20 @@ class HTTPConnector(WebsiteConnector):
         max_redirects: int = 10,
         policy: SafetyPolicy | None = None,
         rate_limiter: RateLimiter | None = None,
+        extra_headers: dict[str, str] | None = None,
     ) -> None:
         self.policy = policy or SafetyPolicy(allowed_capabilities={"read_urls"})
         self._user_agent = user_agent
+
+        if extra_headers:
+            for name in extra_headers:
+                if name.lower() not in _ALLOWED_EXTRA_HEADER_NAMES:
+                    raise DisallowedExtraHeaderError(
+                        f"extra_headers 不允許 {name!r}，只允許 "
+                        f"{sorted(_ALLOWED_EXTRA_HEADER_NAMES)}。HTTPConnector 是唯讀公開"
+                        "爬取工具，不支援夾帶認證/身分類 header（Authorization/Cookie 等），"
+                        "避免這個參數被誤用成任意 header 注入介面。"
+                    )
 
         parsed = urlparse(base_url)
         if not parsed.scheme or not parsed.netloc:
@@ -92,8 +114,15 @@ class HTTPConnector(WebsiteConnector):
         # follow_redirects=False：改由 _safe_get 手動追 redirect，每一跳都重新做
         # SSRF 檢查（ensure_host_allowed）。否則 httpx 自動跟隨 redirect 時，公開
         # 網址可被 30x 導向 private IP 或雲端 metadata endpoint 繞過原本的檢查。
+        #
+        # extra_headers 目前只給 Security Mode 的 referrer-based redirect 檢查
+        # 使用（固定的 Google 搜尋結果 Referer 字串，見 security_mode/cloaking.py），
+        # 不是通用的任意 header 注入介面；一般爬取流程不會使用這個參數。
+        headers = {"User-Agent": user_agent}
+        if extra_headers:
+            headers.update(extra_headers)
         self._client = httpx.Client(
-            headers={"User-Agent": user_agent},
+            headers=headers,
             timeout=timeout_seconds,
             follow_redirects=False,
         )

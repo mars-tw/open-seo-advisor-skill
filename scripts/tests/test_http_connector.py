@@ -246,3 +246,60 @@ def test_probe_path_sensitive_still_follows_same_origin_www_redirect():
     result = connector.probe_path(".env", redact_preview=True)
 
     assert result.status_code == 404
+
+
+@respx.mock
+def test_extra_headers_are_sent_with_every_request():
+    """extra_headers 建構參數（目前只給 Security Mode 的 referrer-based
+    redirect 檢查使用）應該套用到這個 connector 發出的每一個請求。"""
+    seen_referers = []
+
+    def _responder(request):
+        seen_referers.append(request.headers.get("referer", ""))
+        return httpx.Response(200, text="<html></html>")
+
+    respx.get("https://example.com/").mock(side_effect=_responder)
+
+    connector = HTTPConnector(
+        "https://example.com", extra_headers={"Referer": "https://www.google.com/search?q=site"}
+    )
+    connector.fetch_url("https://example.com/")
+
+    assert seen_referers == ["https://www.google.com/search?q=site"]
+
+
+@respx.mock
+def test_no_extra_headers_means_no_referer_sent():
+    seen_referers = []
+
+    def _responder(request):
+        seen_referers.append(request.headers.get("referer"))
+        return httpx.Response(200, text="<html></html>")
+
+    respx.get("https://example.com/").mock(side_effect=_responder)
+
+    connector = HTTPConnector("https://example.com")
+    connector.fetch_url("https://example.com/")
+
+    assert seen_referers == [None]
+
+
+def test_extra_headers_rejects_authorization():
+    """extra_headers 只允許 allowlist 內的 header，不能被誤用成夾帶
+    Authorization/Cookie 等認證/身分類資訊的注入口。"""
+    from seo_advisor.connectors.http import DisallowedExtraHeaderError
+
+    with pytest.raises(DisallowedExtraHeaderError):
+        HTTPConnector("https://example.com", extra_headers={"Authorization": "Bearer token"})
+
+
+def test_extra_headers_rejects_cookie():
+    from seo_advisor.connectors.http import DisallowedExtraHeaderError
+
+    with pytest.raises(DisallowedExtraHeaderError):
+        HTTPConnector("https://example.com", extra_headers={"Cookie": "session=abc"})
+
+
+def test_extra_headers_accepts_accept_language():
+    connector = HTTPConnector("https://example.com", extra_headers={"Accept-Language": "en-US"})
+    connector.close()

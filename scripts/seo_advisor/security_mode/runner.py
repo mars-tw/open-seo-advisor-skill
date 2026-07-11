@@ -1,19 +1,21 @@
 """Security Mode 執行入口：run_security_audit()。
 
-授權邊界（務必先讀）：暴露檔案偵測、目錄列表偵測、cloaking UA 比較本質上
-都是對目標網站發送額外的探測性請求，即使只確認狀態碼、不下載內容，仍是
-一種偵查行為。因此：
+授權邊界（務必先讀）：暴露檔案偵測、目錄列表偵測、cloaking UA 比較、惡意
+重導 Referer 比較本質上都是對目標網站發送額外的探測性請求，即使只確認
+狀態碼、不下載內容，仍是一種偵查行為。因此：
 - 預設（passive_only=False）必須提供 confirm_authorized，且其內容必須
-  精確等於 "AUDIT <host>"（host 為目標網址的網域），才會執行這三類檢查。
+  精確等於 "AUDIT <host>"（host 為目標網址的網域），才會執行這四類檢查。
 - passive_only=True 可以跳過確認，但只會執行完全不發送額外請求的被動檢查
   （HTTPS 憑證/HSTS/mixed content/SEO spam/CMS 版本提示——這些只需要首頁
-  抓取階段已經取得的內容，不對其他路徑或用不同 UA 發送任何請求）。
+  抓取階段已經取得的內容，不對其他路徑、不同 UA、不同 Referer 發送任何
+  額外請求）。
 這個確認機制是本模組的核心信任邊界，任何修改都需要同樣審慎地重新檢視。
 
 Rate limit：整個 audit 過程中可能建立多個 HTTPConnector（主要抓取、
-cloaking 比較用的第二個 UA），全部共用同一個 RateLimiter 實例，確保「對
-目標網站的總請求速率」不會因為多開 connector 而被稀釋（見
-connectors/http.py 的 rate_limiter 參數與 cloaking.check_cloaking）。
+cloaking 比較用的第二個 UA、惡意重導比較用的不同 Referer），全部共用同一個
+RateLimiter 實例，確保「對目標網站的總請求速率」不會因為多開 connector
+而被稀釋（見 connectors/http.py 的 rate_limiter 參數與
+cloaking.check_cloaking/check_referrer_based_redirect）。
 """
 
 from __future__ import annotations
@@ -114,26 +116,39 @@ def run_security_audit(
     else:
         skipped_checks.extend(["hsts", "mixed_content", "seo_spam", "cms_version"])
 
-    # cloaking 比較會額外發送一次請求（切換 User-Agent），本質上與暴露檔案/
-    # 目錄列表一樣是「探測性」行為，因此 passive_only 時也一併跳過，不只
-    # 靠 --no-bot-compare 手動關閉。
+    # cloaking/惡意重導比較都會額外發送請求（切換 User-Agent 或 Referer），
+    # 本質上與暴露檔案/目錄列表一樣是「探測性」行為，因此 passive_only 時
+    # 也一併跳過，不只靠 --no-bot-compare 手動關閉。skip_bot_compare 只控制
+    # cloaking UA 比較（既有 --no-bot-compare 參數的既有語意），惡意重導的
+    # Referer 比較是獨立的檢查項目，不受這個旗標影響——只受 passive_only
+    # 控制，因為它跟 cloaking 一樣都需要明確授權確認。
     if passive_only:
-        skipped_checks.append("cloaking")
-    elif not skip_bot_compare:
-        try:
-            findings.extend(cloaking.check_cloaking(url, next_id, rate_limiter=shared_rate_limiter))
-        except Exception as exc:  # noqa: BLE001 - cloaking 比較失敗不該讓整份報告失敗
-            coverage_notes.append(f"Cloaking 比較檢查失敗，已略過：{exc}")
-            skipped_checks.append("cloaking")
+        skipped_checks.extend(["cloaking", "referrer_redirect"])
     else:
-        skipped_checks.append("cloaking")
+        if skip_bot_compare:
+            skipped_checks.append("cloaking")
+        else:
+            try:
+                findings.extend(cloaking.check_cloaking(url, next_id, rate_limiter=shared_rate_limiter))
+            except Exception as exc:  # noqa: BLE001 - cloaking 比較失敗不該讓整份報告失敗
+                coverage_notes.append(f"Cloaking 比較檢查失敗，已略過：{exc}")
+                skipped_checks.append("cloaking")
+
+        try:
+            findings.extend(
+                cloaking.check_referrer_based_redirect(url, next_id, rate_limiter=shared_rate_limiter)
+            )
+        except Exception as exc:  # noqa: BLE001 - 惡意重導比較失敗不該讓整份報告失敗
+            coverage_notes.append(f"惡意重導（referrer-based redirect）檢查失敗，已略過：{exc}")
+            skipped_checks.append("referrer_redirect")
 
     if passive_only:
         skipped_checks.extend(["exposed_file", "directory_listing"])
         coverage_notes.append(
             "已啟用 passive_only：只執行完全不發送額外請求的被動檢查"
             "（HTTPS/HSTS/mixed content/SEO spam/CMS 版本提示）；"
-            "暴露檔案/目錄列表探測與 cloaking UA 比較需明確授權確認才會執行。"
+            "暴露檔案/目錄列表探測、cloaking UA 比較、惡意重導 Referer 比較"
+            "皆需明確授權確認才會執行。"
         )
     else:
         findings.extend(probes.check_exposed_files(connector, next_id))

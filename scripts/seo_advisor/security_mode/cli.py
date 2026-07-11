@@ -1,8 +1,10 @@
 """Security Mode 的 CLI subapp（seo-advisor security ...）。
 
-安全設計：純被動式檢查，不做任何攻擊性測試。暴露檔案/目錄列表探測需要
-明確授權確認（--confirm-authorized "AUDIT <host>"）才會執行；--passive-only
-可跳過確認但只做完全被動的檢查。
+安全設計：純被動式檢查，不做任何攻擊性測試。暴露檔案/目錄列表探測、
+cloaking UA 比較、惡意重導 Referer 比較都需要明確授權確認
+（--confirm-authorized "AUDIT <host>"）才會執行；--passive-only 可跳過
+確認，但只做完全被動的檢查（HTTPS/HSTS/mixed content/SEO spam/CMS 版本
+提示），不涵蓋任何需要額外發送探測性請求的項目。
 """
 
 from __future__ import annotations
@@ -29,7 +31,9 @@ def audit(
         help='確認你有權對此網站執行安全檢查，需輸入 "AUDIT <網域>"（暴露檔案/目錄列表探測需要此確認）',
     ),
     passive_only: bool = typer.Option(
-        False, "--passive-only", help="只做完全被動的檢查（HTTPS/SEO spam/cloaking 比較），不探測任何路徑，不需授權確認"
+        False, "--passive-only",
+        help="只做完全被動的檢查（HTTPS/SEO spam/CMS 版本提示），不探測任何路徑、"
+        "不做 cloaking/惡意重導比較，不需授權確認",
     ),
     no_bot_compare: bool = typer.Option(False, "--no-bot-compare", help="跳過 Googlebot UA 內容差異比較"),
     out: str = typer.Option("./security-report", "--out", help="輸出目錄"),

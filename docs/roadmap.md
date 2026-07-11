@@ -89,7 +89,7 @@
 - [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
       方法論知識庫時效性標記、www 子網域漏爬修正。
 
-## v0.2.0 ～ v0.2.6
+## v0.2.0 ～ v0.2.7
 
 - [x] **v0.2.0** Engineer Mode：`fixers/` 實作 robots.txt / sitemap /
       canonical 的自動修復，dry-run 預覽 + 二次確認才寫入，有備份/回滾。
@@ -138,9 +138,16 @@
       `decoding="async"` 做真修復（只補完全沒有此屬性的 `<img>`，單頁
       修改量超過 50 個會自動降級為 plan-only）。CSS 拆分/圖片壓縮/
       Lighthouse 真量測仍不做（見下方）。
-- [ ] Security Mode 擴充：惡意重導跡象判斷（需要模擬搜尋引擎 referrer，
-      涉及較高誤用風險評估）、CMS 已知 CVE/漏洞資料庫查詢（需要維護資料
-      來源，目前只做版本暴露提示不查真實漏洞編號）。
+- [x] **v0.2.7** Security Mode 擴充：新增惡意重導/doorway page 偵測
+      （`check_referrer_based_redirect`，比較無 Referer vs 帶 Google
+      搜尋結果 Referer 時的最終導向網址，導向外部網域才給高 severity，
+      同網域路徑差異保守處理）；`HTTPConnector` 新增 `extra_headers`
+      建構子參數並限制 allowlist（只允許 Referer/Accept-Language）。
+      CMS 已知 CVE/漏洞資料庫查詢重新確認維持不做真實查詢（版本偵測
+      只是粗略字串比對、不是可靠指紋，錯誤比對成本高於不做），只加強
+      finding 文案透明度（明確說明「這不是漏洞確認」）。**至此
+      v0.2.0 roadmap 規劃的所有項目（Engineer/Security Mode 擴充、
+      三個新 Connector）皆已完成。**
 - [ ] 產業 profile 加權邏輯串接進 `technical.py` 與 scoring。
 - [ ] JavaScript SEO 檢查：raw HTML vs rendered HTML 差異比對
       （Playwright，optional dependency）。

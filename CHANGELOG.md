@@ -2,6 +2,52 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.7] - Unreleased
+
+**Security Mode 擴充：惡意重導判斷（referrer-based redirect）+ CMS CVE
+查詢政策確認**：這是 `docs/roadmap.md` v0.2.0 規劃的最後一批。
+
+### 新增：惡意重導 / doorway page 偵測
+
+- `security_mode/cloaking.py` 新增 `check_referrer_based_redirect()`：
+  對同一 URL 分別發送「無 Referer」與「固定的 Google 搜尋結果 Referer」
+  兩次請求，比較最終導向網址，偵測常見的 doorway page 手法（直接訪問
+  顯示正常內容，只在偵測到使用者從搜尋引擎點擊進來時才導向詐騙/垃圾
+  內容，藉此在人工審查或 Google 重新抓取時躲過偵測）。
+- 判斷保守：導向**外部網域**才給 `S1_HIGH`（`confidence=0.5`，`seo_impact
+  =user_safety`）；導向**同網域內不同路徑**只給 `S3_LOW`（`confidence=
+  0.2`），文案明確說明可能只是個人化內容/A-B 測試/追蹤頁，不斷言惡意。
+  已知殘餘限制：只固定使用一組搜尋結果 Referer 測試，無法涵蓋只針對
+  特定關鍵字/URL 才觸發的條件式重導。
+- 不提供任何自訂 Referer 的能力，只固定使用這一組公開、無害的字串。
+- 跟暴露檔案/目錄列表/cloaking UA 比較一樣，屬於探測性檢查：
+  `passive_only=True` 時自動跳過；獨立於既有的 `skip_bot_compare`
+  參數（那個參數只控制 cloaking UA 比較，不應連帶影響語意不同的
+  惡意重導檢查）。
+
+### `HTTPConnector` 新增 `extra_headers` 建構子參數（含 allowlist）
+
+- 新增 `extra_headers: dict[str, str] | None` 參數，目前只給上述
+  referrer-based redirect 檢查使用。只允許 `Referer`/`Accept-Language`
+  兩種不涉及認證/身分的 header，明確拒絕 `Authorization`/`Cookie` 等
+  （`DisallowedExtraHeaderError`），避免這個參數被誤用成通用的任意
+  header 注入介面，讓 `HTTPConnector` 意外變成可以代打認證請求的工具。
+
+### CMS CVE 查詢：維持不做真實查詢，改善文案透明度
+
+- 重新確認既有決策（不查詢任何 CVE/漏洞資料庫）仍然成立：目前的版本
+  偵測只是粗略字串比對，不是可靠的 plugin/theme 指紋辨識，拿不準的
+  指紋去查漏洞資料庫容易產生大量誤導性結果；使用者容易把「已知 CVE」
+  文字當成高信任度的資安結論，錯誤比對的成本高於不做。
+- 補強 finding 文案：明確加入「這不是漏洞確認」一句話，並建議使用者
+  使用 WPScan 等專業弱點掃描工具做進一步確認。
+
+### 測試
+
+新增 12 個測試（`test_security_mode_referrer_redirect.py` 5 個、
+`test_http_connector.py` 新增 5 個、`test_security_mode_runner.py`
+新增 2 個），全專案 632 個測試通過，ruff 乾淨。
+
 ## [0.2.6] - Unreleased
 
 **Engineer Mode 擴充：hreflang / redirect chain / CWV 靜態線索**：新增

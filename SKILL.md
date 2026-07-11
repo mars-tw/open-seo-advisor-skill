@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.6
+version: 0.2.7
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,17 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.6）
+## 目前實作狀態（v0.2.7）
 
+- ✅ **Security Mode 擴充：惡意重導判斷 + CMS CVE 查詢政策確認（v0.2.7）**：
+  新增 referrer-based redirect 偵測（比較無 Referer vs 帶 Google 搜尋
+  結果 Referer 時的最終導向網址，偵測 doorway page 手法），導向外部
+  網域才給高 severity，同網域路徑差異保守處理。`HTTPConnector` 新增
+  `extra_headers` 建構子參數並限制 allowlist（只允許 Referer/
+  Accept-Language，拒絕 Authorization/Cookie），避免被誤用成任意
+  header 注入介面。CMS CVE 查詢重新確認維持不做真實查詢（版本偵測不夠
+  準確，錯誤比對成本高於不做），只加強文案透明度。這是 v0.2.0 roadmap
+  規劃的最後一批。
 - ✅ **Engineer Mode 擴充：hreflang / redirect chain / CWV（v0.2.6）**：
   新增 hreflang（六種問題偵測）與 CWV 靜態線索（img 缺尺寸/blocking
   script）兩種技術 SEO 檢查。新增 `PatchPlan.plan_only` 機制表達「只能
