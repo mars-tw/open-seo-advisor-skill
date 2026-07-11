@@ -40,7 +40,15 @@ _WINDOWS_RESERVED_NAMES = frozenset({
     *(f"lpt{i}" for i in range(1, 10)),
 })
 
-FixType = Literal["robots_txt", "sitemap", "canonical"]
+FixType = Literal[
+    "robots_txt",
+    "sitemap",
+    "canonical",
+    "redirect_chain",
+    "hreflang",
+    "cwv_decoding_async",
+    "cwv_blocking_scripts",
+]
 RiskLevel = Literal["low", "medium", "high"]
 
 
@@ -54,7 +62,15 @@ class FixTarget(BaseModel):
 
 
 class PatchPlan(BaseModel):
-    """一份修復計畫：可能包含多個檔案的修改，需整體一起確認、一起套用。"""
+    """一份修復計畫：可能包含多個檔案的修改，需整體一起確認、一起套用。
+
+    plan_only=True 代表這是「建議方案」而非「可自動套用的修復」：`targets`
+    必須是空 list（不產生任何要寫入的內容），實際建議寫在 `summary` 與
+    `suggested_actions`（給人看的具體步驟，例如伺服器設定檔該加的規則）。
+    這種情況常見於修復動作超出目前安全模型（例如需要修改 .htaccess/nginx
+    conf 這類非靜態 SEO 資產，或需要業務層面的判斷如語言網址對照表）——
+    與其自動做出可能錯誤或危險的修改，不如只產出人工可執行的具體建議。
+    """
 
     plan_id: str
     finding_id: str
@@ -64,6 +80,20 @@ class PatchPlan(BaseModel):
     summary: str
     validation_steps: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    plan_only: bool = False
+    suggested_actions: list[str] = Field(default_factory=list)
+
+    def model_post_init(self, __context) -> None:
+        if self.plan_only and self.targets:
+            raise ValueError(
+                "plan_only=True 的 PatchPlan 不應該包含任何 targets"
+                "（這種計畫只能產出建議，不能被 apply_plan() 套用）。"
+            )
+        if self.plan_only and not self.suggested_actions:
+            raise ValueError(
+                "plan_only=True 的 PatchPlan 必須至少提供一項 suggested_actions，"
+                "否則使用者看不到任何可執行的具體建議。"
+            )
 
 
 class FixResult(BaseModel):
@@ -89,6 +119,11 @@ class RollbackResult(BaseModel):
 
 class NotFixableError(ValueError):
     """指定的 finding 目前沒有對應的自動修復邏輯時拋出。"""
+
+
+class PlanOnlyError(ValueError):
+    """嘗試對 plan_only=True 的 PatchPlan 呼叫 apply_plan() 時拋出——這種
+    計畫只能產出建議給人看，不支援自動套用。"""
 
 
 class UnsafeWriteTargetError(ValueError):

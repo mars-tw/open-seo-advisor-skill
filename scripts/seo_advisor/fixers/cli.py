@@ -132,6 +132,20 @@ def engineer(
         (out_path / "fix-plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
         _render_plan_markdown(plan, out_path / "fix-plan.md")
 
+        if plan.plan_only:
+            console.print(f"[bold]建議（需人工處理，無法自動套用）：{plan.plan_id}[/bold]")
+            console.print(plan.summary)
+            for warning in plan.warnings:
+                console.print(f"[yellow]警告：{warning}[/yellow]")
+            console.print("\n[bold]建議步驟：[/bold]")
+            for step in plan.suggested_actions:
+                console.print(f"  - {step}")
+            console.print(
+                "\n[cyan]這個項目超出 Engineer Mode 可以安全自動寫入的範圍，"
+                "已產出建議步驟供人工處理，不會提供 --apply 套用選項。[/cyan]"
+            )
+            raise typer.Exit(code=0)
+
         console.print(f"[bold]修復計畫：{plan.plan_id}[/bold]（風險等級：{plan.risk_level}）")
         console.print(plan.summary)
         for warning in plan.warnings:
@@ -241,19 +255,25 @@ def rollback(
 
 
 def _render_plan_markdown(plan, path: Path) -> None:
+    title = "建議（需人工處理，無法自動套用）" if plan.plan_only else "修復計畫"
     lines = [
-        f"# 修復計畫：{plan.plan_id}",
+        f"# {title}：{plan.plan_id}",
         "",
         f"- Finding ID：{plan.finding_id}",
         f"- 修復類型：{plan.fix_type}",
         f"- 風險等級：{plan.risk_level}",
+        f"- 是否可自動套用：{'否（plan_only）' if plan.plan_only else '是'}",
         "",
         f"## 摘要\n\n{plan.summary}",
     ]
     if plan.warnings:
         lines.append("\n## 警告\n")
         lines.extend(f"- {w}" for w in plan.warnings)
-    lines.append("\n## 變更內容\n")
-    for target in plan.targets:
-        lines.append(f"### {target.path}\n\n```diff\n{target.diff_preview}\n```\n")
+    if plan.plan_only:
+        lines.append("\n## 建議步驟\n")
+        lines.extend(f"- {step}" for step in plan.suggested_actions)
+    else:
+        lines.append("\n## 變更內容\n")
+        for target in plan.targets:
+            lines.append(f"### {target.path}\n\n```diff\n{target.diff_preview}\n```\n")
     path.write_text("\n".join(lines), encoding="utf-8")

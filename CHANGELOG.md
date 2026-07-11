@@ -2,6 +2,68 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.2.6] - Unreleased
+
+**Engineer Mode 擴充：hreflang / redirect chain / CWV 靜態線索**：新增
+三種技術 SEO 檢查與對應修復（或建議），延續「絕不修改程式邏輯檔案、
+不猜測業務層決策」的安全原則——這批的核心風險判斷是「修復動作的範圍是否
+安全」而非傳統的攻擊面，因此大部分項目只產出 `plan_only=True` 的建議，
+只有低風險、語意明確的項目才做真寫入。
+
+### 新增：`PatchPlan.plan_only` / `suggested_actions`
+
+- `PatchPlan` 新增 `plan_only: bool = False` 與 `suggested_actions:
+  list[str]`，表達「這是建議方案，不能自動套用」的計畫。
+- `plan_only=True` 時模型層強制 `targets` 必須為空、`suggested_actions`
+  至少一筆（否則建構當下直接拋 `ValueError`），`apply_plan()` 開頭檢查
+  `plan_only` 並拒絕套用（`PlanOnlyError`，不會呼叫任何 connector 方法）。
+- CLI 對 plan_only 計畫顯示「建議（需人工處理，無法自動套用）」，列出
+  `suggested_actions`，不顯示 `--apply --confirm` 執行指令；`fix-plan.json`/
+  `fix-plan.md` 保留 `plan_only` 欄位供外部工具判斷。
+
+### 新增技術 SEO 檢查
+
+- **hreflang**（`analyzers/technical.py::_check_hreflang`）：偵測缺
+  self-reference、同頁重複語言代碼、格式不合法、非互相對稱（需先收集
+  全站宣告對照表，屬全站層級檢查）、指向授權範圍外網域、HTML+sitemap
+  混用六種問題。只做格式粗檢（不驗證語言代碼是否真實存在）。
+- **CWV 靜態線索**（`_check_cwv_static_hints`）：`<img>` 缺
+  width/height（可能造成 layout shift）、單頁 ≥3 個未使用 defer/async
+  的外部 `<script>`。文案明確標示這是靜態線索，不是實際的 Lighthouse/
+  CWV 分數量測。
+
+### 新增 fixer（redirect / hreflang 為 plan-only，CWV 部分真修復）
+
+- `fixers/redirect.py`：重導鏈修復建議（plan-only）。修復多層重導鏈
+  實務上需要修改伺服器端設定（.htaccess/nginx conf/應用路由），格式
+  差異大且可能含其他不相關邏輯，貿然自動修改風險過高，因此只產出
+  Apache/Nginx 範例規則文字供人工套用。
+- `fixers/hreflang.py`：六種 hreflang 問題的建議（plan-only）。hreflang
+  正確性依賴語言/地區與網址的業務層對應關係，crawler 無法安全推斷，
+  自動插入錯誤宣告可能讓搜尋引擎誤判頁面對應，因此只產出建議。
+- `fixers/cwv.py`：`image_missing_dimensions_hint` 只自動補
+  `decoding="async"`（不覆蓋任何既有 decoding 值，包括空字串），
+  單頁若有超過 50 個 `<img>` 需要修改則自動改為 plan-only（避免產生
+  難以 review 的巨大 diff）；`blocking_scripts_hint` 純 plan-only
+  （是否適合加 defer/async 需視腳本執行順序而定，自動修改可能造成
+  功能異常）。
+
+### 落地過程中修正的兩個真實 bug
+
+- `hreflang_non_reciprocal` 原本誤用「有 hreflang 宣告的頁面集合」判斷
+  「目標頁是否在 crawl 範圍內」，導致目標頁存在但自己完全沒有 hreflang
+  宣告的情況被誤判為「無法驗證」而略過（應判定為 non-reciprocal）。
+  修正為用「所有被爬到的頁面」判斷範圍。
+- blocking script 偵測原本用 `not script.get("defer")` 判斷屬性是否存在，
+  但 BeautifulSoup 對無值的 boolean 屬性（如 `<script defer>`）回傳空
+  字串，導致誤判為「沒有 defer」。修正為 `script.get("defer") is None`。
+
+### 測試
+
+新增約 47 個測試（`test_technical_hreflang_cwv.py` 25 個、
+`test_fixers_plan_only.py` 26 個、`test_cli_fix_plan_only.py` 3 個），
+全專案 620 個測試通過，ruff 乾淨。
+
 ## [0.2.5] - Unreleased
 
 **SSHConnector 接進 Consultant CLI + 新增 `read_logs`**：`seo-advisor audit

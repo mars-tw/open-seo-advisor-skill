@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.5
+version: 0.2.6
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,15 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.5）
+## 目前實作狀態（v0.2.6）
 
+- ✅ **Engineer Mode 擴充：hreflang / redirect chain / CWV（v0.2.6）**：
+  新增 hreflang（六種問題偵測）與 CWV 靜態線索（img 缺尺寸/blocking
+  script）兩種技術 SEO 檢查。新增 `PatchPlan.plan_only` 機制表達「只能
+  看不能自動套用」的建議方案：redirect chain 與 hreflang 修復皆為
+  plan-only（涉及伺服器設定或業務層語言對應決策，超出安全自動寫入的
+  範圍）；CWV 只有 `decoding="async"` 做真修復（單頁修改量過大會自動
+  降級為 plan-only，避免巨大 diff）。
 - ✅ **SSHConnector 接進 Consultant CLI + `read_logs`（v0.2.5）**：
   `seo-advisor audit consultant --source ssh --ssh-host ... --ssh-confirm
   "CONNECT host:port"` 可直接對遠端伺服器跑全站 SEO 健檢；`list_urls()`

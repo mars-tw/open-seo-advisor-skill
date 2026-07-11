@@ -89,7 +89,7 @@
 - [x] **v0.1.17** HTML 單次解析收斂、autopilot 安全閘門 CI 保險機制、
       方法論知識庫時效性標記、www 子網域漏爬修正。
 
-## v0.2.0 ～ v0.2.5
+## v0.2.0 ～ v0.2.6
 
 - [x] **v0.2.0** Engineer Mode：`fixers/` 實作 robots.txt / sitemap /
       canonical 的自動修復，dry-run 預覽 + 二次確認才寫入，有備份/回滾。
@@ -128,9 +128,16 @@
 - [ ] Search Console API / GA4 Data API optional adapter（`growth/providers/
       google.py` 目前僅骨架：建構檢查已就緒，實際 API 呼叫需要 OAuth 認證，
       尚未實作；無憑證時請用 `--provider mock` 試玩）。
-- [ ] Engineer Mode 擴充：hreflang（三種形式擇一貫徹）、redirect chain 修復、
-      CWV（圖片尺寸/CSS 拆分等，需額外工具鏈）自動修復——目前只做 robots.txt/
-      sitemap/canonical 三種。
+- [x] **v0.2.6** Engineer Mode 擴充：新增 hreflang（六種問題偵測：缺
+      self-reference/重複語言代碼/格式不合法/非互相對稱/授權範圍外/
+      HTML+sitemap 混用）與 CWV 靜態線索（img 缺 width/height、單頁
+      ≥3 個未使用 defer/async 的外部 script）兩種技術 SEO 檢查。新增
+      `PatchPlan.plan_only` 機制：redirect chain 與 hreflang 修復皆為
+      plan-only（涉及伺服器設定或業務層語言對應決策，超出 Engineer
+      Mode 安全自動寫入的範圍，只產出具體建議文字）；CWV 只有
+      `decoding="async"` 做真修復（只補完全沒有此屬性的 `<img>`，單頁
+      修改量超過 50 個會自動降級為 plan-only）。CSS 拆分/圖片壓縮/
+      Lighthouse 真量測仍不做（見下方）。
 - [ ] Security Mode 擴充：惡意重導跡象判斷（需要模擬搜尋引擎 referrer，
       涉及較高誤用風險評估）、CMS 已知 CVE/漏洞資料庫查詢（需要維護資料
       來源，目前只做版本暴露提示不查真實漏洞編號）。

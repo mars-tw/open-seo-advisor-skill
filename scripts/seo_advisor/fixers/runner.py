@@ -25,11 +25,11 @@ from pathlib import Path
 
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.crawler import CrawlResult
-from seo_advisor.fixers import canonical, robots, sitemap
-from seo_advisor.fixers.models import FixResult, NotFixableError, PatchPlan
+from seo_advisor.fixers import canonical, cwv, hreflang, redirect, robots, sitemap
+from seo_advisor.fixers.models import FixResult, NotFixableError, PatchPlan, PlanOnlyError
 from seo_advisor.models import Finding
 
-_FIXERS = (robots, sitemap, canonical)
+_FIXERS = (robots, sitemap, canonical, redirect, hreflang, cwv)
 
 
 def find_fixer(finding: Finding):
@@ -86,6 +86,20 @@ def build_plan(
         }
         return canonical.plan_fix(finding, pages=pages)
 
+    if module is redirect:
+        return redirect.plan_fix(finding)
+
+    if module is hreflang:
+        return hreflang.plan_fix(finding)
+
+    if module is cwv:
+        pages = {
+            url: snapshot.html
+            for url, snapshot in crawl_result.pages.items()
+            if snapshot.status_code == 200 and snapshot.html
+        }
+        return cwv.plan_fix(finding, pages=pages)
+
     raise NotFixableError(f"{finding.id} 的 fixer 尚未串接執行邏輯。")  # pragma: no cover
 
 
@@ -96,6 +110,12 @@ def apply_plan(plan: PatchPlan, *, connector: WebsiteConnector) -> FixResult:
     plan.plan_id 相符（見 fixers/safety.py），這裡不重複驗證確認字串本身，
     只負責安全地執行寫入。
     """
+    if plan.plan_only:
+        raise PlanOnlyError(
+            f"{plan.plan_id} 是建議方案（plan_only=True），不支援自動套用。"
+            "請參考 plan.suggested_actions 手動處理。"
+        )
+
     supports_git_session = hasattr(connector, "begin_patch_session")
     if supports_git_session:
         connector.begin_patch_session(plan)

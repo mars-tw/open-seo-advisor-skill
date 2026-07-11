@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
@@ -25,6 +26,22 @@ from seo_advisor.models import Finding, Mode, Severity
 from seo_advisor.url_utils import normalize_host as _normalize_host
 
 _MAX_URLS_PER_SITEMAP_FILE = 50_000
+
+# hreflang 格式粗檢：只驗證格式層級（是否像 "en"/"en-US"/"x-default"），
+# 不驗證是否為真實存在的 ISO 639-1/3166-1 語言或地區代碼——維護一份完整
+# 對照表超出這輪範圍，格式正確但代碼不存在（例如 "zz-ZZ"）不會被抓出來。
+_HREFLANG_FORMAT_PATTERN = re.compile(r"^[a-z]{2}(-[A-Z]{2})?$")
+
+
+def _canonicalize_url_for_comparison(url: str) -> str:
+    """把 URL 正規化成適合「是否為同一個頁面」比對的形式：去掉 fragment、
+    query（hreflang 目標通常不含 query，若真的有 query 也不影響頁面身份
+    判斷）、統一 host 大小寫、去掉結尾多餘的斜線（根路徑 "/" 除外）。
+    """
+    parsed = urlparse(url)
+    path = parsed.path.rstrip("/") or "/"
+    netloc = parsed.netloc.lower()
+    return f"{parsed.scheme}://{netloc}{path}" if netloc else path
 
 
 def _make_id(category: str, seq: int) -> str:
@@ -69,6 +86,8 @@ def analyze_technical_seo(result: CrawlResult, *, seed_url: str) -> list[Finding
     findings.extend(_check_social_metadata(parsed, next_id))
     findings.extend(_check_structured_data(parsed, next_id))
     findings.extend(_check_orphan_pages(result, seed_url, next_id))
+    findings.extend(_check_hreflang(parsed, result, seed_url, next_id))
+    findings.extend(_check_cwv_static_hints(parsed, next_id))
 
     return findings
 
@@ -673,4 +692,327 @@ def _check_orphan_pages(result: CrawlResult, seed_url: str, next_id) -> list[Fin
                 owner=Mode.CONSULTANT,
             )
         )
+    return findings
+
+
+def _sitemap_has_hreflang(sitemap_xml: str | None) -> bool:
+    """粗略檢查 sitemap.xml 是否使用 xhtml:link 宣告 hreflang（sitemap 版本
+    的多語言宣告形式）。只做字串層級檢查，不完整解析 sitemap 結構——這裡
+    只需要判斷「是否同時存在」，不需要比對內容是否正確。
+    """
+    if not sitemap_xml:
+        return False
+    return 'rel="alternate"' in sitemap_xml and "hreflang" in sitemap_xml
+
+
+def _check_hreflang(
+    parsed: dict[str, BeautifulSoup], result: CrawlResult, seed_url: str, next_id
+) -> list[Finding]:
+    """檢查 hreflang 標籤（<link rel="alternate" hreflang="...">）的常見問題：
+    缺 self-reference、重複語言代碼、格式不合法、非互相對稱、指向授權範圍外
+    的網址、以及 HTML/sitemap 兩種宣告形式混用的跡象。
+
+    只檢查 HTML <link> 這種宣告形式；HTTP header 形式的 hreflang 這輪不做。
+    non_reciprocal 檢查需要先收集全站的宣告對照表，因此必須在拿到完整的
+    parsed（所有頁面都解析過）之後才能執行，屬於全站層級檢查。
+    """
+    findings: list[Finding] = []
+    site_origin = seed_url if seed_url.startswith(("http://", "https://")) else None
+
+    # page -> {hreflang_code: target_url}（未正規化的原始 target，用於顯示）
+    page_declarations: dict[str, dict[str, str]] = {}
+    missing_self_ref: list[str] = []
+    duplicate_language: list[str] = []
+    invalid_code_pages: dict[str, list[str]] = {}
+    out_of_scope_pages: dict[str, list[str]] = {}
+
+    for url, soup in parsed.items():
+        alternate_tags = soup.find_all("link", rel="alternate", hreflang=True)
+        if not alternate_tags:
+            continue
+
+        codes_seen: Counter[str] = Counter()
+        declarations: dict[str, str] = {}
+        invalid_codes: list[str] = []
+        out_of_scope: list[str] = []
+
+        for tag in alternate_tags:
+            code = (tag.get("hreflang") or "").strip()
+            href = tag.get("href") or ""
+            if not code or not href:
+                continue
+
+            codes_seen[code] += 1
+            declarations[code] = href
+
+            if code != "x-default" and not _HREFLANG_FORMAT_PATTERN.match(code):
+                invalid_codes.append(code)
+
+            target_absolute = urljoin(url, href)
+            if site_origin:
+                target_netloc = urlparse(target_absolute).netloc
+                seed_netloc = urlparse(site_origin).netloc
+                if (
+                    target_netloc
+                    and _normalize_host(target_netloc) != _normalize_host(seed_netloc)
+                ):
+                    out_of_scope.append(href)
+
+        page_declarations[url] = declarations
+
+        has_self_reference = any(
+            _canonicalize_url_for_comparison(urljoin(url, href))
+            == _canonicalize_url_for_comparison(url)
+            for href in declarations.values()
+        )
+        if not has_self_reference:
+            missing_self_ref.append(url)
+
+        if any(count > 1 for count in codes_seen.values()):
+            duplicate_language.append(url)
+
+        if invalid_codes:
+            invalid_code_pages[url] = invalid_codes
+        if out_of_scope:
+            out_of_scope_pages[url] = out_of_scope
+
+    if not page_declarations:
+        return findings
+
+    # non-reciprocal：只在目標頁確實在本次 crawl 範圍內時才判斷（用「所有
+    # 被爬到的頁面」parsed，不是「有 hreflang 宣告的頁面」page_declarations
+    # ——目標頁存在但完全沒有 hreflang 宣告，本身就是一種 non-reciprocal，
+    # 不該因為它不在 page_declarations 裡就被略過），避免把「目標頁根本
+    # 沒被爬到」誤判成「目標頁沒有指回來」。
+    canonical_to_crawled_page = {
+        _canonicalize_url_for_comparison(url): url for url in parsed
+    }
+    non_reciprocal_pairs: list[str] = []
+    for source_url, declarations in page_declarations.items():
+        for code, href in declarations.items():
+            if code == "x-default":
+                continue
+            target_absolute = urljoin(source_url, href)
+            target_key = _canonicalize_url_for_comparison(target_absolute)
+            target_original = canonical_to_crawled_page.get(target_key)
+            if target_original is None or target_original == source_url:
+                # 目標頁不在本次 crawl 範圍內：無法驗證是否指回，不誤報。
+                continue
+            target_declarations = page_declarations.get(target_original, {})
+            source_key = _canonicalize_url_for_comparison(source_url)
+            points_back = any(
+                _canonicalize_url_for_comparison(urljoin(target_original, back_href))
+                == source_key
+                for back_href in target_declarations.values()
+            )
+            if not points_back:
+                non_reciprocal_pairs.append(f"{source_url} -> {href}")
+
+    if missing_self_ref:
+        findings.append(
+            Finding(
+                id=next_id("hreflang_missing_self_reference"),
+                title=f"{len(missing_self_ref)} 個頁面的 hreflang 宣告缺少 self-reference",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P2,
+                impact=2,
+                effort=1,
+                confidence=0.8,
+                affected_urls=missing_self_ref[:50],
+                evidence={"count": len(missing_self_ref)},
+                recommendation="每個有 hreflang 宣告的頁面，都應該包含一條指向自己的 "
+                "hreflang（self-reference），否則搜尋引擎可能無法正確理解這組頁面的"
+                "語言/地區對應關係。",
+                validation=["確認每個頁面的 hreflang alternate 清單包含自己"],
+                owner=Mode.ENGINEER,
+                sources=["google-hreflang"],
+            )
+        )
+
+    if duplicate_language:
+        findings.append(
+            Finding(
+                id=next_id("hreflang_duplicate_language"),
+                title=f"{len(duplicate_language)} 個頁面對同一語言代碼宣告了多個 hreflang",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P2,
+                impact=2,
+                effort=1,
+                confidence=0.85,
+                affected_urls=duplicate_language[:50],
+                evidence={"count": len(duplicate_language)},
+                recommendation="同一個語言/地區代碼在同一頁只能宣告一次 hreflang，"
+                "重複宣告會讓搜尋引擎難以判斷該以哪一個為準。",
+                validation=["確認每個 hreflang 代碼在單一頁面只出現一次"],
+                owner=Mode.ENGINEER,
+                sources=["google-hreflang"],
+            )
+        )
+
+    if invalid_code_pages:
+        findings.append(
+            Finding(
+                id=next_id("hreflang_invalid_code"),
+                title=f"{len(invalid_code_pages)} 個頁面的 hreflang 代碼格式不正確",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P3,
+                impact=2,
+                effort=1,
+                confidence=0.7,
+                affected_urls=list(invalid_code_pages.keys())[:50],
+                evidence={"examples": dict(list(invalid_code_pages.items())[:10])},
+                recommendation="hreflang 應使用 ISO 639-1 語言代碼（可選加上 ISO 3166-1 "
+                "地區代碼，例如 zh-TW、en-US），或使用 x-default。這裡只檢查格式是否"
+                "符合這個樣式，不驗證代碼本身是否真實存在。",
+                validation=["確認 hreflang 屬性值符合語言/地區代碼格式"],
+                owner=Mode.ENGINEER,
+                sources=["google-hreflang"],
+            )
+        )
+
+    if out_of_scope_pages:
+        findings.append(
+            Finding(
+                id=next_id("hreflang_out_of_scope"),
+                title=f"{len(out_of_scope_pages)} 個頁面的 hreflang 指向網站授權範圍外的網域",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P3,
+                impact=1,
+                effort=1,
+                confidence=0.6,
+                affected_urls=list(out_of_scope_pages.keys())[:50],
+                evidence={"examples": dict(list(out_of_scope_pages.items())[:10])},
+                recommendation="部分 hreflang 目標指向了不同網域。如果這是刻意為之的"
+                "國際站群（例如 example.com 對應 example.de），可以忽略此提示；"
+                "如果不是，請確認網址是否填寫錯誤。",
+                validation=["確認跨網域的 hreflang 目標是否為刻意的國際站群設計"],
+                owner=Mode.CONSULTANT,
+            )
+        )
+
+    if non_reciprocal_pairs:
+        findings.append(
+            Finding(
+                id=next_id("hreflang_non_reciprocal"),
+                title=f"發現 {len(non_reciprocal_pairs)} 組 hreflang 沒有互相指回",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P2,
+                impact=2,
+                effort=2,
+                confidence=0.75,
+                affected_urls=[pair.split(" -> ")[0] for pair in non_reciprocal_pairs][:50],
+                evidence={"examples": non_reciprocal_pairs[:10]},
+                recommendation="hreflang 宣告應該互相對稱：A 頁面宣告指向 B，B 頁面也應該"
+                "宣告指回 A。單向宣告可能讓搜尋引擎忽略整組 hreflang 關係。"
+                "（只檢查了本次 crawl 範圍內確實抓到的頁面，若目標頁未被爬到則不列入判斷。）",
+                validation=["確認每一組互相參照的頁面都有對稱的 hreflang 宣告"],
+                owner=Mode.ENGINEER,
+                sources=["google-hreflang"],
+            )
+        )
+
+    if _sitemap_has_hreflang(result.sitemap_xml):
+        findings.append(
+            Finding(
+                id=next_id("hreflang_mixed_implementation"),
+                title="同時偵測到 HTML 與 sitemap 兩種 hreflang 宣告形式",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P3,
+                impact=1,
+                effort=2,
+                confidence=0.5,
+                affected_urls=list(page_declarations.keys())[:10],
+                evidence={"sitemap_has_hreflang": True, "pages_with_html_hreflang": len(page_declarations)},
+                recommendation="hreflang 可以用 HTML <link> 標籤、HTTP header、或 sitemap "
+                "的 xhtml:link 三種形式宣告，建議三選一貫徹使用，混用容易造成兩處宣告"
+                "不一致時難以排查問題（這裡只偵測到「同時存在」的跡象，不判斷哪一份是"
+                "正確的）。",
+                validation=["確認團隊只維護單一種 hreflang 宣告來源"],
+                owner=Mode.CONSULTANT,
+            )
+        )
+
+    return findings
+
+
+def _check_cwv_static_hints(parsed: dict[str, BeautifulSoup], next_id) -> list[Finding]:
+    """純靜態 HTML 分析找出可能影響 Core Web Vitals 的線索，不是真實的
+    Lighthouse/CWV 分數量測（那需要真實瀏覽器渲染）。只檢查：
+    - <img> 缺少 width/height 屬性（可能造成 layout shift）
+    - 單頁 blocking <script>（沒有 defer/async）數量過多
+    """
+    findings: list[Finding] = []
+    missing_dimensions: list[str] = []
+    many_blocking_scripts: list[str] = []
+
+    for url, soup in parsed.items():
+        images = soup.find_all("img")
+        if any(not img.get("width") or not img.get("height") for img in images):
+            missing_dimensions.append(url)
+
+        blocking_scripts = [
+            script
+            for script in soup.find_all("script", src=True)
+            if script.get("defer") is None and script.get("async") is None
+        ]
+        if len(blocking_scripts) >= 3:
+            many_blocking_scripts.append(url)
+
+    if missing_dimensions:
+        findings.append(
+            Finding(
+                id=next_id("image_missing_dimensions_hint"),
+                title=f"{len(missing_dimensions)} 個頁面有 <img> 缺少 width/height 屬性",
+                mode=Mode.CONSULTANT,
+                category="performance",
+                severity=Severity.P3,
+                impact=2,
+                effort=1,
+                confidence=0.5,
+                affected_urls=missing_dimensions[:50],
+                evidence={
+                    "count": len(missing_dimensions),
+                    "note": "只檢查 HTML 屬性是否存在，不驗證數值是否正確，也未考慮 "
+                    "CSS aspect-ratio 或容器保留空間等替代做法，可能有誤判。",
+                },
+                recommendation="為 <img> 補上 width 與 height 屬性（或用 CSS "
+                "aspect-ratio 搭配容器保留版面空間），避免圖片載入時造成畫面跳動"
+                "（layout shift）。這只是靜態線索，不是實際的 Core Web Vitals 分數。",
+                validation=["用瀏覽器開發者工具或 PageSpeed Insights 確認 CLS 分數"],
+                owner=Mode.ENGINEER,
+                sources=["web-vitals-cls"],
+            )
+        )
+
+    if many_blocking_scripts:
+        findings.append(
+            Finding(
+                id=next_id("blocking_scripts_hint"),
+                title=f"{len(many_blocking_scripts)} 個頁面有多個未使用 defer/async 的 <script>",
+                mode=Mode.CONSULTANT,
+                category="performance",
+                severity=Severity.P3,
+                impact=2,
+                effort=2,
+                confidence=0.5,
+                affected_urls=many_blocking_scripts[:50],
+                evidence={
+                    "count": len(many_blocking_scripts),
+                    "note": "只是靜態線索（script 數量與屬性），不是實際的載入時間量測。",
+                },
+                recommendation="為外部 <script> 標籤加上 defer 或 async 屬性，避免多個"
+                "同步載入的 script 阻塞頁面渲染。是否適合加 defer/async 需視該 script "
+                "的執行順序需求而定，這裡不會自動修改（可能影響 JS 執行順序）。",
+                validation=["用瀏覽器開發者工具的效能面板確認渲染阻塞情況是否改善"],
+                owner=Mode.ENGINEER,
+                sources=["web-vitals-general"],
+            )
+        )
+
     return findings
