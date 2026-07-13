@@ -31,6 +31,9 @@ from seo_advisor.crawler import crawl_site
 from seo_advisor.errors import translate_exception
 from seo_advisor.fixers import rollback as rollback_module
 from seo_advisor.fixers import runner
+from seo_advisor.fixers.hreflang_generator import build_hreflang_html_plan
+from seo_advisor.fixers.hreflang_map import InvalidLanguageMapError, load_language_map
+from seo_advisor.fixers.hreflang_sitemap import build_hreflang_sitemap_plan
 from seo_advisor.fixers.safety import build_apply_confirmation, build_rollback_confirmation, verify_confirmation
 from seo_advisor.models import Finding, SafetyPolicy
 
@@ -185,6 +188,231 @@ def engineer(
                 console.print(
                     f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}"
                 )
+        else:
+            console.print("[red]套用中斷，未完全成功。[/red]")
+            for note in result.validation_notes:
+                console.print(f"[red]{note}[/red]")
+            raise typer.Exit(code=1)
+
+    except typer.Exit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        if debug:
+            raise
+        console.print(f"[red]{translate_exception(exc).render()}[/red]")
+        raise typer.Exit(code=1)
+
+
+def _load_hreflang_pages(connector, hreflang_map) -> dict[str, str]:
+    """讀取語言對照表所有 cluster.targets 指到的檔案內容，供 HTML generator
+    使用。找不到的檔案不在這裡報錯——留給 generator 自己判斷並記錄警告，
+    讓整個流程能盡量處理完其他仍然有效的 cluster，而不是一個檔案讀取失敗
+    就中斷整批。
+    """
+    pages: dict[str, str] = {}
+    for cluster in hreflang_map.clusters:
+        for rel_path in cluster.targets.values():
+            if rel_path in pages:
+                continue
+            try:
+                pages[rel_path] = connector.read_file(rel_path).decode("utf-8", errors="replace")
+            except (FileNotFoundError, ValueError, OSError):
+                continue
+    return pages
+
+
+@fix_app.command("hreflang-html")
+def hreflang_html(
+    source: str = typer.Option(..., "--source", help="本地原始碼包目錄或 zip 檔路徑"),
+    map_file: str = typer.Option(..., "--map", help="語言對照表 JSON 檔案路徑（見 docs/modes.md#engineer-mode）"),
+    write_mode: str = typer.Option(
+        "direct", "--write-mode", help='寫入方式："direct"（預設）或 "git-branch"（見 fix engineer 說明）'
+    ),
+    apply: bool = typer.Option(False, "--apply", help="真的寫入檔案（預設為 dry-run 預覽）"),
+    confirm: str = typer.Option(None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'),
+    out: str = typer.Option("./fix-plan", "--out", help="輸出目錄"),
+    debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
+) -> None:
+    """依語言對照表在指定頁面插入 hreflang 標籤（預設 dry-run）。
+
+    語言對照表由使用者提供、視為權威輸入，工具不會驗證其業務正確性
+    （例如網址是否真的對應正確語言版本），只負責安全地產生/套用標籤。
+    """
+    try:
+        if write_mode not in ("direct", "git-branch"):
+            console.print(f'[red]--write-mode 只接受 "direct" 或 "git-branch"，收到 {write_mode!r}。[/red]')
+            raise typer.Exit(code=1)
+
+        try:
+            hreflang_map = load_language_map(map_file)
+        except InvalidLanguageMapError as exc:
+            console.print(f"[red]語言對照表不合法：{exc}[/red]")
+            raise typer.Exit(code=1)
+
+        write_policy = SafetyPolicy(
+            dry_run=not apply, allowed_capabilities={"read_urls", "read_files", "write_files"}
+        )
+        if write_mode == "git-branch":
+            connector = GitRepoConnector(source, policy=write_policy)
+        else:
+            connector = LocalArchiveConnector(source, policy=write_policy)
+
+        pages = _load_hreflang_pages(connector, hreflang_map)
+        plan = build_hreflang_html_plan(hreflang_map, pages=pages)
+
+        out_path = Path(out)
+        out_path.mkdir(parents=True, exist_ok=True)
+        (out_path / "fix-plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+        _render_plan_markdown(plan, out_path / "fix-plan.md")
+
+        if plan.plan_only:
+            console.print(f"[bold]建議（需人工處理，無法自動套用）：{plan.plan_id}[/bold]")
+            console.print(plan.summary)
+            for warning in plan.warnings:
+                console.print(f"[yellow]警告：{warning}[/yellow]")
+            console.print("\n[bold]建議步驟：[/bold]")
+            for step in plan.suggested_actions:
+                console.print(f"  - {step}")
+            raise typer.Exit(code=0)
+
+        console.print(f"[bold]修復計畫：{plan.plan_id}[/bold]（風險等級：{plan.risk_level}）")
+        console.print(plan.summary)
+        for warning in plan.warnings:
+            console.print(f"[yellow]警告：{warning}[/yellow]")
+        for target in plan.targets:
+            console.print(f"\n[dim]--- {target.path} ---[/dim]")
+            console.print(target.diff_preview or "（無文字 diff）")
+
+        if not apply:
+            write_mode_flag = f" --write-mode {write_mode}" if write_mode != "direct" else ""
+            console.print(
+                f"\n[cyan]這是 dry-run 預覽，尚未寫入任何檔案。[/cyan]\n"
+                f"確認無誤後執行：\n"
+                f"  seo-advisor fix hreflang-html --source {source} --map {map_file}"
+                f'{write_mode_flag} --apply --confirm "{build_apply_confirmation(plan.plan_id)}"'
+            )
+            raise typer.Exit(code=0)
+
+        expected = build_apply_confirmation(plan.plan_id)
+        if not confirm or not verify_confirmation(confirm, expected):
+            console.print(f'[red]確認字串不符或未提供。請加上 --confirm "{expected}" 才會真的寫入。[/red]')
+            raise typer.Exit(code=1)
+
+        result = runner.apply_plan(plan, connector=connector)
+        (out_path / "fix-result.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
+
+        if result.applied:
+            if write_mode == "git-branch":
+                console.print("[bold green]已套用！變更已 commit 到新分支。[/bold green]")
+                for note in result.validation_notes:
+                    console.print(note)
+            else:
+                console.print(f"[bold green]已套用！寫入 {len(result.written_paths)} 個檔案。[/bold green]")
+                console.print(f"備份位置：{result.backup_id}")
+                console.print(f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}")
+        else:
+            console.print("[red]套用中斷，未完全成功。[/red]")
+            for note in result.validation_notes:
+                console.print(f"[red]{note}[/red]")
+            raise typer.Exit(code=1)
+
+    except typer.Exit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        if debug:
+            raise
+        console.print(f"[red]{translate_exception(exc).render()}[/red]")
+        raise typer.Exit(code=1)
+
+
+@fix_app.command("hreflang-sitemap")
+def hreflang_sitemap(
+    source: str = typer.Option(..., "--source", help="本地原始碼包目錄或 zip 檔路徑"),
+    map_file: str = typer.Option(..., "--map", help="語言對照表 JSON 檔案路徑"),
+    sitemap_path: str = typer.Option("sitemap.xml", "--sitemap", help="要修改（或建立）的 sitemap 檔案路徑"),
+    write_mode: str = typer.Option(
+        "direct", "--write-mode", help='寫入方式："direct"（預設）或 "git-branch"（見 fix engineer 說明）'
+    ),
+    apply: bool = typer.Option(False, "--apply", help="真的寫入檔案（預設為 dry-run 預覽）"),
+    confirm: str = typer.Option(None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'),
+    out: str = typer.Option("./fix-plan", "--out", help="輸出目錄"),
+    debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
+) -> None:
+    """依語言對照表在 sitemap.xml 加入 xhtml:link hreflang 條目（預設 dry-run）。"""
+    try:
+        if write_mode not in ("direct", "git-branch"):
+            console.print(f'[red]--write-mode 只接受 "direct" 或 "git-branch"，收到 {write_mode!r}。[/red]')
+            raise typer.Exit(code=1)
+
+        try:
+            hreflang_map = load_language_map(map_file)
+        except InvalidLanguageMapError as exc:
+            console.print(f"[red]語言對照表不合法：{exc}[/red]")
+            raise typer.Exit(code=1)
+
+        write_policy = SafetyPolicy(
+            dry_run=not apply, allowed_capabilities={"read_urls", "read_files", "write_files"}
+        )
+        if write_mode == "git-branch":
+            connector = GitRepoConnector(source, policy=write_policy)
+        else:
+            connector = LocalArchiveConnector(source, policy=write_policy)
+
+        try:
+            current_xml = connector.read_file(sitemap_path).decode("utf-8", errors="replace")
+        except (FileNotFoundError, ValueError, OSError):
+            current_xml = None
+
+        plan = build_hreflang_sitemap_plan(hreflang_map, sitemap_path=sitemap_path, current_sitemap_xml=current_xml)
+
+        out_path = Path(out)
+        out_path.mkdir(parents=True, exist_ok=True)
+        (out_path / "fix-plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+        _render_plan_markdown(plan, out_path / "fix-plan.md")
+
+        if plan.plan_only:
+            console.print(f"[bold]建議（需人工處理，無法自動套用）：{plan.plan_id}[/bold]")
+            console.print(plan.summary)
+            for warning in plan.warnings:
+                console.print(f"[yellow]警告：{warning}[/yellow]")
+            console.print("\n[bold]建議步驟：[/bold]")
+            for step in plan.suggested_actions:
+                console.print(f"  - {step}")
+            raise typer.Exit(code=0)
+
+        console.print(f"[bold]修復計畫：{plan.plan_id}[/bold]（風險等級：{plan.risk_level}）")
+        console.print(plan.summary)
+        for target in plan.targets:
+            console.print(f"\n[dim]--- {target.path} ---[/dim]")
+            console.print(target.diff_preview or "（無文字 diff）")
+
+        if not apply:
+            write_mode_flag = f" --write-mode {write_mode}" if write_mode != "direct" else ""
+            console.print(
+                f"\n[cyan]這是 dry-run 預覽，尚未寫入任何檔案。[/cyan]\n"
+                f"確認無誤後執行：\n"
+                f"  seo-advisor fix hreflang-sitemap --source {source} --map {map_file} --sitemap {sitemap_path}"
+                f'{write_mode_flag} --apply --confirm "{build_apply_confirmation(plan.plan_id)}"'
+            )
+            raise typer.Exit(code=0)
+
+        expected = build_apply_confirmation(plan.plan_id)
+        if not confirm or not verify_confirmation(confirm, expected):
+            console.print(f'[red]確認字串不符或未提供。請加上 --confirm "{expected}" 才會真的寫入。[/red]')
+            raise typer.Exit(code=1)
+
+        result = runner.apply_plan(plan, connector=connector)
+        (out_path / "fix-result.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
+
+        if result.applied:
+            if write_mode == "git-branch":
+                console.print("[bold green]已套用！變更已 commit 到新分支。[/bold green]")
+                for note in result.validation_notes:
+                    console.print(note)
+            else:
+                console.print(f"[bold green]已套用！寫入 {len(result.written_paths)} 個檔案。[/bold green]")
+                console.print(f"備份位置：{result.backup_id}")
+                console.print(f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}")
         else:
             console.print("[red]套用中斷，未完全成功。[/red]")
             for note in result.validation_notes:

@@ -75,15 +75,20 @@ Markdown + JSON 雙格式，結構：
 ## Engineer Mode
 
 **狀態：v0.2.0 已上線 robots.txt / sitemap.xml / canonical 三種自動修復；
-v0.2.2 新增 `--write-mode git-branch`（產出可開 PR 的分支）；hreflang、
-結構化資料驗證、redirect、CWV 仍是規劃中（見 `docs/roadmap.md`）。**
+v0.2.2 新增 `--write-mode git-branch`（產出可開 PR 的分支）；v0.2.6 新增
+redirect chain / hreflang 問題偵測的 plan-only 建議（不自動套用，crawler
+無法安全推斷業務層面的語言/網址對應關係）；v0.3.3 新增 hreflang / 多語
+sitemap 產生器（`fix hreflang-html`/`fix hreflang-sitemap`，使用者提供
+完整語言對照表後直接產生，與 v0.2.6 的 plan-only 建議互補）；結構化資料
+驗證仍是規劃中（見 `docs/roadmap.md`）。**
 
 ### 目標與適用情境
 
 直接修復技術 SEO 問題，產出 patch、diff、部署計畫與驗證結果。目前支援修
 `robots.txt`（缺失/缺 Sitemap 宣告）、`sitemap.xml`（缺失時建立）、
-canonical（移除頁面內多餘的重複標籤）；只支援本地原始碼包/目錄
-（`--source`），不支援直接修改線上網站。
+canonical（移除頁面內多餘的重複標籤）、hreflang（`fix hreflang-html`/
+`fix hreflang-sitemap`，需使用者提供語言對照表）；只支援本地原始碼包/
+目錄（`--source`），不支援直接修改線上網站。
 
 寫入方式有兩種：`--write-mode direct`（預設，直接改 `--source` 目錄裡的
 檔案）或 `--write-mode git-branch`（`--source` 須為已存在的本機 git repo，
@@ -110,9 +115,45 @@ seo-advisor fix engineer --source ./site --write-mode git-branch \
 
 # 回滾（direct 模式；不會覆蓋你在套用之後又手動編輯過的檔案）
 seo-advisor fix rollback --source ./site --backup <備份路徑> --apply --confirm "ROLLBACK <backup_id>"
+
+# hreflang 產生器：需先準備語言對照表 JSON（見下方「hreflang 語言對照表格式」）
+seo-advisor fix hreflang-html --source ./site --map ./hreflang-map.json
+seo-advisor fix hreflang-html --source ./site --map ./hreflang-map.json \
+  --apply --confirm "APPLY <plan_id>"
+seo-advisor fix hreflang-sitemap --source ./site --map ./hreflang-map.json --sitemap sitemap.xml
 ```
 
 自然語言：「直接幫我修 sitemap 和 canonical」（會被路由到上述指令）。
+
+### hreflang 語言對照表格式
+
+`fix hreflang-html`/`fix hreflang-sitemap` 需要使用者提供完整、權威的
+語言對照表（JSON），工具不會嘗試自己推斷語言與網址的對應關係：
+
+```json
+{
+  "clusters": [
+    {
+      "id": "home",
+      "alternates": {
+        "zh-TW": "https://example.com/zh/",
+        "en": "https://example.com/en/",
+        "x-default": "https://example.com/"
+      },
+      "targets": {
+        "zh-TW": "zh/index.html",
+        "en": "en/index.html"
+      }
+    }
+  ]
+}
+```
+
+一個 cluster 代表「同一頁面的所有語言版本」：`alternates` 是公開網址
+（產生 hreflang 的 href），`targets` 是本地相對路徑（`fix hreflang-html`
+用來定位要修改的檔案；`fix hreflang-sitemap` 不需要 targets，只靠
+`alternates` 的網址比對既有 sitemap）。每個 cluster 至少要有 2 個語言
+版本；語言代碼需符合 ISO 639-1（可選 ISO 3166-1 地區碼）或 `x-default`。
 
 ### 工作步驟
 

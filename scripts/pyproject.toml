@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-seo-advisor"
-version = "0.3.2"
+version = "0.3.3"
 description = "開源、可攜、不綁定單一廠商的全域 SEO 顧問技能"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"

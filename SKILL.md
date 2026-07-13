@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.3.2
+version: 0.3.3
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,17 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.3.2）
+## 目前實作狀態（v0.3.3）
 
+- ✅ **hreflang / 多語 sitemap 產生器正式上線（v0.3.3，Engineer Mode
+  擴充）**：使用者提供完整語言對照表後，直接產生 HTML hreflang 標籤
+  （`seo-advisor fix hreflang-html`）或 sitemap 的 xhtml:link hreflang
+  條目（`seo-advisor fix hreflang-sitemap`），跟 v0.2.6 掃描發現問題後
+  只給建議的 plan-only 機制互補（那裡 crawler 無法安全推斷語言/網址
+  對應關係，這裡使用者已提供權威資料可以直接產生）。sitemap 產生器採
+  in-place 修改既有 `<url>` 節點，`lastmod`/`priority`/`changefreq`/
+  extension 等既有欄位與順序不受影響。兩者都預設 dry-run，走與
+  `fix engineer` 相同的 apply/confirm/backup/rollback 流程。
 - ✅ **IndexNow 發布整合正式上線（v0.3.2）**：內容更新後主動通知
   Bing/Yandex 等支援 IndexNow 協定的搜尋引擎（`seo-advisor indexnow
   submit`），加速重新抓取。獨立 CLI 指令，預設 dry-run（只做 key 格式

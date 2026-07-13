@@ -46,6 +46,8 @@ FixType = Literal[
     "canonical",
     "redirect_chain",
     "hreflang",
+    "hreflang_generate_html",
+    "hreflang_generate_sitemap",
     "cwv_decoding_async",
     "cwv_blocking_scripts",
 ]

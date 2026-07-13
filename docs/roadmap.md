@@ -175,7 +175,16 @@
       是使用者輸入的網址，套用 `ensure_host_allowed()` SSRF 防護並用
       streaming 讀取限制在 4KB 上限內（超量直接判定失敗，不對截斷內容
       做前綴比對）。不接掛在 Engineer Mode fixer 套用流程之後自動觸發。
-- [ ] hreflang / 多語 sitemap 產生器（Engineer Mode 擴充）。
+- [x] **v0.3.3** hreflang / 多語 sitemap 產生器（Engineer Mode 擴充）：
+      使用者提供完整語言對照表後，直接產生 HTML hreflang 標籤
+      （`seo-advisor fix hreflang-html`）或 sitemap 的 xhtml:link
+      hreflang 條目（`seo-advisor fix hreflang-sitemap`），跟 v0.2.6
+      plan-only 建議互補（那裡 crawler 無法安全推斷語言對應關係，這裡
+      使用者已提供權威資料）。sitemap 產生器 in-place 修改既有 `<url>`
+      節點，保留 lastmod/priority/changefreq/extension 等既有欄位與
+      順序。兩者共用 `fixers/runner.py::apply_plan()` 與既有確認字串
+      機制，維持與 `fix engineer` 一致的 dry-run/apply/confirm/backup/
+      rollback 流程。
 - [ ] Report HTML/PDF 渲染（在 Markdown/JSON 基礎上新增可視化圖表：
       Impact x Effort matrix、URL 狀態分布、hreflang 矩陣）。
 - [ ] Plugin Dev Mode：WordPress 外掛 scaffold 產生器（schema 產生器、

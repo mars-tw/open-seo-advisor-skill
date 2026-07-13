@@ -2,7 +2,83 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
-## [0.3.2] - Unreleased
+## [0.3.3] - Unreleased
+
+**hreflang / 多語 sitemap 產生器正式上線**（`docs/roadmap.md` v0.3.0 第四批，
+Engineer Mode 擴充）：使用者提供完整的語言對照表後，直接產生 HTML
+hreflang 標籤與 sitemap hreflang 條目。
+
+### 與 v0.2.6 plan-only 建議的關係
+
+v0.2.6 的 `fixers/hreflang.py` 是「掃描發現 hreflang 問題 → crawler 無法
+安全推斷語言/網址對應關係 → 只給文字建議」；這批是「使用者主動提供完整、
+權威的語言對照表 → 直接產生標記」。兩者互補、不衝突，`FixType` 刻意
+用不同的值區分（`hreflang_generate_html`/`hreflang_generate_sitemap`
+vs 既有的 `hreflang`），避免同一個 fix_type 有時 plan_only 有時不是。
+
+### 語言對照表（`fixers/hreflang_map.py`）
+
+- 由多個 cluster 組成，每個 cluster 代表「同一頁面的所有語言版本」：
+  `alternates`（語言代碼 → 公開網址，用來產生 hreflang href）、`targets`
+  （語言代碼 → 本地相對路徑，供 HTML generator 找到要修改的檔案，可省略）。
+- 驗證規則：每個 cluster 至少 2 個語言版本；語言代碼必須符合 ISO 639-1
+  （可選 ISO 3166-1 地區）或 `x-default`；alternate 網址只允許 http(s)、
+  拒絕 userinfo/fragment/路徑穿越；同一個網址（host 正規化後比對，含
+  大小寫與結尾點）不能同時出現在兩個不同 cluster。
+
+### HTML hreflang 產生器（`fixers/hreflang_generator.py`）
+
+- 沿用既有 `fixers/canonical.py` 的模式：BeautifulSoup 解析、樣板引擎
+  語法（Jinja/Django/PHP/ASP）偵測到就降級 plan_only、`ensure_write_
+  target_allowed()` 檢查副檔名白名單。
+- 整組替換既有的 `<link rel="alternate" hreflang="...">`（語言對照表視為
+  權威輸入，不部分保留舊標籤），插入點依序嘗試：canonical 標籤後 →
+  `<title>` 標籤後 → `<head>` 開頭；不動其他 `rel="alternate"`（如 RSS）。
+- 找不到 `<head>`、找不到 targets 指定的頁面、含樣板語法、副檔名不在
+  白名單 → 該筆降級為警告，不中斷整個流程；全部都無法套用時整份
+  PatchPlan 降級為 plan_only。
+
+### sitemap hreflang 產生器（`fixers/hreflang_sitemap.py`）
+
+- 獨立模組，不接進既有 `fixers/sitemap.py`（那裡只處理「sitemap 完全
+  缺失」的結構清楚情況，避免混入多語邏輯讓職責複雜化）。
+- **in-place 修改既有 `<url>` 節點**（非重新產生整份 XML）：只移除/
+  重新附加該節點下的 `xhtml:link rel="alternate"` 子節點，`lastmod`/
+  `priority`/`changefreq`/image、video、news extension 等其他子節點
+  原樣保留、原始順序不變；語言對照表裡不存在於既有 sitemap 的 URL 才
+  新增全新 `<url>` 節點，append 在檔案最後。
+- 用標準函式庫 `xml.etree.ElementTree`（與專案既有慣例一致），
+  `register_namespace()` 確保輸出是語意化的 `xhtml:link` 前綴而非
+  自動產生的 `ns0:link`。
+- sitemap index（`<sitemapindex>`）、XML 解析失敗、URL 總數超過
+  50,000（官方單檔上限）→ 降級 plan_only。
+
+### CLI
+
+- `seo-advisor fix hreflang-html --source --map [--write-mode direct|
+  git-branch] [--apply --confirm "APPLY <plan_id>"]`
+- `seo-advisor fix hreflang-sitemap --source --map [--sitemap sitemap.xml]
+  [--write-mode direct|git-branch] [--apply --confirm "APPLY <plan_id>"]`
+- 兩者複用既有 `fixers/runner.py::apply_plan()`（不依賴 Finding，只依賴
+  `PatchPlan` + connector）與 `fixers/safety.py` 的確認字串機制，維持與
+  `fix engineer` 完全一致的 dry-run/apply/confirm/backup/rollback 流程。
+
+### 落地後複審修正的一個資料遺失風險
+
+NORA 落地後複審指出 sitemap 產生器最初版本（讀取既有 `<loc>` 後重新
+產生整份 XML）會遺失既有的 `lastmod`/`priority`/`changefreq`/sitemap
+extension 等欄位，且重新排序整份 sitemap 會造成不必要的大 diff，已改為
+上述的 in-place 修改策略。同時修正了 language map 的跨 cluster URL 去重
+偵測，原本只比對原始字串，未正規化 host 大小寫與結尾點，改用
+`_normalized_url_key()` 正規化後比對。
+
+### 測試
+
+新增 50 個測試（`hreflang_map` 19 + `hreflang_generator` 11 +
+`hreflang_sitemap` 13 + CLI 整合 8 + rewrite 過程新增的回歸鎖定測試），
+全專案 844 個測試通過，ruff 乾淨。
+
+## [0.3.2] - 2026-07-13
 
 **IndexNow 發布整合正式上線**（`docs/roadmap.md` v0.3.0 第三批）：內容
 更新後主動通知 Bing/Yandex 等支援 IndexNow 協定的搜尋引擎，加速重新
