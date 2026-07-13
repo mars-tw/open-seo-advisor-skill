@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.2.7
+version: 0.3.0
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,14 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.2.7）
+## 目前實作狀態（v0.3.0）
 
+- ✅ **CloudflareConnector 正式上線（v0.3.0）**：唯讀盤點 DNS/redirect/
+  cache 設定（`seo-advisor cloudflare audit --zone-id <id>`），選配寫入
+  能力只開放 redirect rule 新增（安全子集限制 + 二次確認字串 + 樂觀鎖
+  hash 比對），cache rule 寫入/Pages 部署刻意未做。`capabilities()` 回報
+  `read_cloudflare_config`/選配 `deploy_cloudflare_rules`，不含
+  `read_urls`（這不是網站內容爬蟲）。
 - ✅ **Security Mode 擴充：惡意重導判斷 + CMS CVE 查詢政策確認（v0.2.7）**：
   新增 referrer-based redirect 偵測（比較無 Referer vs 帶 Google 搜尋
   結果 Referer 時的最終導向網址，偵測 doorway page 手法），導向外部

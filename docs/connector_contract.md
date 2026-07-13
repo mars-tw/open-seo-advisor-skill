@@ -69,7 +69,7 @@ v0.1.0 只要求實作 `id()`、`capabilities()`、`probe()`、`list_urls()`、
 | `SSHConnector` | v0.2.5 已實作（MVP：唯讀，已接進 CLI） | `read_files`, `read_urls`, 選配 `read_logs` | 透過 SFTP 讀取遠端網站靜態檔案；`list_urls`/`fetch_url` 把遠端檔案系統包裝成 URL 爬取介面供 `seo-advisor audit consultant --source ssh` 使用；`read_logs` 需明確提供 `allowed_log_paths` 白名單，與 `read_file` 共用 component-wise walk 防 symlink；`write_files`/`run_commands` 刻意不做（見 docs/roadmap.md），避免半套實作；DNS rebinding 防護 + component-wise symlink jail 防護 |
 | `GitRepoConnector` | v0.2.2 已實作 | `read_files`, `write_files`（走 branch+commit） | 繼承 `LocalArchiveConnector`，操作本機已存在的 git repo，產出可開 PR 的分支+commit；不涉及遠端連線 |
 | `WordPressAPIConnector` | v0.2.4 已實作（MVP：唯讀） | `read_urls` | 透過 REST API 盤點 posts/pages + 無認證公開頁面 fetch；只支援 Application Password（可選匿名唯讀）；REST 回傳的 `link` 視為 attacker-controlled，經 scope allowlist 過濾；`write_files`（未來改用獨立的 `write_content` capability）刻意未做 |
-| `CloudflareConnector` | v0.3.0 規劃 | `read_urls`, 選配 `deploy`（redirect/cache rules） | 需 API Token，最小權限範圍 |
+| `CloudflareConnector` | v0.3.0 已實作（MVP：唯讀為主） | `read_cloudflare_config`, 選配 `deploy_cloudflare_rules` | 讀取/修改 CDN 層設定（DNS/redirect/cache rules），不是網站內容爬蟲，`list_urls`/`fetch_url` 明確 override 拋 `ConnectorCapabilityError`；只支援 API Token 認證；寫入只開放 redirect rule 新增，要求二次確認字串（`APPLY CLOUDFLARE <zone> <patch_id>`）+ 樂觀鎖 hash 比對避免覆蓋他人變更；cache rule 寫入/Pages 部署刻意未做，`seo-advisor cloudflare audit` 只接了唯讀盤點 |
 | `CPanelConnector` | v0.3.0 規劃 | `read_files`, 選配 `write_files` | 有限度的部署能力 |
 
 ## SafetyPolicy：把資安原則變成程式碼約束

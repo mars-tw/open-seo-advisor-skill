@@ -44,6 +44,14 @@ _SSH_USERINFO_RE = re.compile(r"(ssh://)[^/@\s:]+(?::[^/@\s]+)?@")
 # 例外訊息或 httpx 的 request repr 裡也不能外洩。
 _BASIC_AUTH_HEADER_RE = re.compile(r"(?i)\bAuthorization\s*[=:]\s*Basic\s+[A-Za-z0-9+/=]+")
 _WP_APP_PASSWORD_RE = re.compile(r"\b[a-zA-Z0-9]{4}(?: [a-zA-Z0-9]{4}){5}\b")
+# CloudflareConnector 相關：Authorization: Bearer <token> 這種「兩層」格式
+# 沒有被上面的 _TOKEN_RE 完整涵蓋（那個規則只吃 "Authorization" 後面接的
+# 第一個詞，Bearer 後面實際的 token 值會漏網）；環境變數名稱型態的
+# "..._API_TOKEN=value"/"..._TOKEN=value" 也因為 _TOKEN_RE 的 \b word
+# boundary 在底線前不成立而完全匹配不到（例如 CLOUDFLARE_API_TOKEN，
+# TOKEN 前面是底線，\btoken 抓不到）。
+_BEARER_TOKEN_RE = re.compile(r"(?i)\bBearer\s+[^\s,;'\"]+")
+_ENV_VAR_TOKEN_RE = re.compile(r"(?i)\b[A-Z][A-Z0-9_]*(?:TOKEN|API_KEY|SECRET)\s*=\s*[^\s,;'\"]+")
 
 
 def redact_secrets(text: str) -> str:
@@ -54,6 +62,8 @@ def redact_secrets(text: str) -> str:
     text = _PASSWORD_FIELD_RE.sub(lambda m: f"{m.group(1)}=[已遮蔽]", text)
     text = _BASIC_AUTH_HEADER_RE.sub("Authorization: Basic [已遮蔽]", text)
     text = _WP_APP_PASSWORD_RE.sub("[已遮蔽的應用程式密碼]", text)
+    text = _BEARER_TOKEN_RE.sub("Bearer [已遮蔽]", text)
+    text = _ENV_VAR_TOKEN_RE.sub(lambda m: f"{m.group(0).split('=')[0]}=[已遮蔽]", text)
     text = _TOKEN_RE.sub(lambda m: f"{m.group(1)}=[已遮蔽]", text)
     text = _KEY_PREFIX_RE.sub("[已遮蔽]", text)
     text = _WIN_HOME_RE.sub(r"C:\\Users\\[使用者]", text)

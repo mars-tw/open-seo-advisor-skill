@@ -2,6 +2,77 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.3.0] - Unreleased
+
+**`CloudflareConnector` 正式上線**（`docs/roadmap.md` v0.3.0 第一批）：
+唯讀盤點 Cloudflare zone 的 DNS/redirect/cache 設定，選配寫入能力只開放
+redirect rule 新增。
+
+### 定位與 capabilities
+
+- `CloudflareConnector` 的定位是「讀取/修改 CDN 層設定」，不是網站內容
+  爬蟲：`capabilities()` 回報 `{"read_cloudflare_config"}`（有 policy
+  授權才加 `{"deploy_cloudflare_rules"}`），不包含 `read_urls`。
+- `list_urls()`/`fetch_url()` 明確 override 並拋出
+  `ConnectorCapabilityError`——落地時發現 `WebsiteConnector` 這兩個方法
+  是強制實作的 `@abstractmethod`（不像 `write_file`/`get_logs` 有預設
+  實作可以不 override），因此無法完全「不實作」，只能明確拋例外表達
+  「不支援」。
+
+### 唯讀盤點
+
+- `build_snapshot()`：讀取 DNS records、redirect rules（Rulesets API
+  的 `http_request_dynamic_redirect` phase）、cache rules
+  （`http_request_cache_settings` phase）、legacy page rules，任一區塊
+  因權限不足回 403 只記錄 permission note，不中斷整個 snapshot。
+- `seo-advisor cloudflare audit --zone-id <id> [--zone-name <name>]`：
+  輸出 Markdown + JSON 報告。
+
+### 選配寫入：redirect rule 新增（唯一支援的真寫入操作）
+
+- 只支援新增規則，不支援修改/刪除既有規則、不支援 cache rule 寫入、
+  不支援 Cloudflare Pages 部署（留待後續版本獨立設計與審查）。
+- 安全子集限制：來源路徑只能是絕對路徑 exact-match（拒絕查詢字串/
+  fragment/不安全字元）；目標網址必須是 HTTPS、不含 userinfo、host 必須
+  落在同一個 zone 的授權網域內（避免被用來建立開放重導攻擊第三方網站）。
+- 二次確認機制：真寫入需要 patch 內提供
+  `confirmation == "APPLY CLOUDFLARE <zone_name> <patch_id>"`，獨立於
+  `SafetyPolicy` 的 capability/dry_run 閘門之外——DNS/redirect 設定寫入
+  若出錯可能導致整個網站無法存取，風險不低於 SSHConnector 的遠端操作，
+  因此比照同樣的二次確認設計。
+- 樂觀鎖：真寫入前重新讀取目前 ruleset 並比對 hash，若與 patch 建立時的
+  `base_ruleset_hash` 不符就拒絕套用（避免覆蓋掉使用者在 Cloudflare
+  Dashboard 上同時做的變更）。新增 `build_redirect_add_patch()` helper
+  自動帶入正確的 hash，呼叫端不需要自己計算。
+- CLI 刻意不接寫入能力：這輪只提供 connector 層的寫入 API，`seo-advisor
+  cloudflare audit` 只做唯讀盤點；寫入需要比唯讀稽核更完整的人機互動
+  設計，留待後續版本。
+
+### `errors.py::redact_secrets()` 修正兩個既有漏洞
+
+補上 Cloudflare Token 遮蔽規則時，發現並修正了既有 `_TOKEN_RE` 本來就有
+的兩個盲點（不是 Cloudflare 新增功能才有的問題）：
+- `Authorization: Bearer <token>` 這種兩層格式，原本只吃掉 `Authorization:`
+  後面第一個詞，實際 token 值完全沒被遮住。
+- `CLOUDFLARE_API_TOKEN=xxx` 這種環境變數賦值格式完全沒被遮住——因為
+  `\btoken` 的 word boundary 比對在 `API_TOKEN` 的底線前不成立（底線
+  在正規表示式裡算單字字元）。
+
+### API 呼叫安全
+
+Cloudflare API 的請求目標固定是官方端點
+`https://api.cloudflare.com/client/v4`，不涉及使用者輸入的任意網址，
+因此不使用 `ensure_host_allowed()`（那是給「使用者輸入的目標網址」用的
+SSRF 防護，這裡的威脅模型不同）。真正的風險改用：zone_id 格式白名單
+（32 字元十六進位）、zone_name 一致性驗證（避免操作到錯誤網域）、
+API response 大小上限、token 洩漏防護。
+
+### 測試
+
+新增 84 個測試（`test_cloudflare_connector.py` 26 個、
+`test_cloudflare_safety.py` 16 個、`test_cloudflare_cli.py` 4 個、
+`test_friendly_errors.py` 新增 3 個），全專案 681 個測試通過，ruff 乾淨。
+
 ## [0.2.7] - Unreleased
 
 **Security Mode 擴充：惡意重導判斷（referrer-based redirect）+ CMS CVE

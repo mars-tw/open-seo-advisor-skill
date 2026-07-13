@@ -132,3 +132,21 @@ def test_redact_secrets_removes_ssh_url_userinfo():
     redacted = redact_secrets("ssh://deploy:hunter2@example.com/var/www")
     assert "hunter2" not in redacted
     assert "deploy" not in redacted
+
+
+def test_redact_secrets_removes_bearer_token():
+    redacted = redact_secrets("Authorization: Bearer super-secret-token-value")
+    assert "super-secret-token-value" not in redacted
+
+
+def test_redact_secrets_removes_env_var_style_api_token():
+    """CLOUDFLARE_API_TOKEN=xxx 這種環境變數賦值格式：既有 _TOKEN_RE 的
+    \\b word boundary 在底線前不成立，TOKEN 前面接底線時完全匹配不到，
+    需要獨立的規則涵蓋。"""
+    redacted = redact_secrets("CLOUDFLARE_API_TOKEN=cfut_abc123secretvalue")
+    assert "cfut_abc123secretvalue" not in redacted
+
+
+def test_redact_secrets_removes_env_var_style_generic_token():
+    redacted = redact_secrets("MY_SERVICE_TOKEN=another-secret-value")
+    assert "another-secret-value" not in redacted

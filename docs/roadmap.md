@@ -157,8 +157,10 @@
 
 ## v0.3.0
 
-- [ ] `CloudflareConnector`：讀取 DNS/redirect/cache 規則，寫入需
-      明確授權（redirect rules、cache rules、Pages 部署）。
+- [x] **v0.3.0** `CloudflareConnector`：唯讀盤點 DNS/redirect/cache
+      設定，選配寫入只開放 redirect rule 新增（安全子集限制 + 二次確認
+      + 樂觀鎖 hash 比對）。cache rule 寫入、Pages 部署留待後續版本。
+      CLI 只接了唯讀盤點（`seo-advisor cloudflare audit`）。
 - [ ] `CPanelConnector`（有限度部署能力）。
 - [ ] IndexNow 發布整合（內容更新後主動通知支援的搜尋引擎）。
 - [ ] hreflang / 多語 sitemap 產生器（Engineer Mode 擴充）。
