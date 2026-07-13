@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.3.0
+version: 0.3.1
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,14 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.3.0）
+## 目前實作狀態（v0.3.1）
 
+- ✅ **CPanelConnector 正式上線（v0.3.1）**：透過 cPanel UAPI Fileman
+  讀寫網站靜態檔案（`seo-advisor audit consultant --source cpanel`），
+  不做 DNS/Email/Cron/Database/SSL 等帳戶層級設定。只支援 API Token
+  認證；遠端路徑用 component-wise walk（逐層列目錄比對 type）防 symlink
+  jail escape，與 SSHConnector 共用讀取白名單/denylist；寫入只允許
+  `.html`/`.htm`/`.txt`/`.xml` 極窄範圍。
 - ✅ **CloudflareConnector 正式上線（v0.3.0）**：唯讀盤點 DNS/redirect/
   cache 設定（`seo-advisor cloudflare audit --zone-id <id>`），選配寫入
   能力只開放 redirect rule 新增（安全子集限制 + 二次確認字串 + 樂觀鎖

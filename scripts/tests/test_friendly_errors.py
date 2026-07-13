@@ -150,3 +150,9 @@ def test_redact_secrets_removes_env_var_style_api_token():
 def test_redact_secrets_removes_env_var_style_generic_token():
     redacted = redact_secrets("MY_SERVICE_TOKEN=another-secret-value")
     assert "another-secret-value" not in redacted
+
+
+def test_redact_secrets_removes_cpanel_auth_header():
+    redacted = redact_secrets("Authorization: cpanel myuser:super-secret-token-value")
+    assert "super-secret-token-value" not in redacted
+    assert "myuser" not in redacted

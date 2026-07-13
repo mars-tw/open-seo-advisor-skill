@@ -111,7 +111,8 @@ def demo(
 def audit_consultant(
     url: str = typer.Option(None, "--url", help="要檢查的網站 URL（與 --source 擇一，可省略 https://）"),
     source: str = typer.Option(
-        None, "--source", help="本地原始碼包或目錄路徑，或填 'ssh' 搭配 --ssh-* 參數（與 --url 擇一）"
+        None, "--source",
+        help="本地原始碼包或目錄路徑，或填 'ssh'/'cpanel' 搭配對應 --ssh-*/--cpanel-* 參數（與 --url 擇一）",
     ),
     out: str = typer.Option("./report", "--out", help="報告輸出目錄"),
     max_urls: int = typer.Option(200, "--max-urls", help="最多爬取的 URL 數量"),
@@ -127,8 +128,18 @@ def audit_consultant(
     ssh_confirm: str = typer.Option(
         None, "--ssh-confirm", help="[--source ssh] 連線確認字串，格式為 'CONNECT <host>:<port>'"
     ),
+    cpanel_host: str = typer.Option(None, "--cpanel-host", help="[--source cpanel] cPanel 主機名稱"),
+    cpanel_port: int = typer.Option(2083, "--cpanel-port", help="[--source cpanel] cPanel UAPI 連接埠"),
+    cpanel_user: str = typer.Option(None, "--cpanel-user", help="[--source cpanel] cPanel 使用者名稱"),
+    cpanel_remote_root: str = typer.Option(
+        "public_html", "--cpanel-remote-root", help="[--source cpanel] 遠端網站根目錄（預設 public_html）"
+    ),
+    cpanel_confirm: str = typer.Option(
+        None, "--cpanel-confirm", help="[--source cpanel] 連線確認字串，格式為 'CONNECT CPANEL <host>:<port>'"
+    ),
     allow_private_network: bool = typer.Option(
-        False, "--allow-private-network", help="[--source ssh] 允許連線到私有網段/本機（例如內網伺服器）"
+        False, "--allow-private-network",
+        help="[--source ssh/cpanel] 允許連線到私有網段/本機（例如內網伺服器）",
     ),
     debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
 ) -> None:
@@ -137,6 +148,7 @@ def audit_consultant(
     ensure_implemented(Mode.CONSULTANT)
 
     is_ssh_source = source == "ssh"
+    is_cpanel_source = source == "cpanel"
 
     if not url and not source:
         console.print("[red]錯誤：必須提供 --url 或 --source 其中之一。[/red]")
@@ -168,6 +180,27 @@ def audit_consultant(
             allow_private_network=allow_private_network,
         )
 
+    cpanel_options = None
+    if is_cpanel_source:
+        from seo_advisor.scan_runner import CPanelSourceOptions
+
+        missing = CPanelSourceOptions.missing_required_fields(
+            host=cpanel_host, username=cpanel_user, remote_root=cpanel_remote_root,
+            confirm_connect=cpanel_confirm,
+        )
+        if missing:
+            console.print(f"[red]錯誤：--source cpanel 需要同時提供：{', '.join(missing)}[/red]")
+            raise typer.Exit(code=1)
+
+        cpanel_options = CPanelSourceOptions(
+            host=cpanel_host,
+            username=cpanel_user,
+            remote_root=cpanel_remote_root,
+            confirm_connect=cpanel_confirm,
+            port=cpanel_port,
+            allow_private_network=allow_private_network,
+        )
+
     _run_scan(
         lambda progress: run_consultant_scan(
             url=url,
@@ -177,6 +210,7 @@ def audit_consultant(
             max_depth=max_depth,
             on_progress=progress,
             ssh_options=ssh_options,
+            cpanel_options=cpanel_options,
         ),
         debug=debug,
     )

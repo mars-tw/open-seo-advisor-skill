@@ -15,6 +15,7 @@ from typing import Callable
 from seo_advisor.analyzers.technical import analyze_technical_seo
 from seo_advisor.beginner_report import render_beginner_markdown
 from seo_advisor.connectors.base import WebsiteConnector
+from seo_advisor.connectors.cpanel import CPanelConnector
 from seo_advisor.connectors.http import HTTPConnector
 from seo_advisor.connectors.local_archive import LocalArchiveConnector
 from seo_advisor.connectors.ssh import SSHConnector
@@ -60,6 +61,34 @@ class SSHSourceOptions:
             missing.append("--ssh-confirm")
         return missing
 
+
+@dataclass
+class CPanelSourceOptions:
+    """`audit consultant --source cpanel` 需要的連線參數。"""
+
+    host: str
+    username: str
+    remote_root: str
+    confirm_connect: str
+    port: int = 2083
+    allow_private_network: bool = False
+
+    @staticmethod
+    def missing_required_fields(
+        *, host: str | None, username: str | None, remote_root: str | None, confirm_connect: str | None
+    ) -> list[str]:
+        missing = []
+        if not host:
+            missing.append("--cpanel-host")
+        if not username:
+            missing.append("--cpanel-user")
+        if not remote_root:
+            missing.append("--cpanel-remote-root")
+        if not confirm_connect:
+            missing.append("--cpanel-confirm")
+        return missing
+
+
 ProgressCallback = Callable[[str], None]
 
 _COVERAGE_NOTES = [
@@ -100,22 +129,30 @@ def run_consultant_scan(
     timeout_seconds: float = 15.0,
     on_progress: ProgressCallback = _noop,
     ssh_options: SSHSourceOptions | None = None,
+    cpanel_options: CPanelSourceOptions | None = None,
 ) -> ScanOutcome:
     """執行 Consultant Mode 掃描並寫出三份報告（beginner/技術版/JSON）。
 
-    url、source、ssh_options 三者恰好需提供一個（source="ssh" 搭配
-    ssh_options 視為第三種來源）；url 會先經過 normalize_url() 正規化，
+    url、source（本地路徑）、source="ssh"+ssh_options、source="cpanel"+
+    cpanel_options 四者恰好需提供一個；url 會先經過 normalize_url() 正規化，
     因此呼叫端不需要自己處理「使用者忘記打 https://」的情況。
     """
     is_ssh = source == "ssh"
+    is_cpanel = source == "cpanel"
     if ssh_options is not None and not is_ssh:
         raise ValueError("提供 ssh_options 時 source 必須是 'ssh'。")
     if is_ssh and ssh_options is None:
         raise ValueError("source='ssh' 時必須提供 ssh_options。")
+    if cpanel_options is not None and not is_cpanel:
+        raise ValueError("提供 cpanel_options 時 source 必須是 'cpanel'。")
+    if is_cpanel and cpanel_options is None:
+        raise ValueError("source='cpanel' 時必須提供 cpanel_options。")
 
-    provided_count = sum([bool(url), bool(source) and not is_ssh, is_ssh])
+    provided_count = sum([bool(url), bool(source) and not is_ssh and not is_cpanel, is_ssh, is_cpanel])
     if provided_count != 1:
-        raise ValueError("必須提供 url、source（本地路徑）或 source='ssh' 三者恰好其中之一。")
+        raise ValueError(
+            "必須提供 url、source（本地路徑）、source='ssh' 或 source='cpanel' 四者恰好其中之一。"
+        )
 
     generated_at = _now_iso()
     connector: WebsiteConnector
@@ -148,6 +185,30 @@ def run_consultant_scan(
         target = ReportTarget(
             source_type="ssh",
             identifier=f"ssh:{ssh_options.user}@{ssh_options.host}:{ssh_options.remote_root}",
+        )
+        seed = "/"
+    elif is_cpanel:
+        assert cpanel_options is not None  # 上面已驗證，這裡讓型別檢查器安心
+        on_progress(
+            f"準備掃描 cPanel 網站：{cpanel_options.username}@{cpanel_options.host}:"
+            f"{cpanel_options.remote_root}"
+        )
+        connector = CPanelConnector(
+            cpanel_options.host,
+            username=cpanel_options.username,
+            remote_root=cpanel_options.remote_root,
+            port=cpanel_options.port,
+            confirm_connect=cpanel_options.confirm_connect,
+            allow_private_network=cpanel_options.allow_private_network,
+            timeout_seconds=timeout_seconds,
+            policy=SafetyPolicy(
+                allowed_capabilities={"read_files", "read_urls"},
+                allow_private_network=cpanel_options.allow_private_network,
+            ),
+        )
+        target = ReportTarget(
+            source_type="cpanel",
+            identifier=f"cpanel:{cpanel_options.username}@{cpanel_options.host}:{cpanel_options.remote_root}",
         )
         seed = "/"
     else:

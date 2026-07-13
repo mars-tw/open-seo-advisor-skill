@@ -70,7 +70,7 @@ v0.1.0 只要求實作 `id()`、`capabilities()`、`probe()`、`list_urls()`、
 | `GitRepoConnector` | v0.2.2 已實作 | `read_files`, `write_files`（走 branch+commit） | 繼承 `LocalArchiveConnector`，操作本機已存在的 git repo，產出可開 PR 的分支+commit；不涉及遠端連線 |
 | `WordPressAPIConnector` | v0.2.4 已實作（MVP：唯讀） | `read_urls` | 透過 REST API 盤點 posts/pages + 無認證公開頁面 fetch；只支援 Application Password（可選匿名唯讀）；REST 回傳的 `link` 視為 attacker-controlled，經 scope allowlist 過濾；`write_files`（未來改用獨立的 `write_content` capability）刻意未做 |
 | `CloudflareConnector` | v0.3.0 已實作（MVP：唯讀為主） | `read_cloudflare_config`, 選配 `deploy_cloudflare_rules` | 讀取/修改 CDN 層設定（DNS/redirect/cache rules），不是網站內容爬蟲，`list_urls`/`fetch_url` 明確 override 拋 `ConnectorCapabilityError`；只支援 API Token 認證；寫入只開放 redirect rule 新增，要求二次確認字串（`APPLY CLOUDFLARE <zone> <patch_id>`）+ 樂觀鎖 hash 比對避免覆蓋他人變更；cache rule 寫入/Pages 部署刻意未做，`seo-advisor cloudflare audit` 只接了唯讀盤點 |
-| `CPanelConnector` | v0.3.0 規劃 | `read_files`, 選配 `write_files` | 有限度的部署能力 |
+| `CPanelConnector` | v0.3.0 已實作（MVP：唯讀為主，已接進 CLI） | `read_files`, `read_urls`, 選配 `write_files` | 透過 cPanel UAPI Fileman 讀寫網站靜態檔案，不做 DNS/Email/Cron/Database/SSL 等帳戶層級設定；只支援 API Token 認證；cPanel host 是使用者輸入的，走 `ensure_host_allowed()` SSRF 防護；遠端路徑用 component-wise walk（逐層 list_dir 比對 type）防 symlink jail escape，與 SSHConnector 共用讀取白名單/denylist（`security/remote_file_policy.py`）；寫入只允許 `.html`/`.htm`/`.txt`/`.xml` 極窄範圍，明確拒絕 `.php`/`.htaccess`/`web.config` 等；`seo-advisor audit consultant --source cpanel` 已接進 CLI（唯讀） |
 
 ## SafetyPolicy：把資安原則變成程式碼約束
 

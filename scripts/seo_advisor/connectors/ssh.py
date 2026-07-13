@@ -45,7 +45,6 @@
 
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 from collections import deque
 from pathlib import Path
@@ -61,6 +60,11 @@ from seo_advisor.models import (
     UrlRecord,
 )
 from seo_advisor.security.network_policy import is_cloud_metadata_host, is_private_or_blocked_host
+# 讀取白名單/denylist 抽到 security/remote_file_policy.py 共用模組（原本
+# 只在這裡定義，CPanelConnector 落地時發現同一套規則會被需要，避免兩份
+# 定義各自漂移）。這裡保留原本的公開名稱 re-export，維持既有呼叫端相容。
+from seo_advisor.security.remote_file_policy import ALLOWED_READ_EXTENSIONS  # noqa: F401 - re-export
+from seo_advisor.security.remote_file_policy import is_read_target_allowed as _is_read_target_allowed
 from seo_advisor.security.ssh_log_safety import (
     resolve_log_path,
     tail_log_content,
@@ -77,31 +81,6 @@ try:
     import paramiko
 except ImportError:  # pragma: no cover - 在沒安裝 optional extra 的環境才會走到
     paramiko = None
-
-# 讀取白名單：只涵蓋 SEO 診斷真正需要的靜態資產，刻意不含 .conf/.log/.ini/
-# .yml/.env 等常見夾帶憑證/內部設定的格式（NORA×Grok 審查定案收緊後的範圍）。
-ALLOWED_READ_EXTENSIONS = frozenset({".html", ".htm", ".xml", ".txt", ".json", ".css"})
-
-# 即使副檔名在白名單內，這些 basename（不分大小寫、不含副檔名比對 stem）
-# 一律拒絕讀取，因為這類檔名習慣性地存放憑證/機密設定，寧可誤擋也不誤放。
-# 這份清單經過 NORA×Grok 兩輪交叉審查補充；刻意不加入過於寬泛的字詞
-# （例如單獨的 "security"，會誤擋合法的 security.txt）。
-_DENYLIST_STEMS = frozenset({
-    "config", "settings", "secrets", "secret", "credential", "credentials",
-    "token", "key", "private", "password", "passwd", "id_rsa", "id_ed25519",
-    "id_ecdsa", "id_dsa", "authorized_keys", "known_hosts",
-    ".npmrc", ".pypirc", ".netrc",
-    "auth", "oauth", "jwt", "session", "cookie", "apikey", "api_key", "api-key",
-    "access_key", "access-key", "private_key", "client_secret", "client-secret",
-    "serviceaccount", "service_account", "service-account", "firebase-adminsdk",
-    "connectionstrings", "connection-strings", "database", "db",
-    "local.settings", "composer-auth", "wp-config",
-})
-_DENYLIST_PATTERNS = (
-    ".env*", "*secret*", "*credential*", "*password*", "*token*",
-    "service-account*.json", "google-services.json", "firebase*.json",
-    "appsettings*.json", "credentials.json", "secrets.json",
-)
 
 # 單一檔案讀取大小上限，避免超大檔案吃爆記憶體或造成過長的連線佔用。
 _MAX_READ_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -160,22 +139,6 @@ def _reject_unsafe_fetch_url(url: str) -> str | None:
         return f"{url!r} 含有帳號密碼資訊，已拒絕。"
 
     return None
-
-
-def _is_read_target_allowed(path: str) -> bool:
-    """檢查路徑是否符合讀取白名單/denylist。副檔名需在允許清單內，且
-    basename 的 stem 不得落在敏感檔名 denylist 或 pattern denylist 裡。
-    """
-    basename = path.rsplit("/", 1)[-1].lower()
-    stem = basename.split(".", 1)[0] if "." in basename else basename
-
-    if stem in _DENYLIST_STEMS:
-        return False
-    if any(fnmatch.fnmatch(basename, pattern) for pattern in _DENYLIST_PATTERNS):
-        return False
-
-    suffix = "." + basename.rsplit(".", 1)[-1] if "." in basename else ""
-    return suffix in ALLOWED_READ_EXTENSIONS
 
 
 class SSHConnector(WebsiteConnector):

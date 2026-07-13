@@ -2,6 +2,67 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.3.1] - Unreleased
+
+**`CPanelConnector` 正式上線**（`docs/roadmap.md` v0.3.0 第二批）：透過
+cPanel UAPI Fileman 讀寫網站靜態檔案，選配寫入能力只開放極窄的靜態
+SEO 資產。
+
+### 定位與認證
+
+- 聚焦「透過 cPanel 讀寫網站檔案」，不做帳戶層級設定管理（DNS/Email/
+  Cron/Database/SSL/PHP 設定一律不做）。
+- 只支援 cPanel API Token 認證（不支援帳密），只支援 UAPI（不支援較舊
+  的 API2）。
+- cPanel host 是使用者輸入的（不像 CloudflareConnector 的 API host 是
+  寫死的官方端點），因此走 `ensure_host_allowed()` SSRF 防護，威脅模型
+  跟 SSHConnector/WordPressAPIConnector 一致。
+
+### Component-wise path walk（cPanel 版）
+
+- cPanel UAPI 沒有 SFTP `lstat()` 的對應操作，改用「逐層呼叫
+  `list_files` 列出目前目錄、比對下一個路徑分量的 type」達成同樣的安全
+  目的：每一步都看到「這一步本身」的真實類型，不能被中途 follow 過去。
+- 新增 `MAX_DIR_ENTRIES`（5000）上限：component-wise walk 每一層都要
+  下載該層目錄的完整內容，若某層目錄項目數異常龐大會造成資源耗盡風險。
+
+### 重構：讀取白名單/denylist 抽成共用模組
+
+- 新增 `security/remote_file_policy.py`，把原本寫死在 SSHConnector 內
+  的讀取白名單/敏感檔名 denylist 抽出，讓 SSHConnector 與
+  CPanelConnector 共用同一套規則，避免兩份定義各自漂移。SSHConnector
+  改為從共用模組 import 並保留原本的公開名稱 re-export，維持既有呼叫端
+  相容；完整回歸測試（731 個測試）確認這個重構沒有改變任何既有行為。
+
+### 選配寫入：極窄的靜態 SEO 資產
+
+- 只允許 `.html`/`.htm`/`.txt`/`.xml`，明確拒絕 `.php`/`.htaccess`/
+  `web.config`/`.user.ini`/`wp-config.php` 等，單檔大小上限 2 MiB。
+- `Fileman::save_file_content` 不保證 POSIX atomic write，這是已知的
+  正確性層面殘餘（不是安全層面問題），已在 docstring 註記。
+- `backup()`：把即將修改的檔案內容備份到本機（不是遠端）
+  `~/.seo-advisor/cpanel-backups/<host-slug>/`，host 目錄名用「安全字元
+  子集 + hash」組合，避免特殊字元或大小寫碰撞問題。
+
+### CLI
+
+- `audit consultant` 新增 `--source cpanel` + `--cpanel-host`/
+  `--cpanel-port`/`--cpanel-user`/`--cpanel-remote-root`（預設
+  `public_html`）/`--cpanel-confirm`，共用既有的 `--allow-private-network`
+  參數。
+
+### 落地過程的一個把關案例
+
+NORA 落地後複審時建議調整建構子的檢查順序（metadata/private 網段檢查
+搶在確認字串驗證之前），但這跟 SSHConnector 既有定案（Grok 三輪辯論明確
+要求確認字串驗證必須在任何網路操作之前完成，包含 DNS 解析）矛盾。核對
+SSHConnector 原始碼與 docstring 後回饋給 NORA，NORA 確認自己的建議有誤
+並撤回，CPanelConnector 維持與 SSHConnector 一致的檢查順序。
+
+### 測試
+
+新增約 78 個測試，全專案 733 個測試通過，ruff 乾淨。
+
 ## [0.3.0] - Unreleased
 
 **`CloudflareConnector` 正式上線**（`docs/roadmap.md` v0.3.0 第一批）：

@@ -4,7 +4,12 @@ import httpx
 import pytest
 import respx
 
-from seo_advisor.scan_runner import SSHSourceOptions, SiteUnreachableError, run_consultant_scan
+from seo_advisor.scan_runner import (
+    CPanelSourceOptions,
+    SSHSourceOptions,
+    SiteUnreachableError,
+    run_consultant_scan,
+)
 
 
 @respx.mock
@@ -126,3 +131,56 @@ def test_ssh_source_builds_connector_with_ssh_options(mock_ssh_connector_class, 
     assert call_kwargs["user"] == "deploy"
     assert call_kwargs["remote_root"] == "/var/www/site"
     assert call_kwargs["confirm_connect"] == "CONNECT example.com:22"
+
+
+# --- source="cpanel" 三/四選一互斥邏輯與 CPanelConnector 建構參數傳遞 ---
+
+
+def test_source_cpanel_without_cpanel_options_raises(tmp_path):
+    with pytest.raises(ValueError, match="cpanel_options"):
+        run_consultant_scan(url=None, source="cpanel", out_dir=str(tmp_path / "report"))
+
+
+def test_url_and_cpanel_options_together_raises(tmp_path):
+    cpanel_options = CPanelSourceOptions(
+        host="example.com", username="deploy", remote_root="public_html",
+        confirm_connect="CONNECT CPANEL example.com:2083",
+    )
+    with pytest.raises(ValueError, match="source"):
+        run_consultant_scan(
+            url="https://example.com", source=None, out_dir=str(tmp_path / "report"),
+            cpanel_options=cpanel_options,
+        )
+
+
+@patch("seo_advisor.scan_runner.CPanelConnector")
+def test_cpanel_source_builds_connector_with_cpanel_options(mock_cpanel_connector_class, tmp_path):
+    from seo_advisor.models import ConnectorProfile, PageSnapshot, UrlRecord
+
+    mock_connector = MagicMock()
+    mock_connector.probe.return_value = ConnectorProfile(
+        source_type="cpanel", detected_stack=None, notes=["已連線"]
+    )
+    mock_connector.list_urls.return_value = [
+        UrlRecord(url="/index.html", source="crawl", discovered_depth=0)
+    ]
+    mock_connector.fetch_url.return_value = PageSnapshot(
+        url="/index.html", status_code=200, final_url="/index.html",
+        html="<html><title>Home</title></html>", fetched_at="",
+    )
+    mock_cpanel_connector_class.return_value = mock_connector
+
+    cpanel_options = CPanelSourceOptions(
+        host="example.com", username="deploy", remote_root="public_html",
+        confirm_connect="CONNECT CPANEL example.com:2083",
+    )
+    outcome = run_consultant_scan(
+        url=None, source="cpanel", out_dir=str(tmp_path / "report"), cpanel_options=cpanel_options
+    )
+
+    assert outcome.report is not None
+    mock_cpanel_connector_class.assert_called_once()
+    call_kwargs = mock_cpanel_connector_class.call_args.kwargs
+    assert call_kwargs["username"] == "deploy"
+    assert call_kwargs["remote_root"] == "public_html"
+    assert call_kwargs["confirm_connect"] == "CONNECT CPANEL example.com:2083"

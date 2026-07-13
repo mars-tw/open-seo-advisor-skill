@@ -161,7 +161,13 @@
       設定，選配寫入只開放 redirect rule 新增（安全子集限制 + 二次確認
       + 樂觀鎖 hash 比對）。cache rule 寫入、Pages 部署留待後續版本。
       CLI 只接了唯讀盤點（`seo-advisor cloudflare audit`）。
-- [ ] `CPanelConnector`（有限度部署能力）。
+- [x] **v0.3.1** `CPanelConnector`：透過 cPanel UAPI Fileman 讀寫網站
+      靜態檔案，component-wise walk 防 symlink（逐層 list_files 比對
+      type，因 UAPI 無 lstat 對應操作），與 SSHConnector 共用讀取白名單/
+      denylist（抽成 `security/remote_file_policy.py` 共用模組）。寫入
+      只允許 `.html`/`.htm`/`.txt`/`.xml`，不做 DNS/Email/Cron/Database/
+      SSL 等帳戶層級設定。CLI 已接進 `seo-advisor audit consultant
+      --source cpanel`（唯讀）。
 - [ ] IndexNow 發布整合（內容更新後主動通知支援的搜尋引擎）。
 - [ ] hreflang / 多語 sitemap 產生器（Engineer Mode 擴充）。
 - [ ] Report HTML/PDF 渲染（在 Markdown/JSON 基礎上新增可視化圖表：
