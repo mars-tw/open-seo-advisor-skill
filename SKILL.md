@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.3.4
+version: 0.3.5
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,15 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.3.4）
+## 目前實作狀態（v0.3.5）
 
+- ✅ **Plugin Dev Mode：`schema-generator` 正式上線（v0.3.5）**：
+  `seo-advisor plugin dev --cms wordpress --feature schema-generator`
+  產生一份可用的 WordPress 外掛 scaffold（Organization/WebSite/
+  Article JSON-LD 產生器，含後台設定頁），純本機檔案產出，不做任何
+  遠端安裝/部署。`indexnow-notifier`/`internal-linking` 仍是規劃中。
+  落地過程發現並修正一個 PHP docblock 逃逸注入漏洞（外掛描述等欄位
+  若含 `*/` 可提前結束註解區塊、注入可執行程式碼），已加上驗證拒絕。
 - ✅ **Report HTML/PDF 渲染正式上線（v0.3.4）**：Consultant Mode 現在會
   多產出一份 `report.html`，內含 Impact x Effort matrix、URL 狀態分布、
   hreflang 矩陣三種純 SVG/HTML table 圖表（不引入 matplotlib 等繪圖

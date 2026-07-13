@@ -278,19 +278,48 @@ metadata、schema、內部連結建議。
 
 ## Plugin Dev Mode
 
-**狀態：v0.3.0 規劃中，本版本先提供介面與 prompt 模板。**
+**狀態：v0.3.5 起 `schema-generator` 已實作（真的產生可用的 PHP
+scaffold）；`indexnow-notifier`/`internal-linking` 仍是規劃中，只有
+prompt 模板可用。**
 
 ### 目標與適用情境
 
-為 WordPress 等 CMS 開發 SEO 外掛或模組，例如結構化資料產生器、
-內部連結建議工具、IndexNow 自動通知、hreflang 管理器。
+為 WordPress 等 CMS 開發 SEO 外掛或模組。目前唯一已實作的 feature 是
+`schema-generator`：產生一個會在前台輸出 Organization/WebSite/Article
+JSON-LD 結構化資料的完整 WordPress 外掛（含後台設定頁）。
 
-### 觸發方式
+`internal-linking`（內部連結建議工具）、`indexnow-notifier`（IndexNow
+自動通知模組）尚未實作，仍只有 `prompts/plugin_dev.md` 的規劃導向
+prompt 模板可用（輸出 PRD/File Tree/Security Checklist 等文件，不產生
+真正的程式碼）。
 
-- CLI：`seo-advisor plugin dev --cms wordpress --feature schema-generator`
-- 自然語言：「幫我規劃一個 WordPress SEO schema 外掛」
+### 觸發方式（schema-generator，已實作）
 
-### 工作步驟
+```bash
+seo-advisor plugin dev \
+  --cms wordpress \
+  --feature schema-generator \
+  --name "Open SEO Schema Helper" \
+  --slug open-seo-schema-helper \
+  --out ./plugin-dev
+```
+
+只支援 `--feature schema-generator`；其餘 feature 名稱會被拒絕（尚未
+實作）。
+
+輸出：`<out>/<slug>/` 目錄（完整可審閱的 PHP scaffold）+ 選配的
+`<out>/<slug>.zip` 打包（`--no-zip` 可關閉）。純本機檔案產出，**不會**
+自動安裝、啟用或部署到任何 WordPress 站台——請先在 staging/測試站台
+安裝並完整測試，確認無誤後才部署到正式環境。
+
+安全設計：`plugin_name`/`description`/`author`/`version`/`license`
+這些欄位會被插入 PHP 檔案的 docblock 註解，一律驗證不含
+`*/`/`<?php`/`<?=`/`?>`/換行符號，避免 docblock 逃逸注入；slug 嚴格
+限制格式（小寫英數字與連字號）；產生的 PHP 遵循 capability check +
+nonce + sanitize/escape + `wp_json_encode()` 等 WordPress 標準安全
+慣例；輸出目錄已存在且非空時預設拒絕覆蓋，需要 `--force`。
+
+### 工作步驟（規劃中 feature 仍適用此流程）
 
 1. 定義外掛需求與目標 CMS 版本。
 2. 選擇架構：PHP plugin、admin UI、REST endpoints、WP-CLI command、
@@ -301,7 +330,7 @@ metadata、schema、內部連結建議。
 5. 實作功能、撰寫測試（PHPUnit、WordPress Coding Standards）。
 6. 打包：`readme.txt`、版本號、changelog、license、release zip。
 
-### 輸出格式
+### 輸出格式（規劃中 feature，純規劃導向）
 
 Plugin PRD / File Tree / Security Checklist / API Routes /
 Database Migration / Admin UI Spec / Test Plan / Release Plan。

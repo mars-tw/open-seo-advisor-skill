@@ -2,7 +2,65 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
-## [0.3.4] - Unreleased
+## [0.3.5] - Unreleased
+
+**Plugin Dev Mode 正式上線：`schema-generator`**（`docs/roadmap.md`
+v0.3.0 第六批，也是最後一批）：`seo-advisor plugin dev` 現在能真的
+產生一份可用的 WordPress 外掛 scaffold（不只是規劃文件），MVP 只做
+`schema-generator`（Organization/WebSite/Article JSON-LD 產生器），
+`indexnow-notifier`/`internal-linking` 留待後續版本。
+
+### 模組結構
+
+- `seo_advisor/plugins/models.py`：`PluginScaffoldRequest`（Pydantic
+  model）。slug 嚴格驗證格式（`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`，長度
+  3-64），衍生 PHP class 前綴/常數前綴/text domain。
+- `seo_advisor/plugins/templates/`：純函式模板（f-string 組字串，不
+  引入 Jinja2，符合專案精簡依賴慣例）——外掛主檔案、schema class（JSON-LD
+  輸出）、admin class（後台設定頁）、`readme.txt`、`uninstall.php`。
+- `seo_advisor/plugins/generator.py`：組裝模板寫出檔案、選配打包 zip。
+- `seo_advisor/plugins/cli.py`：`seo-advisor plugin dev --cms wordpress
+  --feature schema-generator --name ... --slug ... --out ...`。
+
+### 安全設計
+
+- **docblock 逃逸注入防護**（落地過程中自行發現的漏洞）：
+  `plugin_name`/`description`/`author`/`version`/`license` 這幾個欄位
+  最終會插入 PHP 檔案的 docblock 註解（`/** ... */`）。docblock 沒有
+  跳脫符號的概念，若輸入含有 `*/` 就能提前結束註解區塊，後接
+  `<?php system(...); ?>` 會變成可執行的注入程式碼。已新增
+  `validate_metadata_text()`，拒絕含有 `*/`、`<?php`、`<?=`、`?>`
+  （縱深防禦）、換行符號的輸入，並限制長度 200 字元。
+- 遵循 WordPress 外掛標準安全慣例：capability check
+  （`current_user_can('manage_options')`）在 nonce 驗證之前先擋一次、
+  `check_admin_referer()`/`wp_nonce_field()`、輸入
+  `sanitize_text_field()`/`esc_url_raw()`（`$_POST` 一律先
+  `wp_unslash()`）、輸出 `esc_html__()`/`esc_attr()`/`esc_textarea()`、
+  JSON-LD 輸出用 `wp_json_encode(..., JSON_UNESCAPED_SLASHES |
+  JSON_UNESCAPED_UNICODE)` 不手動拼接 JSON 字串、`uninstall.php` 有
+  `WP_UNINSTALL_PLUGIN` 常數守衛並清理全部 options、每個 PHP 檔案都有
+  `defined('ABSPATH') || exit;` 防直接存取。
+- `update_option()` 的 option name 一律是模板裡固定寫死的字串（不用
+  使用者輸入動態組 key），避免 option key injection。
+
+### 純本機檔案產出
+
+不做任何遠端安裝/部署/WordPress REST API 呼叫/`shell_exec`，只在
+`--out` 指定目錄下產生檔案。輸出目錄已存在且非空時預設拒絕覆蓋，需要
+`--force`。zip 打包用相對路徑（`<slug>/<relative_path>`），不含 `..`
+或絕對路徑，避免 zip slip。IndexNow 若要進 WordPress 外掛，必須用 PHP
+重新實作精簡通知邏輯（不可能呼叫 Python 的 `run_submission()`，也不做
+`shell_exec` 橋接呼叫本機 CLI）——這個判斷已確認，但這輪 MVP 不含這個
+feature。
+
+### 測試
+
+新增 51 個測試（`models` 29 + `generator` 13 + CLI 整合 9），全專案
+921+ 個測試通過，ruff 乾淨。因為執行環境沒有 PHP CLI，無法跑 `php -l`
+語法檢查，改用結構性驗證（括號配對、`<?php` 開頭、`ABSPATH` 守衛存在性、
+關鍵安全函式呼叫存在性）確保產出正確性。
+
+## [0.3.4] - 2026-07-13
 
 **Report HTML/PDF 渲染正式上線**（`docs/roadmap.md` v0.3.0 第五批）：
 在既有 Markdown/JSON 報告基礎上，新增 `report.html` 視覺化報告，內含

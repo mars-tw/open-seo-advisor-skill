@@ -192,8 +192,15 @@
       （內建 `@media print` CSS），不引入 weasyprint/playwright 等新
       依賴。所有動態內容 `html.escape()` 跳脫，不提供可點擊連結，
       `finding.evidence` 不渲染到 HTML。
-- [ ] Plugin Dev Mode：WordPress 外掛 scaffold 產生器（schema 產生器、
-      內部連結建議工具、IndexNow 自動通知模組）。
+- [x] **v0.3.5** Plugin Dev Mode：WordPress 外掛 scaffold 產生器，MVP
+      只做 `schema-generator`（Organization/WebSite/Article JSON-LD
+      產生器，`seo-advisor plugin dev --cms wordpress --feature
+      schema-generator`）。純本機檔案產出，不做任何遠端安裝/部署。
+      落地過程發現並修正 PHP docblock 逃逸注入漏洞（外掛描述等 metadata
+      欄位若含 `*/` 可提前結束 PHP docblock 註解、注入可執行程式碼）。
+      內部連結建議工具、IndexNow 自動通知模組（`indexnow-notifier`）
+      留待後續版本——IndexNow 若要進 WordPress 外掛必須用 PHP 重新
+      實作精簡通知邏輯，不可能呼叫既有 Python `run_submission()`。
 
 ## v1.0.0
 
