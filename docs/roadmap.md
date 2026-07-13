@@ -168,7 +168,13 @@
       只允許 `.html`/`.htm`/`.txt`/`.xml`，不做 DNS/Email/Cron/Database/
       SSL 等帳戶層級設定。CLI 已接進 `seo-advisor audit consultant
       --source cpanel`（唯讀）。
-- [ ] IndexNow 發布整合（內容更新後主動通知支援的搜尋引擎）。
+- [x] **v0.3.2** IndexNow 發布整合：內容更新後主動通知 Bing/Yandex 等
+      支援 IndexNow 協定的搜尋引擎（`seo-advisor indexnow submit`）。
+      獨立 CLI 指令，預設 dry-run（本地 key 格式/URL scope 驗證，不發出
+      任何網路請求），真的送出需要 `--send --confirm`。`--key-location`
+      是使用者輸入的網址，套用 `ensure_host_allowed()` SSRF 防護並用
+      streaming 讀取限制在 4KB 上限內（超量直接判定失敗，不對截斷內容
+      做前綴比對）。不接掛在 Engineer Mode fixer 套用流程之後自動觸發。
 - [ ] hreflang / 多語 sitemap 產生器（Engineer Mode 擴充）。
 - [ ] Report HTML/PDF 渲染（在 Markdown/JSON 基礎上新增可視化圖表：
       Impact x Effort matrix、URL 狀態分布、hreflang 矩陣）。

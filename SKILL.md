@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.3.1
+version: 0.3.2
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,16 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.3.1）
+## 目前實作狀態（v0.3.2）
 
+- ✅ **IndexNow 發布整合正式上線（v0.3.2）**：內容更新後主動通知
+  Bing/Yandex 等支援 IndexNow 協定的搜尋引擎（`seo-advisor indexnow
+  submit`），加速重新抓取。獨立 CLI 指令，預設 dry-run（只做 key 格式
+  與 URL scope 本地驗證，不發出任何網路請求），真的送出需要
+  `--send --confirm "SUBMIT INDEXNOW <host> <count>"`。`--key-location`
+  是使用者輸入的網址，套用 `ensure_host_allowed()` SSRF 防護並用
+  streaming 讀取限制在 4KB 上限內。不接掛在 Engineer Mode fixer 套用
+  流程之後自動觸發。
 - ✅ **CPanelConnector 正式上線（v0.3.1）**：透過 cPanel UAPI Fileman
   讀寫網站靜態檔案（`seo-advisor audit consultant --source cpanel`），
   不做 DNS/Email/Cron/Database/SSL 等帳戶層級設定。只支援 API Token
