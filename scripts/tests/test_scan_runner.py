@@ -63,6 +63,9 @@ def test_reachable_site_scans_normally(tmp_path):
     assert outcome.report.site_health_score >= 0
     assert outcome.technical_path.exists()
     assert outcome.json_path.exists()
+    assert outcome.html_path.exists()
+    distribution = outcome.report.scan_stats["status_code_distribution"]
+    assert set(distribution.keys()) == {"2xx", "3xx", "4xx", "5xx", "0"}  # 固定五桶，即使數量為 0 也要出現
 
 
 # --- 三選一互斥邏輯 ---

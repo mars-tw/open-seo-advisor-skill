@@ -1,7 +1,7 @@
 ---
 name: Open SEO Advisor
 slug: open-seo-advisor
-version: 0.3.3
+version: 0.3.4
 license: Apache-2.0
 description: >
   蒸餾多位資深 SEO 顧問方法論與 Google 官方標準，自動偵測網站全域 SEO 問題，
@@ -71,8 +71,14 @@ triggers:
 升級為需人工確認且只產計畫。免金鑰試玩：`seo-advisor matrix demo`。
 詳見 `docs/ai-matrix-os.md`。
 
-## 目前實作狀態（v0.3.3）
+## 目前實作狀態（v0.3.4）
 
+- ✅ **Report HTML/PDF 渲染正式上線（v0.3.4）**：Consultant Mode 現在會
+  多產出一份 `report.html`，內含 Impact x Effort matrix、URL 狀態分布、
+  hreflang 矩陣三種純 SVG/HTML table 圖表（不引入 matplotlib 等繪圖
+  套件）。所有動態內容一律 `html.escape()` 跳脫，不提供任何可點擊
+  連結，`finding.evidence` 不渲染到 HTML。這輪只做 HTML，PDF 靠瀏覽器
+  「列印為 PDF」（HTML 內建 `@media print` CSS），不引入新依賴。
 - ✅ **hreflang / 多語 sitemap 產生器正式上線（v0.3.3，Engineer Mode
   擴充）**：使用者提供完整語言對照表後，直接產生 HTML hreflang 標籤
   （`seo-advisor fix hreflang-html`）或 sitemap 的 xhtml:link hreflang

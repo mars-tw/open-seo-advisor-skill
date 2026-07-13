@@ -2,7 +2,59 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
-## [0.3.3] - Unreleased
+## [0.3.4] - Unreleased
+
+**Report HTML/PDF 渲染正式上線**（`docs/roadmap.md` v0.3.0 第五批）：
+在既有 Markdown/JSON 報告基礎上，新增 `report.html` 視覺化報告，內含
+Impact x Effort matrix、URL 狀態分布、hreflang 矩陣三種圖表。
+
+### 技術選型
+
+- 圖表用純 SVG（Python 手刻座標轉換 + f-string），不引入 matplotlib
+  等重量級繪圖套件，符合專案既有的精簡依賴慣例（`pyproject.toml`
+  只有 7 個核心依賴）。hreflang 矩陣改用 HTML table 而非 SVG（NORA
+  建議：table 的可讀性與可及性優於自製圖表）。
+- 這輪只做 HTML，不做 PDF：`report.html` 內建 `@media print` CSS，
+  使用者可透過瀏覽器「列印為 PDF」取得 PDF 版本，不引入 weasyprint/
+  playwright 之類的新依賴。
+- 所有動態內容（Finding 標題、recommendation、URL、hreflang 目標網址
+  等）一律用 Python 標準函式庫 `html.escape()` 跳脫；報告裡不做任何
+  `<a href>` 可點擊連結，URL 一律以純文字顯示，避免 `javascript:`
+  等 scheme 被注入的攻擊面；`finding.evidence` 完全不渲染到 HTML，
+  避免大型/非預期內容外洩或撐爆版面。
+
+### 資料擴充（純加法，向後相容）
+
+- `Report.scan_stats` 新增 `status_code_distribution`（固定 `2xx`/
+  `3xx`/`4xx`/`5xx`/`0` 五個桶，即使數量為 0 也會出現，讓 JSON/HTML
+  消費端不需要處理缺 key 的情況）與 `hreflang_matrix`（只有實際有
+  hreflang 宣告的頁面才會加這個 key）。
+- 新增 `analyzers/technical.py::extract_hreflang_matrix(result)`：
+  獨立的公開函式，回傳「頁面 x 語言」完整矩陣，跟既有 `_check_hreflang()`
+  共用同一份底層 parsing 邏輯（抽出 `_extract_page_hreflang_declarations()`），
+  避免兩處各自解析一次 HTML 造成邏輯漂移。刻意新增獨立函式而非修改
+  `analyze_technical_seo()` 的回傳型別，因為那是本模組對外的穩定介面。
+- `ScanOutcome` 新增必填欄位 `html_path`，`run_consultant_scan()` 固定
+  輸出第四份報告檔案（`report.html`），沒有額外 CLI flag 控制開關。
+
+### 落地過程的兩個 bug 修正
+
+1. 重構 `_check_hreflang()` 抽出共用矩陣 parsing 邏輯時，一度讓「重複
+   語言代碼」（`HREFLANG_DUPLICATE_LANGUAGE`）的偵測失效——矩陣是去重
+   後的 dict（同一語言代碼出現兩次只保留最後一個值），若直接拿它重新
+   統計次數會遺失重複資訊。已修正為對原始 tag 額外做一次獨立計數，
+   矩陣（給 HTML 報告）與重複偵測（給 Finding）使用不同粒度的資料。
+2. hreflang 矩陣表格的欄位排序（要求 `x-default` 固定排最後）第一版
+   寫成 `c != "x-default"` 排序 key，這是相反的邏輯（`x-default` 本身
+   求值為 `False`，Python 由小到大排序會讓它排最前面）。已修正為
+   `c == "x-default"`，並補測試鎖住。
+
+### 測試
+
+新增 27 個測試（`report_html.py` 23 個 + hreflang matrix 相關 4 個），
+全專案 869+ 個測試通過，ruff 乾淨。
+
+## [0.3.3] - 2026-07-13
 
 **hreflang / 多語 sitemap 產生器正式上線**（`docs/roadmap.md` v0.3.0 第四批，
 Engineer Mode 擴充）：使用者提供完整的語言對照表後，直接產生 HTML

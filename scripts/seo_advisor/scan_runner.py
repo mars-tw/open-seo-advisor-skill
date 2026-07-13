@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from seo_advisor.analyzers.technical import analyze_technical_seo
+from seo_advisor.analyzers.technical import analyze_technical_seo, extract_hreflang_matrix
 from seo_advisor.beginner_report import render_beginner_markdown
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.connectors.cpanel import CPanelConnector
@@ -22,6 +22,7 @@ from seo_advisor.connectors.ssh import SSHConnector
 from seo_advisor.crawler import crawl_site
 from seo_advisor.models import Mode, Report, ReportTarget, SafetyPolicy
 from seo_advisor.report import build_report, render_json, render_markdown
+from seo_advisor.report_html import render_html
 from seo_advisor.url_utils import normalize_url
 
 
@@ -109,10 +110,32 @@ class ScanOutcome:
     beginner_path: Path
     technical_path: Path
     json_path: Path
+    html_path: Path
 
 
 def _now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _status_code_distribution(crawl_result) -> dict[str, int]:
+    """把爬取到的每個頁面狀態碼分類計數，key 用區間標籤（2xx/3xx/4xx/5xx）
+    而非逐一列出每個實際狀態碼，避免報告裡出現過多細碎分類；`0` 代表連線
+    失敗（`PageSnapshot.status_code == 0`，見 `models.py` 的既有慣例）。
+    """
+    distribution = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "0": 0}
+    for snapshot in crawl_result.pages.values():
+        code = snapshot.status_code
+        if code == 0:
+            distribution["0"] += 1
+        elif 200 <= code < 300:
+            distribution["2xx"] += 1
+        elif 300 <= code < 400:
+            distribution["3xx"] += 1
+        elif 400 <= code < 500:
+            distribution["4xx"] += 1
+        elif code >= 500:
+            distribution["5xx"] += 1
+    return distribution
 
 
 def _noop(_: str) -> None:
@@ -131,7 +154,7 @@ def run_consultant_scan(
     ssh_options: SSHSourceOptions | None = None,
     cpanel_options: CPanelSourceOptions | None = None,
 ) -> ScanOutcome:
-    """執行 Consultant Mode 掃描並寫出三份報告（beginner/技術版/JSON）。
+    """執行 Consultant Mode 掃描並寫出四份報告（beginner/技術版/JSON/HTML）。
 
     url、source（本地路徑）、source="ssh"+ssh_options、source="cpanel"+
     cpanel_options 四者恰好需提供一個；url 會先經過 normalize_url() 正規化，
@@ -241,6 +264,16 @@ def run_consultant_scan(
         findings = analyze_technical_seo(crawl_result, seed_url=seed)
         on_progress(f"發現 {len(findings)} 項需要留意的問題")
 
+        hreflang_matrix = extract_hreflang_matrix(crawl_result)
+        scan_stats = {
+            "urls_crawled": len(crawl_result.pages),
+            "urls_skipped": len(crawl_result.skipped_urls),
+            "detected_stack": profile.detected_stack,
+            "status_code_distribution": _status_code_distribution(crawl_result),
+        }
+        if hreflang_matrix:
+            scan_stats["hreflang_matrix"] = hreflang_matrix
+
         report = build_report(
             report_id=_derive_report_id(target),
             generated_at=generated_at,
@@ -248,11 +281,7 @@ def run_consultant_scan(
             mode=Mode.CONSULTANT,
             findings=findings,
             coverage_notes=coverage_notes,
-            scan_stats={
-                "urls_crawled": len(crawl_result.pages),
-                "urls_skipped": len(crawl_result.skipped_urls),
-                "detected_stack": profile.detected_stack,
-            },
+            scan_stats=scan_stats,
         )
     finally:
         connector.close()
@@ -264,16 +293,19 @@ def run_consultant_scan(
     beginner_path = out_path / "report-beginner.md"
     technical_path = out_path / "report.md"
     json_path = out_path / "report.json"
+    html_path = out_path / "report.html"
 
     beginner_path.write_text(render_beginner_markdown(report), encoding="utf-8")
     technical_path.write_text(render_markdown(report), encoding="utf-8")
     json_path.write_text(render_json(report), encoding="utf-8")
+    html_path.write_text(render_html(report), encoding="utf-8")
 
     return ScanOutcome(
         report=report,
         beginner_path=beginner_path,
         technical_path=technical_path,
         json_path=json_path,
+        html_path=html_path,
     )
 
 

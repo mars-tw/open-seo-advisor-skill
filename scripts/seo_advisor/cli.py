@@ -368,6 +368,7 @@ def _run_scan(scan_fn, *, debug: bool) -> None:
     console.print(f"給非技術人員看的懶人包：{outcome.beginner_path}")
     console.print(f"完整技術報告：{outcome.technical_path}")
     console.print(f"機器可讀資料：{outcome.json_path}")
+    console.print(f"視覺化報告（含圖表，可用瀏覽器開啟或列印為 PDF）：{outcome.html_path}")
 
 
 if __name__ == "__main__":

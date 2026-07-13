@@ -128,9 +128,10 @@ pip install -e .
 seo-advisor audit consultant --url example.com --out ./report
 ```
 
-`--url` 可以省略 `https://`，工具會自動補上。掃描完成後會產出三份報告：
+`--url` 可以省略 `https://`，工具會自動補上。掃描完成後會產出四份報告：
 `report-beginner.md`（白話懶人包）、`report.md`（完整技術報告）、
-`report.json`（機器可讀資料）。
+`report.json`（機器可讀資料）、`report.html`（含 Impact x Effort matrix/
+URL 狀態分布/hreflang 矩陣等圖表的視覺化報告，可用瀏覽器開啟或列印為 PDF）。
 
 看 [`docs/architecture.md`](docs/architecture.md) 了解整體架構，
 看 [`docs/roadmap.md`](docs/roadmap.md) 了解目前實作進度與未來規劃。

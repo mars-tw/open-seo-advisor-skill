@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from seo_advisor.analyzers.technical import analyze_technical_seo
+from seo_advisor.analyzers.technical import analyze_technical_seo, extract_hreflang_matrix
 from seo_advisor.crawler import CrawlResult
 from seo_advisor.models import PageSnapshot
 
@@ -321,3 +321,54 @@ class TestCwvBlockingScripts:
         result = _result({"https://example.com/x": html})
         findings = analyze_technical_seo(result, seed_url="https://example.com/x")
         assert not any("BLOCKING_SCRIPTS_HINT" in f.id for f in findings)
+
+
+class TestExtractHreflangMatrix:
+    def test_returns_page_to_language_mapping(self):
+        html = (
+            '<html><head>'
+            '<link rel="alternate" hreflang="en" href="https://example.com/en">'
+            '<link rel="alternate" hreflang="zh-TW" href="https://example.com/zh">'
+            '</head><body>hi</body></html>'
+        )
+        result = _result({"https://example.com/en": html})
+        matrix = extract_hreflang_matrix(result)
+        assert matrix == {
+            "https://example.com/en": {
+                "en": "https://example.com/en",
+                "zh-TW": "https://example.com/zh",
+            }
+        }
+
+    def test_excludes_pages_without_hreflang(self):
+        result = _result({"https://example.com/x": "<html><head></head><body>no hreflang</body></html>"})
+        matrix = extract_hreflang_matrix(result)
+        assert matrix == {}
+
+    def test_duplicate_language_code_keeps_last_value_in_matrix(self):
+        """矩陣輸出（給 HTML 報告畫表格用）是去重後的 dict——重複語言代碼
+        本身是另一個 Finding（HREFLANG_DUPLICATE_LANGUAGE）要抓的問題，
+        矩陣只需要呈現「目前解析出的宣告狀態」。"""
+        html = (
+            '<html><head>'
+            '<link rel="alternate" hreflang="en" href="https://example.com/en-1">'
+            '<link rel="alternate" hreflang="en" href="https://example.com/en-2">'
+            '</head><body>hi</body></html>'
+        )
+        result = _result({"https://example.com/x": html})
+        matrix = extract_hreflang_matrix(result)
+        assert matrix["https://example.com/x"]["en"] == "https://example.com/en-2"
+
+    def test_duplicate_detection_still_works_after_matrix_extraction(self):
+        """回歸測試：抽出 extract_hreflang_matrix() 共用邏輯時，不能讓
+        _check_hreflang() 的重複語言代碼偵測失效（矩陣是去重後的 dict，
+        偵測邏輯必須仍然基於原始 tag 逐一計數）。"""
+        html = (
+            '<html><head>'
+            '<link rel="alternate" hreflang="en" href="https://example.com/en">'
+            '<link rel="alternate" hreflang="en" href="https://example.com/en-2">'
+            '</head><body>hi</body></html>'
+        )
+        result = _result({"https://example.com/x": html})
+        findings = analyze_technical_seo(result, seed_url="https://example.com/x")
+        assert any("HREFLANG_DUPLICATE_LANGUAGE" in f.id for f in findings)

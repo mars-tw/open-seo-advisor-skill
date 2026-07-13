@@ -233,6 +233,7 @@ def _run_consultant(task: AutoTask, out_dir: str) -> ModuleResult:
                 _relpath(outcome.beginner_path, out_dir),
                 _relpath(outcome.technical_path, out_dir),
                 _relpath(outcome.json_path, out_dir),
+                _relpath(outcome.html_path, out_dir),
             ],
         )
     except Exception as exc:  # noqa: BLE001 - 單一模組失敗不該讓 autopilot 整體崩

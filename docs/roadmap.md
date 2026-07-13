@@ -185,8 +185,13 @@
       順序。兩者共用 `fixers/runner.py::apply_plan()` 與既有確認字串
       機制，維持與 `fix engineer` 一致的 dry-run/apply/confirm/backup/
       rollback 流程。
-- [ ] Report HTML/PDF 渲染（在 Markdown/JSON 基礎上新增可視化圖表：
-      Impact x Effort matrix、URL 狀態分布、hreflang 矩陣）。
+- [x] **v0.3.4** Report HTML/PDF 渲染：在既有 Markdown/JSON 基礎上新增
+      `report.html` 視覺化報告，內含 Impact x Effort matrix、URL 狀態
+      分布（純 SVG）、hreflang 矩陣（HTML table）三種圖表，不引入
+      matplotlib 等繪圖套件。只做 HTML，PDF 靠瀏覽器「列印為 PDF」
+      （內建 `@media print` CSS），不引入 weasyprint/playwright 等新
+      依賴。所有動態內容 `html.escape()` 跳脫，不提供可點擊連結，
+      `finding.evidence` 不渲染到 HTML。
 - [ ] Plugin Dev Mode：WordPress 外掛 scaffold 產生器（schema 產生器、
       內部連結建議工具、IndexNow 自動通知模組）。
 

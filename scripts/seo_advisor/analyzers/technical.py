@@ -705,6 +705,43 @@ def _sitemap_has_hreflang(sitemap_xml: str | None) -> bool:
     return 'rel="alternate"' in sitemap_xml and "hreflang" in sitemap_xml
 
 
+def extract_hreflang_matrix(result: CrawlResult) -> dict[str, dict[str, str]]:
+    """回傳「頁面 x 語言」的完整 hreflang 宣告矩陣：{頁面 URL: {語言代碼:
+    宣告的 href}}，只包含有 hreflang 宣告的頁面。
+
+    給 scan_runner 組 `Report.scan_stats["hreflang_matrix"]` 用（供
+    HTML 報告畫矩陣表格），跟 `_check_hreflang()` 共用同一份底層 parsing
+    邏輯（`_extract_page_hreflang_declarations()`），避免兩處各自重新解析
+    一次 HTML 造成邏輯漂移。這是獨立的公開函式而非修改 `analyze_technical_
+    seo()` 的回傳型別，因為那是本模組對外的穩定介面，改動型別會牽動所有
+    呼叫端（包含既有測試）。
+    """
+    parsed = _parsed_pages(result)
+    return _extract_page_hreflang_declarations(parsed)
+
+
+def _extract_page_hreflang_declarations(parsed: dict[str, BeautifulSoup]) -> dict[str, dict[str, str]]:
+    """逐頁解析 `<link rel="alternate" hreflang="...">` 標籤，回傳
+    {頁面 URL: {語言代碼: 宣告的 href（未正規化的原始值，用於顯示）}}，
+    只包含至少有一個 hreflang 宣告的頁面。
+    """
+    page_declarations: dict[str, dict[str, str]] = {}
+    for url, soup in parsed.items():
+        alternate_tags = soup.find_all("link", rel="alternate", hreflang=True)
+        if not alternate_tags:
+            continue
+
+        declarations: dict[str, str] = {}
+        for tag in alternate_tags:
+            code = (tag.get("hreflang") or "").strip()
+            href = tag.get("href") or ""
+            if not code or not href:
+                continue
+            declarations[code] = href
+        page_declarations[url] = declarations
+    return page_declarations
+
+
 def _check_hreflang(
     parsed: dict[str, BeautifulSoup], result: CrawlResult, seed_url: str, next_id
 ) -> list[Finding]:
@@ -719,32 +756,30 @@ def _check_hreflang(
     findings: list[Finding] = []
     site_origin = seed_url if seed_url.startswith(("http://", "https://")) else None
 
-    # page -> {hreflang_code: target_url}（未正規化的原始 target，用於顯示）
-    page_declarations: dict[str, dict[str, str]] = {}
+    page_declarations = _extract_page_hreflang_declarations(parsed)
     missing_self_ref: list[str] = []
     duplicate_language: list[str] = []
     invalid_code_pages: dict[str, list[str]] = {}
     out_of_scope_pages: dict[str, list[str]] = {}
 
     for url, soup in parsed.items():
-        alternate_tags = soup.find_all("link", rel="alternate", hreflang=True)
-        if not alternate_tags:
+        declarations = page_declarations.get(url)
+        if declarations is None:
             continue
 
+        # 重複語言代碼的偵測需要逐一遍歷原始 tag（而非去重後的 declarations
+        # dict），因為同一語言代碼出現兩次時 dict 只會保留最後一個值，count
+        # 資訊會遺失。
         codes_seen: Counter[str] = Counter()
-        declarations: dict[str, str] = {}
+        for tag in soup.find_all("link", rel="alternate", hreflang=True):
+            code = (tag.get("hreflang") or "").strip()
+            if code and (tag.get("href") or ""):
+                codes_seen[code] += 1
+
         invalid_codes: list[str] = []
         out_of_scope: list[str] = []
 
-        for tag in alternate_tags:
-            code = (tag.get("hreflang") or "").strip()
-            href = tag.get("href") or ""
-            if not code or not href:
-                continue
-
-            codes_seen[code] += 1
-            declarations[code] = href
-
+        for code, href in declarations.items():
             if code != "x-default" and not _HREFLANG_FORMAT_PATTERN.match(code):
                 invalid_codes.append(code)
 
@@ -757,8 +792,6 @@ def _check_hreflang(
                     and _normalize_host(target_netloc) != _normalize_host(seed_netloc)
                 ):
                     out_of_scope.append(href)
-
-        page_declarations[url] = declarations
 
         has_self_reference = any(
             _canonicalize_url_for_comparison(urljoin(url, href))
