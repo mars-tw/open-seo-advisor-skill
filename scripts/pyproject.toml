@@ -44,7 +44,7 @@ ads-meta = [
     "facebook-business>=19.0",
 ]
 ssh = [
-    "paramiko>=3.4,<4",
+    "paramiko>=3.4,<6",
 ]
 
 [project.scripts]
