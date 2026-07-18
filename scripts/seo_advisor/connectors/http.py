@@ -61,6 +61,37 @@ def _decode_body(resp: _SafeResponse) -> str:
         return resp.body.decode("utf-8", errors="replace")
 
 
+def _is_textual_content_type(content_type: str) -> bool:
+    """判斷這個 content-type 是否為「文字類」，決定要不要把 decode 後的 body
+    保留到 PageSnapshot.html。
+
+    保留：HTML、XML（含 sitemap 的 application/xml、text/xml、任何 +xml）、
+    純文字（robots.txt 的 text/plain）、JSON、JavaScript/CSS 等文字資源。
+    不保留：圖片、字型、PDF、壓縮檔等二進位內容——這些塞進 html 欄位只會產生
+    亂碼，且下游分析器（HTML 解析、XML 解析）都以文字為前提。
+
+    修正紀錄：早期只用 `"text/html" in content-type` 判斷，導致 sitemap.xml
+    （application/xml）與 robots.txt（text/plain）的 body 被丟成空字串，
+    連帶讓 sitemap 分析器對空字串呼叫 ElementTree.fromstring 而誤報「非合法 XML」。
+    """
+    ct = content_type.split(";", 1)[0].strip().lower()
+    if not ct:
+        # 沒宣告 content-type：保守地不當作文字，維持與舊行為一致（避免把
+        # 無 header 的二進位回應也 decode 進 html）。
+        return False
+    if ct.startswith("text/"):
+        return True
+    if ct.endswith("+xml") or ct.endswith("+json"):
+        # application/rss+xml、application/atom+xml、image/svg+xml、
+        # application/ld+json 等都由這裡涵蓋。
+        return True
+    return ct in {
+        "application/xml",
+        "application/json",
+        "application/javascript",
+    }
+
+
 class HTTPConnector(WebsiteConnector):
     """透過一般 HTTP 請求存取公開網站，僅發送 GET/HEAD，不需要任何憑證。"""
 
@@ -410,14 +441,16 @@ class HTTPConnector(WebsiteConnector):
         cached = self._response_cache.get(url)
         if cached is not None:
             self._register_final_host(cached.final_url)
-            is_html_cached = "text/html" in cached.headers.get("content-type", "")
+            retain_body_cached = _is_textual_content_type(
+                cached.headers.get("content-type", "")
+            )
             return PageSnapshot(
                 url=url,
                 status_code=cached.status_code,
                 final_url=cached.final_url,
                 redirect_chain=cached.history,
                 headers=cached.headers,
-                html=_decode_body(cached) if is_html_cached else "",
+                html=_decode_body(cached) if retain_body_cached else "",
                 fetched_at=fetched_at,
                 elapsed_ms=0,
             )
@@ -430,14 +463,14 @@ class HTTPConnector(WebsiteConnector):
             resp = self._safe_get(url)
             elapsed_ms = int((time.monotonic() - start) * 1000)
             self._register_final_host(resp.final_url)
-            is_html = "text/html" in resp.headers.get("content-type", "")
+            retain_body = _is_textual_content_type(resp.headers.get("content-type", ""))
             return PageSnapshot(
                 url=url,
                 status_code=resp.status_code,
                 final_url=resp.final_url,
                 redirect_chain=resp.history,
                 headers=resp.headers,
-                html=_decode_body(resp) if is_html else "",
+                html=_decode_body(resp) if retain_body else "",
                 fetched_at=fetched_at,
                 elapsed_ms=elapsed_ms,
             )
