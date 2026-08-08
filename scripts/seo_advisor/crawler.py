@@ -74,7 +74,9 @@ def crawl_site(
             urljoin(seed_url, "/sitemap.xml"), fetched_at=fetched_at
         )
         if sitemap_snapshot.status_code == 200:
-            result.sitemap_xml = sitemap_snapshot.html
+            result.sitemap_xml = sitemap_snapshot.html or sitemap_snapshot.headers.get(
+                "_raw_text", ""
+            )
     except Exception:
         pass
 

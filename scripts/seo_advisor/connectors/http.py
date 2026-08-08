@@ -61,6 +61,23 @@ def _decode_body(resp: _SafeResponse) -> str:
         return resp.body.decode("utf-8", errors="replace")
 
 
+def _headers_with_raw_text(resp: _SafeResponse, *, is_html: bool) -> dict[str, str]:
+    """非 HTML 的純文字型回應把解碼後的內容放進 `_raw_text`，讓 crawler 讀得到。
+
+    `PageSnapshot.html` 只保留真正的 HTML，所以 robots.txt / sitemap.xml 這類
+    純文字資產的 body 原本會在 `fetch_url()` 就被丟掉，crawler 拿到空字串後
+    會誤判成「robots.txt 未宣告 sitemap」與「sitemap.xml 不是合法 XML」。
+    body 在 `_safe_get()` 已受大小上限保護，這裡不會引入新的記憶體風險。
+    """
+    headers = dict(resp.headers)
+    if is_html:
+        return headers
+    content_type = headers.get("content-type", "").lower()
+    if any(token in content_type for token in ("text/", "xml", "json")):
+        headers["_raw_text"] = _decode_body(resp)
+    return headers
+
+
 class HTTPConnector(WebsiteConnector):
     """透過一般 HTTP 請求存取公開網站，僅發送 GET/HEAD，不需要任何憑證。"""
 
@@ -416,7 +433,7 @@ class HTTPConnector(WebsiteConnector):
                 status_code=cached.status_code,
                 final_url=cached.final_url,
                 redirect_chain=cached.history,
-                headers=cached.headers,
+                headers=_headers_with_raw_text(cached, is_html=is_html_cached),
                 html=_decode_body(cached) if is_html_cached else "",
                 fetched_at=fetched_at,
                 elapsed_ms=0,
@@ -436,7 +453,7 @@ class HTTPConnector(WebsiteConnector):
                 status_code=resp.status_code,
                 final_url=resp.final_url,
                 redirect_chain=resp.history,
-                headers=resp.headers,
+                headers=_headers_with_raw_text(resp, is_html=is_html),
                 html=_decode_body(resp) if is_html else "",
                 fetched_at=fetched_at,
                 elapsed_ms=elapsed_ms,
