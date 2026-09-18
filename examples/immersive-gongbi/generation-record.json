@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-18",
+  "tool": "built-in image_gen.imagegen",
+  "model": "not exposed; not inferred",
+  "deity": "媽祖",
+  "assets": [
+    {
+      "id": "final",
+      "file": "public/assets/final.png",
+      "dimensions": [
+        1024,
+        1536
+      ],
+      "prompt": "Create ONE original exquisite traditional Chinese gongbi painting of Mazu (天上聖母), NOT a statue, NOT a photograph, NOT a 3D render. A museum-quality meticulous fine-line mineral-pigment devotional portrait on warm ivory silk, portrait 2:3 canvas, target 1024x1536. Full seated figure, front-facing symmetrical composition, dignified benevolent adult feminine face with calm clear eyes. Iconography: rectangular dark ceremonial mian crown with delicate hanging golden bead strings, ornate cinnabar-red mang robe with restrained golden mythical-dragon and auspicious cloud embroidery, muted mineral jade/blue sleeve lining, BOTH hands hold a single narrow ivory ceremonial hu tablet vertically in front of her chest. No lotus, no vase, no halberd, no beard, no other deity. The robe cascades into precise flowing folds, feet discreetly covered, small understated antique chair mostly behind the robe. Exact composition for later registered painting stages: crown from x30%-70%, y10%-25%; face centered x50%, y29%-37%; tablet at x50%, y45%-61%; robe spreads x21%-79%, y39%-88%. Full artwork has 8% clean margins. Pale blank silk surrounds figure, natural fine silk fibres; no landscape, no temple architecture, no dark vignette, no frames. Hair-thin continuous ink contours, delicately shaded translucent flesh, layered cinnabar and mineral teal washes, extremely fine antique-gold lines with a subtle nonmetallic pigment sheen. Flat hand-painted surface with exquisite tangible pigment detail, respectful and serene, elegant restrained palette. This must look like a finished painting on silk, not a digitally rendered character. No lettering, calligraphy, signatures, stamps, watermarks or logos. One single full composition, no collage, no decorative border.",
+      "reference": null
+    },
+    {
+      "id": "linework",
+      "file": "public/assets/linework.png",
+      "dimensions": [
+        1024,
+        1536
+      ],
+      "prompt": "Edit this exact supplied Mazu gongbi portrait into its UNCOLORED FINE INK LINE DRAWING stage. This must remain precisely registered to the reference: identical 2:3 canvas dimensions, crop, borders, figure size, head position, crown silhouette and every bead placement, face identity and expression, both hands and tablet, seated posture, chair and robe outline. Do not recompose, redraw into a different pose, shift or enlarge anything. REMOVE ALL red, turquoise, gold, flesh-color washes and all fully painted areas. Retain only very delicate warm-gray/brown ink outlines of the identical crown, facial features, hands, tablet, embroidery guide contours, chair and flowing robe folds over the SAME warm ivory silk substrate. Hair should be sparse fine line guidance with unpainted ivory between, not a filled black mass. No painted eyes, filled pupils or lip color; fine contour indications only. It should look like an exquisite traditional gongbi baimiao preparatory line drawing before any pigment is applied, never a desaturated photo. Thin subtle lines, no heavy black outlines, no shadows or 3D effects. Keep the blank silk background and textile texture consistent with reference. No text, labels, seals, new motifs, watermarks, hands or tools.",
+      "reference": "public/assets/final.png"
+    },
+    {
+      "id": "underpaint",
+      "file": "public/assets/underpaint.png",
+      "dimensions": [
+        1024,
+        1536
+      ],
+      "prompt": "Edit this exact supplied Mazu gongbi portrait into an EARLY TRANSLUCENT UNDERPAINTING stage. Preserve EXACT 2:3 canvas dimensions, crop, figure position, face identity/expression, crown silhouette and bead layout, hand/tablet geometry, chair, every robe fold and outline so this is registered to the original finished painting. Keep the same warm ivory silk substrate. Apply only pale flat first washes: very dilute dusty cinnabar pink-red on outer robes, very pale mineral jade/blue on sleeve lining and borders, faint warm skin wash, pale gray hair indications. Retain the thin brown ink contours. OMIT all final dense gold embroidery, shiny gold points, deep shadows, dark hair fill, strong saturation, fully painted dark pupils, and final detailed highlights. Intricate motifs can remain faint preparatory outlines, but no final metallic color. The result should be an authentic unfinished gongbi painting halfway through initial pigment washes: 30 percent of the final color intensity, abundant paper showing through, elegant and clearly distinct from the finished richly colored portrait. No added or removed objects, text, labels, seals, signatures, tool marks, brushes or people.",
+      "reference": "public/assets/final.png"
+    },
+    {
+      "id": "studio",
+      "file": "public/assets/studio.png",
+      "dimensions": [
+        1672,
+        941
+      ],
+      "prompt": "Create one cinematic editorial photograph for a traditional Chinese gongbi portrait painting website, wide landscape 16:9, no people and no hands. Close quiet artist's desk: an elongated old dark inkstone with wet black ink, two fine-point bamboo painting brushes diagonally resting on a pale ceramic brush rest, three small porcelain dishes holding cinnabar red pigment, muted mineral turquoise, and antique gold pigment, a mostly blank stretched warm ivory silk sheet at left. Window light from upper left, warm midmorning atelier, tactile fine fibres, bamboo, glazed ceramic and worn elm wood. Restrained Chinese craft aesthetic, sophisticated rather than ornate, close detail, shallow depth of field but identifiable tools. Composition places tools in the right and lower half, left upper half calm blank silk for webpage text; no painting of a deity on the sheet because the portrait is a separate artwork, no written characters, no stamps, no logo or watermark. Natural colors, no fantasy glow, no incense smoke, no altar and no ritual setup.",
+      "reference": null
+    }
+  ]
+}

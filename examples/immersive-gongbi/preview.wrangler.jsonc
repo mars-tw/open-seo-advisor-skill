@@ -1,0 +1,9 @@
+{
+  "name": "open-seo-gongbi-demo",
+  "compatibility_date": "2026-09-18",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page"
+  }
+}

@@ -1,11 +1,16 @@
 # Open SEO Advisor
 
-**[直接體驗：一片葉的回家路](https://open-seo-advisor-demo.digimkt.workers.dev/)**
+免下載、免登入，直接體驗兩種敘事網站：
 
-免下載、免登入。往下捲動、點亮茶葉，再向上捲動倒帶；也可關閉動態，改用圖文閱讀。
-山嵐茶屋是虛構品牌，示範站不提供預約或收款。[查看分鏡、素材與本機預覽](examples/immersive-tea/README.md)。
+| 線上示範 | 可以體驗什麼 | 素材與本機預覽 |
+|---|---|---|
+| [一片葉的回家路](https://open-seo-advisor-demo.digimkt.workers.dev/) | 四幕旅程、點燈、倒帶與靜態閱讀 | [山嵐茶屋範例](examples/immersive-tea/README.md) |
+| [一筆敬意｜工筆媽祖畫像](https://open-seo-gongbi-demo.digimkt.workers.dev/) | 五段作畫敘事、捲動畫筆、訪客落印 | [工筆畫像範例](examples/immersive-gongbi/README.md) |
 
-## v0.4.2：引導式 SEO／AEO 敘事建站
+工筆畫像先點「開始作畫動畫」再捲動，也可 [直接看勾線](https://open-seo-gongbi-demo.digimkt.workers.dev/#outline)。
+兩站皆為 GPT 圖像與互動示範，不提供預約或收款。
+
+## v0.4.3：引導式 SEO／AEO 敘事建站
 
 沉浸式動畫以「主角要做什麼、遇到什麼、訪客怎麼參與、最後改變什麼」設計。
 範例《一片葉的回家路》有四張 GPT 場景、獨立透明主角、可倒帶的路徑與分幕環境變化，

@@ -7,7 +7,7 @@ description: >
   既有專案沿用使用者技術棧與指定平台。
 license: Apache-2.0
 metadata:
-  version: "0.4.2"
+  version: "0.4.3"
   upstream: "https://github.com/mars-tw/open-seo-advisor-skill"
 ---
 
@@ -16,6 +16,10 @@ metadata:
 [線上體驗《一片葉的回家路》](https://open-seo-advisor-demo.digimkt.workers.dev/)：
 免安裝的四幕故事示範，包含獨立主角、點燈、倒帶與靜態閱讀。可先讓使用者預覽，
 再依自己的品牌設計；這是虛構品牌範例，不提供預約或交易。
+
+[線上體驗《一筆敬意｜工筆媽祖畫像》](https://open-seo-gongbi-demo.digimkt.workers.dev/)：
+點「開始作畫動畫」後捲動，觀看五段創作敘事並選擇訪客印。這是 AI 圖像互動示範，
+不提供交易或宗教儀式；[素材、實作與本機預覽](examples/immersive-gongbi/README.md) 可供參考。
 
 你同時負責網站策略、設計、內容與工程。新建站交付可執行網站、真實素材、測試與部署交接；
 只有使用者要求企劃時才停在文件。既有網站稽核與修復仍走原模式。本技能不假設某台電腦、

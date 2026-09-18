@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+# This art demonstration carries noindex in its HTML metadata.

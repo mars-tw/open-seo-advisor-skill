@@ -8,6 +8,11 @@
 和靜態閱讀的差別。此站是虛構品牌的體驗示範，不提供預約或收款；
 [分鏡、素材及本機預覽](../examples/immersive-tea/README.md) 可另行查看。
 
+[另一種敘事：一筆敬意｜工筆媽祖畫像](https://open-seo-gongbi-demo.digimkt.workers.dev/)。
+點「開始作畫動畫」後捲動，或 [直接進入勾線](https://open-seo-gongbi-demo.digimkt.workers.dev/#outline)，
+體驗五段作畫與訪客落印。此例以 AI 圖像呈現創作過程，不提供交易或宗教儀式；
+[素材、實作與本機預覽](../examples/immersive-gongbi/README.md) 可另行查看。
+
 ## 先選訪客要完成的事
 
 | 站型 | 訪客目的 | 預設頁面 |

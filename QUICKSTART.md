@@ -6,6 +6,10 @@
 如何改變；向上捲動可倒帶，關閉動態可改用圖文閱讀。這是虛構品牌示範，不提供預約或收款。
 想看原始碼或在自己電腦開啟，見 [範例與本機預覽](examples/immersive-tea/README.md)。
 
+也可 [體驗《一筆敬意｜工筆媽祖畫像》](https://open-seo-gongbi-demo.digimkt.workers.dev/)：
+點「開始作畫動畫」後捲動，觀看五段作畫敘事，最後選一枚訪客印。
+這是 AI 畫作的互動示範，沒有交易或宗教儀式；[素材與本機預覽](examples/immersive-gongbi/README.md) 另列。
+
 **想建立新網站？** 安裝後輸入 `seo-advisor website init --out ./my-site`，會依序問品牌、
 站型、主機與網域，產生可預覽的網站草稿。或在 coding agent 呼叫 `$open-seo-advisor`，
 由它引導完成 GPT 圖文、故事動畫、SEO／AEO、商務功能與部署。
