@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "brand": "山嵐茶屋",
+  "site_type": "experience",
+  "hosting": "cloudflare",
+  "canonical": null,
+  "publication": "draft",
+  "lang": "zh-TW",
+  "title": "一片葉的回家路｜山嵐茶屋",
+  "description": "陪一片迷路的茶葉穿過晨霧、越過吊橋，將一點溫暖送回山中茶屋。四幕可倒帶的原創捲動故事，含點燈互動與靜態閱讀模式。",
+  "headline": "一片葉，\n把溫暖送回家。",
+  "intro": "山上的茶屋整夜沒亮燈。一片迷路的茶葉，想在天亮前，送回最後一點暖。",
+  "chapters": [
+    {
+      "title": "茶屋的燈，還沒亮。",
+      "body": "晨霧把回家的石階藏了起來。葉子停在半空，記得山的那頭，有人還在等一杯熱茶。它決定沿著風，去找那扇門。"
+    },
+    {
+      "title": "風，把路吹遠了。",
+      "body": "走到吊橋，風忽然轉了方向。葉子被捲離橋面，差一點跌進霧裡。只要還認得對岸，就能繼續。願意的話，替它留一點光。"
+    },
+    {
+      "title": "門前，少了一點暖。",
+      "body": "越過山谷，茶屋終於出現在眼前。門邊的燈還暗著。葉子帶著一路收下的光，輕輕碰了碰屋簷。"
+    },
+    {
+      "title": "這一次，換它留下來。",
+      "body": "門開了，桌上正好有一只等待的茶杯。葉子緩緩落下，水面漾開一圈光。那些穿過霧與風的路，終於變成一口暖。"
+    }
+  ],
+  "qa": [
+    {
+      "question": "現在可以購買或預約嗎？",
+      "answer": "這是虛構品牌的互動示範，尚未開放收款或預約。正式網站會提供確認過的商品、服務與交易資訊。"
+    },
+    {
+      "question": "可以關閉頁面動畫嗎？",
+      "answer": "可以。右上角能關閉動畫，系統的減少動態設定也會生效。四幕圖片與故事會改成正常排列，仍可讀完整段旅程。"
+    },
+    {
+      "question": "圖片與品牌故事是真實資料嗎？",
+      "answer": "山嵐茶屋與茶葉回家故事都是虛構創作。四幕場景及透明茶葉主角由 GPT image 生成，不是真實茶園或商品的照片。"
+    }
+  ],
+  "cta": {
+    "label": "回到故事開頭",
+    "url": "#story"
+  },
+  "products": [],
+  "assets": {
+    "hero": {
+      "path": "assets/scene-01-mist.png",
+      "alt": "晨霧中的虛構茶山與石階，遠方山坡上有一間等待天亮的茶屋。GPT 生成場景。",
+      "source": "gpt-image"
+    }
+  },
+  "content_verified": false,
+  "story_scenes": [
+    {
+      "image": {
+        "path": "assets/scene-01-mist.png",
+        "alt": "茶葉出發的晨霧茶山，石階通往遠方。 GPT 生成示意。",
+        "source": "gpt-image"
+      },
+      "effect": "mist",
+      "actor_pose": {
+        "x": 66,
+        "y": 62,
+        "rotation": -20,
+        "scale": 0.9
+      },
+      "effect_points": [],
+      "image_position": {
+        "x": 70,
+        "y": 50
+      }
+    },
+    {
+      "image": {
+        "path": "assets/scene-02-bridge.png",
+        "alt": "山谷中的吊橋，茶葉要越過風與深霧。 GPT 生成示意。",
+        "source": "gpt-image"
+      },
+      "effect": "wind",
+      "actor_pose": {
+        "x": 59,
+        "y": 44,
+        "rotation": 38,
+        "scale": 0.8
+      },
+      "effect_points": [],
+      "image_position": {
+        "x": 70,
+        "y": 50
+      }
+    },
+    {
+      "image": {
+        "path": "assets/scene-03-pavilion.png",
+        "alt": "石階盡頭的山中茶屋，屋簷下有兩盞還未點亮的紙燈。 GPT 生成示意。",
+        "source": "gpt-image"
+      },
+      "effect": "lanterns",
+      "actor_pose": {
+        "x": 80,
+        "y": 49,
+        "rotation": -12,
+        "scale": 0.7
+      },
+      "effect_points": [
+        {
+          "x": 67.1,
+          "y": 39.7
+        },
+        {
+          "x": 88.1,
+          "y": 37.1
+        }
+      ],
+      "image_position": {
+        "x": 85,
+        "y": 50
+      }
+    },
+    {
+      "image": {
+        "path": "assets/scene-04-cup.png",
+        "alt": "青瓷茶杯放在茶屋門前的石台上，等待茶葉落入。 GPT 生成示意。",
+        "source": "gpt-image"
+      },
+      "effect": "steam",
+      "actor_pose": {
+        "x": 74,
+        "y": 61.5,
+        "rotation": 42,
+        "scale": 0.45
+      },
+      "effect_points": [
+        {
+          "x": 74,
+          "y": 61.5
+        }
+      ],
+      "image_position": {
+        "x": 85,
+        "y": 50
+      }
+    }
+  ],
+  "story_actor": {
+    "path": "assets/actor-tea-leaf.png",
+    "alt": "帶著金色葉脈微光的茶葉，是這段故事的主角。",
+    "source": "gpt-image"
+  },
+  "story_action": {
+    "label": "替葉子點一盞光",
+    "active_label": "你留的光，正陪著它",
+    "prompt": "輕點或按 Enter，把光交給這片葉子。也可以直接往下走。",
+    "result_text": "你點亮的那點光，跟著葉子回到了家。",
+    "inactive_result_text": "葉子趕在天亮前抵達了。若想陪它走一程，可以點亮它，再從霧裡出發。"
+  },
+  "story_start_pose": {
+    "x": 82,
+    "y": 83,
+    "rotation": -38,
+    "scale": 0.65
+  }
+}

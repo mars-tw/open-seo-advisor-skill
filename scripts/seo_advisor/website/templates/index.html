@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="${lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${title}</title>
+  <meta name="description" content="${description}">
+  <meta name="robots" content="${robots}">
+${canonical}
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+${og_image}
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="story.css">
+  <script type="application/ld+json">${structured_data}</script>
+  <script src="story-timeline.js" defer></script>
+  <script src="site.js" defer></script>
+</head>
+<body class="site-${kind}">
+  <a class="skip-link" href="#main">跳到主要內容</a>
+  ${draft_banner}
+  <header class="site-header">
+    <a href="#main" class="brand">${brand}<span>AN EVERYDAY ESCAPE</span></a>
+    <nav aria-label="主要導覽"><a href="#story">品牌故事</a><a href="#selection">${label}</a><a href="#faq">常見問題</a></nav>
+    <button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="false" hidden>動畫：開啟</button>
+  </header>
+  <main id="main" tabindex="-1">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy"><p class="eyebrow">${label} / SLOW EXPLORATION</p><h1 id="hero-title">${headline}</h1><p class="intro">${intro}</p><a class="round-link" href="#story"><span aria-hidden="true">↓</span>循著故事，往下走</a><a class="story-skip" href="#selection">略過故事，直接查看${label} →</a></div>
+      <figure class="hero-image">${hero}<figcaption><span>${brand}</span><span>LIGHT · LEAF · TIME</span></figcaption></figure>
+      <p class="hero-footnote">A LITTLE ROOM<br>FOR THE PRESENT.</p>
+    </section>
+    ${story_section}
+    ${mode_content}
+    <section class="faq section-pad" id="faq"><div><span class="eyebrow">BEFORE YOU GO</span><h2>你可能想知道。</h2></div><div class="answers">${qa}</div></section>
+    <section class="contact section-pad" id="contact"><span class="eyebrow">KEEP IN TOUCH</span><h2>把故事，接下去。</h2><a class="button" href="${cta_url}">${cta_label}</a><p class="fineprint">${contact_note}</p></section>
+  </main>
+  <footer><a href="#main" class="brand">${brand}</a><p>把注意力，留給值得的事。</p><a href="#main">回到頁首 ↑</a></footer>
+</body>
+</html>

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "open-seo-advisor"
-version = "0.3.5"
+version = "0.4.1"
 description = "開源、可攜、不綁定單一廠商的全域 SEO 顧問技能"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
@@ -18,10 +18,14 @@ dependencies = [
     "lxml>=5.0,<7",
     "PyYAML>=6.0,<7",
     "rich>=13.7,<16",
+    "Pillow>=11,<13",
 ]
 
 [project.optional-dependencies]
 dev = [
+    # Wheel installation tests also run in fresh uv environments without bundled pip/setuptools.
+    "pip>=24",
+    "setuptools>=68",
     "pytest>=8.0",
     "ruff>=0.4",
     "black>=24.0",
@@ -66,10 +70,15 @@ include = ["seo_advisor*"]
 "seo_advisor.matrix.prompts" = ["*.md"]
 # 行銷方法論知識庫（中性化蒸餾），knowledge 載入器用 importlib.resources 讀取。
 "seo_advisor.knowledge" = ["*.yaml"]
+"seo_advisor.website" = ["templates/*.html", "templates/*.css", "templates/*.js", "templates/*.json"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
+# Keep the existing baseline stable when Ruff adds new default rules.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.black]
 line-length = 100

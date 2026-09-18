@@ -1,0 +1,63 @@
+{
+  "generated_at": "2026-09-18",
+  "tool": "built-in image_gen.imagegen",
+  "model": "not exposed by tool; not inferred",
+  "story": "一片葉的回家路",
+  "assets": [
+    {
+      "path": "assets/scene-01-mist.png",
+      "prompt": "Create a completely NEW cinematic background shot in the same tactile realistic teal mountain world, soft mist and celadon palette as the reference image. Wide 16:9 landscape for chapter ONE of an original scroll story: a tiny lost tea leaf will travel through this landscape, but DO NOT paint the leaf protagonist because it will be overlaid separately. Predawn Taiwan-inspired tea terraces, dense gentle mist rolling between mountain layers, an old narrow stone path curves from lower right toward a distant ridge; a tiny unlit tea house barely visible on far right hillside. Tea bushes on right edge framing a doorway-like opening through the fog. Very beautiful cinematic environmental storytelling, cool blue-teal predawn, a faint golden light on the horizon, atmospheric depth. The LEFT 42 percent kept darker and quiet with mist for HTML narrative text; RIGHT holds the narrative path. No tea cup, no gaiwan, no people, no text, no logo, no watermark, no protagonist leaf. Entire single scene, no collage or panels. This is fictional story scenery, not an actual location.",
+      "reference": "assets/tea-mountains.png",
+      "status": "generated-and-visually-inspected",
+      "dimensions": [
+        1672,
+        941
+      ],
+      "transparent": false
+    },
+    {
+      "path": "assets/scene-02-bridge.png",
+      "prompt": "Create a completely NEW cinematic background shot in the exact atmospheric realistic teal tea-mountain world and painterly subtle grain of the reference. Wide 16:9. Chapter TWO: a perilous wind crossing. A narrow old rope-and-timber footbridge stretches diagonally from right foreground toward middle-left distance across a deep cloud-filled mountain ravine. Nearby branches lean in the wind, dark pine silhouettes, slivers of cool early daylight cutting through slate clouds. The bridge is intact but exposed and daunting; we must visibly understand the obstacle and path. Main bridge and gorge center-right, LEFT 40 percent has a naturally dark rock/forest shadow suitable for HTML text, lower contrast. Cinematic dramatic but gentle fantasy adventure, photoreal landscape. DO NOT draw any leaf protagonist, particles or wind streak overlays, because those are animated separately. No teapot, cup, people, text, watermark, logo. One full scene, no split panels.",
+      "reference": "assets/tea-mountains.png",
+      "status": "generated-and-visually-inspected",
+      "dimensions": [
+        1672,
+        941
+      ],
+      "transparent": false
+    },
+    {
+      "path": "assets/scene-03-pavilion.png",
+      "prompt": "Create a new original background scene in the same cinematic photorealistic teal mountain tea landscape style as the reference, 16:9 wide landscape. CHAPTER THREE, arrival: at blue dawn a small weathered wooden Taiwanese mountain tea pavilion sits in the RIGHT half among tea bushes and rocks, its roof low, windows dark, two simple paper lanterns hanging under its porch currently UNLIT. The stone path comes from lower middle into the doorway at approximately x 72 percent y 66 percent. Lantern positions around x 67 percent y 41 percent and x 84 percent y 41 percent; leave them naturally pale and unlit so an animated warm glow can light them later. Distant mountain mist seen on left; LEFT 42 percent dark calm foreground pine shadow and mist for HTML copy. Warmth is missing from the house, giving a sense of waiting for a visitor. No people, no leaf protagonist (added as separate animation), no cups in foreground, no text, no signs, no watermark. Single full background scene, realistic materials, subtle magical narrative atmosphere without painted magic effects.",
+      "reference": "assets/tea-mountains.png",
+      "status": "generated-and-visually-inspected",
+      "dimensions": [
+        1672,
+        941
+      ],
+      "transparent": false
+    },
+    {
+      "path": "assets/scene-04-cup.png",
+      "prompt": "Create a new original cinematic scene continuing the reference's cool teal mountains and tactile celadon palette. CHAPTER FOUR, homecoming: close view of a small unbranded pale celadon teacup containing clear warm amber tea on a weathered stone ledge on the RIGHT at about x 70 percent y 69 percent. Camera sees the open oval of tea clearly; cup spans about 20 percent of canvas width. Only one teacup, no lid, no teapot or gaiwan. Behind it is the very softly defocused wooden porch of a quiet mountain tea house, a subdued warm dawn doorway glows at upper right, distant soft blue-green mountains left. The cup is waiting for a single leaf which will be animated separately, DO NOT paint a leaf in the tea. DO NOT paint visible steam, it will be animated later. LEFT 45 percent is darker tranquil teal blurred mountain scenery suitable for HTML narrative. End-of-journey feeling, tender natural light, photoreal tactile ceramic and stone, understated fine grain, landscape 16:9. No text, labels, watermark, logo, people or collage.",
+      "reference": "assets/tea-mountains.png",
+      "status": "generated-and-visually-inspected",
+      "dimensions": [
+        1672,
+        941
+      ],
+      "transparent": false
+    },
+    {
+      "path": "assets/actor-tea-leaf.png",
+      "prompt": "Generate a single isolated young tea leaf, an elegant original protagonist sprite for a cinematic scroll website. GENUINELY TRANSPARENT background with alpha, no background at all, no white or gray matte, no checkerboard drawn into image. One fresh deep jade green tea leaf with delicate visible veins, slightly curled and tapered, tiny stem at lower-left, pointed tip upper-right at a 25 degree diagonal, realistic tactile organic translucent edges with very subtle warm golden rim illumination. Leaf occupies about 80 percent of the square image, centered, not cropped. No face, eyes, limbs, extra leaves, droplets, shadow on a surface, text or logo. The leaf should read clearly at 90px wide on a dark forest background. We will add glow and movement in CSS, so keep edges crisp and no haze outside the subject. One transparent PNG-style cutout, beautiful photoreal object.",
+      "reference": null,
+      "status": "generated-and-visually-inspected",
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "transparent": true
+    }
+  ]
+}

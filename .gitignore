@@ -48,3 +48,5 @@ id_rsa*
 Thumbs.db
 .collab-rules.md
 .coverage
+/.verification/
+/output/

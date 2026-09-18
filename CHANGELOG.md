@@ -2,6 +2,26 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.4.1] - 2026-09-18
+
+- 將單圖縮放故事升級為可倒帶的多幕敘事：獨立角色路徑、霧／風／燈火／蒸氣、可選點燈與不同結尾。
+- 新增宣告式場景、主角、操作與原圖座標契約，保持舊 brief 可用。
+- 重做《一片葉的回家路》，提供四幕 GPT 原創場景與真正透明的葉片主角。
+- 敘事規格要求目標、阻力、行動與後果，並逐幕驗證跳章、倒帶、手機及靜態降級。
+- 固定原專案 Ruff 基線規則，避免檢查工具新增預設規則改變既有模組的 CI 範圍。
+
+## [0.4.0] - 2026-09-18（本地衍生版）
+
+- 新增引導式 SEO／AEO 沉浸式建站技能，保留既有稽核／修復／內容／行銷模式。
+- 新增 `website init/build/demo/check`：sales／shop／experience 離線骨架、自然捲動故事、
+  減少動態、語意 HTML、metadata、JSON-LD、robots／sitemap 與草稿 noindex。
+- 加入 GPT 圖文生成與接入、真實商務功能、免費額度主機、無障礙與發布驗收的按需文件。
+- 產出 Cloudflare Workers Static Assets、Firebase Hosting、GCP Cloud Run 設定；不自動部署。
+- 附實際 GPT 生成主視覺的虛構茶屋範例。CLI 的 mock／骨架與完整 agent 成品分開標示。
+- SKILL.md 移除大量歷史敘述，歷史仍保留在本檔與 Git；新增 Codex UI metadata。
+
+此版本為使用者需求的衍生改作，未代表 upstream 已合併或發布。
+
 ## [0.3.5] - Unreleased
 
 **Plugin Dev Mode 正式上線：`schema-generator`**（`docs/roadmap.md`

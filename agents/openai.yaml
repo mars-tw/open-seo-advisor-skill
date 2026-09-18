@@ -1,0 +1,6 @@
+interface:
+  display_name: "SEO／AEO 沉浸式網站建築師"
+  short_description: "引導建立銷售站、購物站與沉浸式體驗，整合 GPT 圖文、SEO／AEO 與免費部署"
+  default_prompt: "使用 $open-seo-advisor，帶我建立有 GPT 圖文與沉浸式滾動動畫的 SEO／AEO 網站，並協助選擇免費主機。"
+policy:
+  allow_implicit_invocation: true

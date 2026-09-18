@@ -12,6 +12,17 @@
 
 ## 分類（Taxonomy）
 
+### 新增：Website Builder（v0.4.0）
+
+| 能力 | 狀態 | 使用方式與範圍 |
+|---|---|---|
+| 引導式客製建站 | 技能工作流 | 依 `SKILL.md` 與 `docs/website-*.md`，agent 設計、產圖文、實作、驗收、部署；受宿主工具與帳號可用性限制 |
+| 離線網站骨架 | ✅ | `website init/build/demo`：sales／shop／experience，語意 HTML、滾動動畫、無 JS 與 reduced-motion 基線 |
+| 離線檢查 | ✅ | `website check --site DIR`：JSON；exit 0 基線、2 草稿、1 錯誤，不等於商務或正式發布驗收 |
+| 免費額度部署 | 設定產出＋agent 引導 | CLI 產生 Workers Static Assets／Firebase Hosting／Cloud Run 設定；不自動登入、部署或開 Billing |
+| GPT 網站素材 | agent 真工具產圖 | CLI 只列 prompt 與待補素材；內建 GPT image 優先，無工具就如實列待補，API 路徑另計費 |
+| 收款商店 | agent 客製整合 | CLI 的示範 cart 不收款，外部 checkout 為逐商品連結；完整後端需另實作與交易測試 |
+
 專案的能力分三層，避免「模式 / 模組 / 統籌器」混淆：
 
 ### A. 核心 SEO 模式（Core Modes）

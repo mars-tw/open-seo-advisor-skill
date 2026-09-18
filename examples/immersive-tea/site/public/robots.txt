@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+# Draft: pages carry noindex; sitemap has no draft entries.

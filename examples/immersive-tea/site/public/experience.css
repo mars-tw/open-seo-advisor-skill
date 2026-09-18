@@ -1,0 +1,13 @@
+/* A project-specific visual treatment, separate from the reusable starter. */
+.site-experience .hero{display:flex;min-height:calc(100svh - 125px);isolation:isolate;overflow:hidden;background:#123338;color:#f5f2df;padding-top:6rem;padding-bottom:7rem}
+.site-experience .hero-copy{max-width:660px}
+.site-experience .hero-image{position:absolute;inset:0;z-index:-2;border-radius:0;margin:0;width:100%;height:100%;max-height:none;min-height:0}
+.site-experience .hero-image img{object-position:78% center}
+.site-experience .hero::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(5,27,33,.87),rgba(8,32,35,.48) 55%,rgba(10,32,36,.05))}
+.site-experience .hero .intro{color:#e3e9db;max-width:28rem}
+.site-experience .hero-copy .eyebrow{color:#e7c58a}
+.site-experience .round-link span{border-color:#c5d5c8}
+.site-experience .hero-image figcaption{left:auto;right:var(--gutter);bottom:2rem;max-width:32%;background:rgba(5,27,33,.78);color:#f4f0dc}
+.site-experience .hero-footnote{color:#d6dfd1}
+.site-experience .reveal{opacity:1!important}
+@media(max-width:580px){.site-experience .hero{min-height:calc(100svh - 170px);padding-top:4rem;padding-bottom:5rem}.site-experience .hero h1{font-size:2.55rem}.site-experience .hero-image img{object-position:72% center}.site-experience .hero::before{background:rgba(5,27,33,.65)}.site-experience .hero-image figcaption{display:none}}

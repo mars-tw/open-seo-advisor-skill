@@ -1,5 +1,39 @@
 # Open SEO Advisor
 
+## v0.4.1：引導式 SEO／AEO 敘事建站
+
+沉浸式動畫以「主角要做什麼、遇到什麼、訪客怎麼參與、最後改變什麼」設計。
+範例《一片葉的回家路》有四張 GPT 場景、獨立透明主角、可倒帶的路徑與分幕環境變化，
+訪客的點燈操作會影響後續畫面和結尾。背景不使用縮放動畫。
+
+本衍生版本在原有 SEO 顧問能力上，加入銷售站、購物站、互動體驗站的建置工作流。
+使用者說明品牌與目的，agent 引導設計故事分幕、用 GPT 產生圖文、實作網站、驗收並選擇
+Cloudflare、Firebase Hosting 或 GCP Cloud Run。免費額度與帳務條件分別查核。
+
+在已安裝技能的 coding agent 輸入：
+
+> 使用 $open-seo-advisor，帶我建立有 GPT 圖文與沉浸式滾動動畫的購物網站，優先用免費主機。
+
+將完整資料夾放在宿主的 skills 目錄，例如 `~/.codex/skills/open-seo-advisor/`，重新開啟
+工作階段。無 agent 也能用 Python 3.10+ 執行離線建站精靈：
+
+```bash
+python -m pip install -e ./scripts
+seo-advisor website init --out ./my-site
+python -m http.server 8080 --bind 127.0.0.1 --directory ./my-site/public
+```
+
+開啟 `http://127.0.0.1:8080`。CLI 產出可操作的靜態骨架、素材 prompt 清單與部署設定；
+**真正 GPT 產圖、客製多頁、支付後端與部署由 agent 後續完成，CLI 不會自動執行。**
+展示購物車不收款；正式店需驗證支付流程。`website check` 只檢查離線基線，不保證排名或 AI 引用。
+
+[完整建站流程](docs/website-builder.md) · [GPT 素材](docs/website-assets.md) ·
+[主機選擇](docs/website-hosting.md) · [商務流程](docs/website-commerce.md) ·
+[山嵐茶屋示範](examples/immersive-tea/README.md)
+
+保留 [mars-tw/open-seo-advisor-skill](https://github.com/mars-tw/open-seo-advisor-skill) 原作者
+與 Apache-2.0 授權；以下既有稽核、內容與行銷能力繼續保留。
+
 > 開源、可攜、不綁定單一廠商的**全域行銷營運技能**。從 SEO 健檢出發，延伸到
 > 內容、廣告、產圖、成長行銷、電商 listing，並用 AI 矩陣與一鍵代操把它們串成
 > 「一個指令搞定」——蒸餾業界公認方法論與 Google 官方標準，結合爬蟲與 LLM，

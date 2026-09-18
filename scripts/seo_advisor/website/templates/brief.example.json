@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "brand": "山嵐茶屋",
+  "site_type": "sales",
+  "hosting": "cloudflare",
+  "canonical": null,
+  "publication": "draft",
+  "lang": "zh-TW",
+  "title": "山嵐茶屋｜品牌茶席網站草稿",
+  "description": "山嵐茶屋的品牌網站草稿。請換成已核對的品牌背景、服務內容與商品資訊。",
+  "headline": "把一天，留一點給山。",
+  "intro": "從山間的光，到杯裡的暖，讓注意力回到眼前。此為文案示意，請依真實品牌資料改寫。",
+  "chapters": [
+    {"title": "故事的起點", "body": "請填入品牌成立原因、服務對象與可確認的背景。"},
+    {"title": "做法與細節", "body": "請填入可核對的材料、製程或服務流程。"},
+    {"title": "走進日常", "body": "請填入實際使用情境與下一步行動。"}
+  ],
+  "qa": [
+    {"question": "這是正式網站嗎？", "answer": "目前是網站草稿，尚待品牌確認內容與服務資訊。"},
+    {"question": "可以關閉動畫嗎？", "answer": "可以。頁首的動畫切換按鈕與系統減少動態效果設定都能關閉動畫。"}
+  ],
+  "cta": {"label": "查看服務內容", "url": "#contact"},
+  "products": [],
+  "assets": {"hero": null},
+  "content_verified": false
+}

@@ -68,6 +68,7 @@ from seo_advisor.indexnow.cli import indexnow_app  # noqa: E402 - 延後匯入�
 from seo_advisor.matrix.cli import matrix_app  # noqa: E402 - 延後匯入避免循環相依
 from seo_advisor.plugins.cli import plugin_app  # noqa: E402 - 延後匯入避免循環相依
 from seo_advisor.security_mode.cli import security_app  # noqa: E402 - 延後匯入避免循環相依
+from seo_advisor.website.cli import website_app  # noqa: E402
 
 app.add_typer(image_app, name="image")
 app.add_typer(ads_app, name="ads")
@@ -79,6 +80,7 @@ app.add_typer(security_app, name="security")
 app.add_typer(cloudflare_app, name="cloudflare")
 app.add_typer(indexnow_app, name="indexnow")
 app.add_typer(plugin_app, name="plugin")
+app.add_typer(website_app, name="website")
 
 # 一鍵代操機器人：頂層指令，新手最推薦的入口
 app.command("auto")(_auto_command)

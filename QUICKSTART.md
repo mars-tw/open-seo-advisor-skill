@@ -1,5 +1,10 @@
 # 3 分鐘上手：一個指令搞定
 
+**想建立新網站？** 安裝後輸入 `seo-advisor website init --out ./my-site`，會依序問品牌、
+站型、主機與網域，產生可預覽的網站草稿。或在 coding agent 呼叫 `$open-seo-advisor`，
+由它引導完成 GPT 圖文、故事動畫、SEO／AEO、商務功能與部署。
+詳見 [建站指南](docs/website-builder.md)。以下是原有網站 SEO 健檢的上手流程。
+
 這份指南寫給完全沒有寫過程式、沒有行銷/SEO 背景的人。跟著做，幾分鐘內就能拿到
 一份看得懂的優化報告。
 

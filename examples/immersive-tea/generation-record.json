@@ -1,0 +1,15 @@
+{
+  "status": "verified",
+  "tool": "built-in image_gen.imagegen",
+  "model": "Not exposed by tool; do not infer model ID",
+  "generated_at": "2026-09-18",
+  "asset": "assets/tea-mountains.png",
+  "dimensions": [
+    1672,
+    941
+  ],
+  "bytes": 1866210,
+  "review": "Opened generated image: original misty tea landscape, readable negative space, celadon tea set, no text/logo; illustrative fictional scene.",
+  "prompt_summary": "Original cinematic landscape 16:9 website background for fictional Taiwanese tea experience 山嵐茶屋. No text, logo or watermark. Teal-green high mountain tea garden at dawn, terraced tea rows, layered blue-green mountains and mist, dark slate ledge lower right with unbranded celadon gaiwan and cup. Left 45 percent calm dark teal negative space for HTML typography. Foreground, midground, background distinct for gentle scroll animation. Atmospheric photorealism, cool dawn light, muted golden right rim, no people or actual business/location claims.",
+  "prompt": "Generate one original cinematic website background image for a fictional Taiwanese tea experience called 山嵐茶屋. No text anywhere, no logo, no watermark. Landscape 16:9 composition. An evocative teal-green high mountain tea garden at early dawn: terraced tea rows contour steep slopes in the midground, layered blue-green mountain silhouettes and low translucent pale mist in the distance, a weathered dark slate tea ledge in the lower right with one elegant unbranded pale celadon gaiwan and a small matching teacup, fine natural steam, quiet small tea leaves nearby. The left 45 percent is visually calm low-contrast dark teal mist and hillside, intentionally usable behind real HTML cream typography. Strong cinematic depth with identifiable foreground ledge, midground tea rows, background mountain layers that can be cropped and moved gently on scroll. Editorial atmospheric photorealism, tactile glaze and stone, natural cool dawn light with a narrow muted golden rim on right, sophisticated forest jade palette, fine grain, realistic perspective. Not a photo of any actual business or place; an illustrative fictional tea landscape. No people, no architecture logos, no packaging or commercial text."
+}
