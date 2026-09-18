@@ -3,7 +3,7 @@
 [一筆敬意：工筆媽祖畫像](https://open-seo-gongbi-demo.digimkt.workers.dev/)
 
 2026-09-18 發布於 Cloudflare Workers Static Assets，Worker 為 `open-seo-gongbi-demo`。
-部署版本：`a7e37839-738f-4110-84a1-0e53c6f8f6c1`。只發布 `public/`，沒有後端服務或付款功能。
+部署版本：`9d718a62-2717-4a3c-b421-b059858f32b8`。只發布 `public/`，沒有後端服務或付款功能。
 網頁保留 noindex；四張圖像的生成紀錄與研究文件保留在原始碼，沒有當作公開網站檔案上傳。
 
 已讀回 9 份公開檔案，內容雜湊全部與本機一致；不存在路徑與生成紀錄網址皆回傳 404。
