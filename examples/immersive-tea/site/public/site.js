@@ -72,8 +72,9 @@
     }
     if (cinematic && !reduced) {
       const navHeight = navigation.getBoundingClientRect().height;
+      story.style.setProperty("--story-nav-height", `${navHeight}px`);
       let index = 0;
-      chapters.forEach((chapter, i) => { if (chapter.getBoundingClientRect().top <= navHeight) index = i; });
+      chapters.forEach((chapter, i) => { if (chapter.getBoundingClientRect().top <= navHeight + 1) index = i; });
       const bounds = chapters[index].getBoundingClientRect();
       const cursor = index + clamp((navHeight - bounds.top) / Math.max(1, bounds.height));
       const viewport = {width: stage.clientWidth, height: stage.clientHeight};

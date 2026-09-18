@@ -1,5 +1,11 @@
 # 3 分鐘上手：一個指令搞定
 
+**[直接體驗：一片葉的回家路](https://open-seo-advisor-demo.digimkt.workers.dev/)**
+
+不用安裝、下載或登入，就能先看技能做出的故事網站。往下捲動、點亮茶葉，看看結尾
+如何改變；向上捲動可倒帶，關閉動態可改用圖文閱讀。這是虛構品牌示範，不提供預約或收款。
+想看原始碼或在自己電腦開啟，見 [範例與本機預覽](examples/immersive-tea/README.md)。
+
 **想建立新網站？** 安裝後輸入 `seo-advisor website init --out ./my-site`，會依序問品牌、
 站型、主機與網域，產生可預覽的網站草稿。或在 coding agent 呼叫 `$open-seo-advisor`，
 由它引導完成 GPT 圖文、故事動畫、SEO／AEO、商務功能與部署。

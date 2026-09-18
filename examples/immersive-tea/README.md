@@ -4,15 +4,26 @@
 四幕有不同場景，茶葉是獨立透明圖層；訪客的點燈操作會改變後續燈火及結尾。
 山嵐茶屋為虛構品牌，此例不提供預約或收款。
 
+**[直接體驗：一片葉的回家路](https://open-seo-advisor-demo.digimkt.workers.dev/)**
+
+免下載、免登入。進入故事後往下捲動、點亮茶葉，再倒回吊橋，最後回到茶杯終幕。
+章節導覽可以直接跳轉；重玩會重設選擇；關閉動態後四幕改為正常圖文閱讀。
+也可 [直接進入第一幕](https://open-seo-advisor-demo.digimkt.workers.dev/#story)。
+
+維護與重新發布方式見 [部署說明](DEPLOYMENT.md)。
+
+## 本機預覽
+
 在這個資料夾執行：
 
 ```bash
 python -m http.server 8787 --bind 127.0.0.1 --directory site/public
 ```
 
-開啟 `http://127.0.0.1:8787`，進入故事後往下捲動、點亮茶葉、倒回吊橋，再到茶杯終幕。
-章節導覽可以直接跳轉；重玩會重設選擇；關閉動態後四幕改為正常圖文閱讀。
+開啟 `http://127.0.0.1:8787`，即可在本機查看同一份故事。
 預覽保留 noindex，未連接正式商品或支付帳號。
+
+## 素材與原始碼
 
 - `storyboard.md`：敘事因果、每幕動作與畫面驗收。
 - `brief.json`：四幕、原圖座標、主角、操作及結尾的可編輯契約。
@@ -22,6 +33,8 @@ python -m http.server 8787 --bind 127.0.0.1 --directory site/public
 - `generation-record.json`／`assets/tea-mountains.png`：最初視覺方向的來源紀錄。
 - `experience.css`：本範例 hero 的全幅視覺，並非所有品牌的固定風格。
 - `site/`：預覽輸出；只有 `public/` 是網站公開目錄。
+
+## 重新建置
 
 重新建立到新目錄：
 

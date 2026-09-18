@@ -1,6 +1,8 @@
 # 山嵐茶屋 網站專案
 
-目前是離線產出的可預覽網站；未部署、未生圖、未呼叫 API。
+此範例已公開部署：[直接體驗一片葉的回家路](https://open-seo-advisor-demo.digimkt.workers.dev/)。
+
+圖片由 GPT image 生成。這是虛構品牌的互動展示，不提供預約或交易；以下步驟供本機檢視與修改。
 
 1. 在本目錄執行 `python -m http.server 8000 --bind 127.0.0.1 --directory public`，開啟 http://localhost:8000。只公開 public，不要公開專案根目錄。
 2. 將 brief.json 交給網站技能繼續引導。填入真實內容，依 asset-manifest.json 透過 GPT Image 生成並審核圖片。
