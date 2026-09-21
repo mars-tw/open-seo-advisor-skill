@@ -2,6 +2,15 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.4.6] - 2026-09-21
+
+- 修正使用者回報的 robots.txt／sitemap.xml 誤判：HTTP 與 WordPress connector 保留有大小限制的文字回應，首次讀取與快取都能交給分析器；有效檔案不再因內容遺失而被扣分。空白、格式錯誤的 sitemap 及缺少 Sitemap 宣告的 robots.txt 仍會正常列出問題。
+- 將 URL 的 `#fragment` 視為同一份文件，避免重複計算頁數、標題與抓取額度；sitemap index 的子檔案共用去重清單，保留不同 query 的網址。
+- 修正 `install.sh` 在部分非 UTF-8 語系出現 `unbound variable` 的問題，並校正 Python 版本判斷。
+- 新增 55 項回歸測試，涵蓋上述回報、編碼、MIME、快取與安裝流程；放寬 Windows CI 的 Node 測試啟動等待時間，避免負載下的偶發逾時。
+
+回報來源：[#7](https://github.com/mars-tw/open-seo-advisor-skill/issues/7)、[#9](https://github.com/mars-tw/open-seo-advisor-skill/issues/9)。感謝 WendaC58 與 dwyanekobe-dev 的重現資訊，以及 [#5](https://github.com/mars-tw/open-seo-advisor-skill/pull/5)、[#8](https://github.com/mars-tw/open-seo-advisor-skill/pull/8) 的修正提案；本版另以 `PageSnapshot.text` 實作文字回應契約。
+
 ## [0.4.5] - 2026-09-21
 
 - 加入 OpenCode 安裝與建站指南：專案／全域技能路徑、Build 模式、模型連線與 V1／V2 差異。

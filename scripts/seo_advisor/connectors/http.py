@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urldefrag, urljoin, urlparse
 from xml.etree import ElementTree
 
 import httpx
 
 from seo_advisor.connectors.base import WebsiteConnector
+from seo_advisor.connectors.text_response import snapshot_body_fields
 from seo_advisor.models import ConnectorProfile, PageSnapshot, ProbeResult, SafetyPolicy, UrlRecord
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
 from seo_advisor.security.rate_limiter import RateLimiter
@@ -59,6 +60,12 @@ def _decode_body(resp: _SafeResponse) -> str:
         return resp.body.decode(resp.encoding, errors="replace")
     except (LookupError, ValueError):
         return resp.body.decode("utf-8", errors="replace")
+
+
+def _document_key(url: str) -> str:
+    """Fragments and an omitted root slash do not identify different HTTP bodies."""
+    parsed = urlparse(urldefrag(url).url)
+    return parsed._replace(path=parsed.path or "/").geturl()
 
 
 class HTTPConnector(WebsiteConnector):
@@ -177,8 +184,9 @@ class HTTPConnector(WebsiteConnector):
         （如 /.env）探測時：使用者只授權掃描自己的網站，若該路徑意外 redirect
         到第三方網域，繼續追下去等於對未授權的第三方主機發送敏感路徑探測。
         """
-        if use_cache and url in self._response_cache:
-            return self._response_cache[url]
+        cache_key = _document_key(url)
+        if use_cache and cache_key in self._response_cache:
+            return self._response_cache[cache_key]
 
         origin_host = urlparse(url).netloc
         history: list[str] = []
@@ -232,7 +240,7 @@ class HTTPConnector(WebsiteConnector):
                     truncated=truncated,
                 )
                 if use_cache:
-                    self._response_cache[url] = result
+                    self._response_cache[cache_key] = result
                 return result
         raise httpx.RequestError(f"redirect 次數超過上限（{self._max_redirects}）：{url}")
 
@@ -311,9 +319,12 @@ class HTTPConnector(WebsiteConnector):
         return records[:limit]
 
     def _parse_sitemap(
-        self, xml_text: str, depth: int, *, limit: int, skipped_external: list[str]
+        self, xml_text: str, depth: int, *, limit: int, skipped_external: list[str],
+        seen_urls: set[str] | None = None,
     ) -> list[UrlRecord]:
         records: list[UrlRecord] = []
+        if seen_urls is None:
+            seen_urls = set()
         # XML 安全：正常 sitemap 不需要 DTD 或自訂 entity；直接拒絕含 DOCTYPE/
         # ENTITY 的內容，徹底避免 entity expansion（billion laughs）與 XXE。
         # 另外 body 已在下載時經 _MAX_SITEMAP_BYTES 上限保護。
@@ -350,8 +361,9 @@ class HTTPConnector(WebsiteConnector):
                             self._parse_sitemap(
                                 _decode_body(child_resp),
                                 depth + 1,
-                                limit=limit,
+                                limit=limit - len(records),
                                 skipped_external=skipped_external,
+                                seen_urls=seen_urls,
                             )
                         )
                 except (httpx.HTTPError, PrivateNetworkBlockedError):
@@ -363,10 +375,13 @@ class HTTPConnector(WebsiteConnector):
                 loc_el = url_el.find("sm:loc", _SITEMAP_NS)
                 if loc_el is None or not loc_el.text:
                     continue
-                page_url = loc_el.text.strip()
+                page_url = _document_key(urljoin(self.base_url, loc_el.text.strip()))
                 if not self.is_url_in_scope(page_url):
                     skipped_external.append(page_url)
                     continue
+                if page_url in seen_urls:
+                    continue
+                seen_urls.add(page_url)
                 records.append(
                     UrlRecord(url=page_url, source="sitemap", discovered_depth=depth)
                 )
@@ -407,17 +422,18 @@ class HTTPConnector(WebsiteConnector):
         # 若這個 URL 剛好是 probe()/list_urls() 已快取過的固定路徑（robots.txt/
         # sitemap.xml/首頁），直接重用結果，不重新發送請求也不用再等 rate limit——
         # 這是同一份內容，不應該被算成第二次「新的」請求。
-        cached = self._response_cache.get(url)
+        cached = self._response_cache.get(_document_key(url))
         if cached is not None:
             self._register_final_host(cached.final_url)
-            is_html_cached = "text/html" in cached.headers.get("content-type", "")
             return PageSnapshot(
                 url=url,
                 status_code=cached.status_code,
                 final_url=cached.final_url,
                 redirect_chain=cached.history,
                 headers=cached.headers,
-                html=_decode_body(cached) if is_html_cached else "",
+                **snapshot_body_fields(
+                    cached.body, cached.headers.get("content-type", ""), cached.encoding
+                ),
                 fetched_at=fetched_at,
                 elapsed_ms=0,
             )
@@ -430,14 +446,15 @@ class HTTPConnector(WebsiteConnector):
             resp = self._safe_get(url)
             elapsed_ms = int((time.monotonic() - start) * 1000)
             self._register_final_host(resp.final_url)
-            is_html = "text/html" in resp.headers.get("content-type", "")
             return PageSnapshot(
                 url=url,
                 status_code=resp.status_code,
                 final_url=resp.final_url,
                 redirect_chain=resp.history,
                 headers=resp.headers,
-                html=_decode_body(resp) if is_html else "",
+                **snapshot_body_fields(
+                    resp.body, resp.headers.get("content-type", ""), resp.encoding
+                ),
                 fetched_at=fetched_at,
                 elapsed_ms=elapsed_ms,
             )

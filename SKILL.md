@@ -7,7 +7,7 @@ description: >
   既有專案沿用使用者技術棧與指定平台。
 license: Apache-2.0
 metadata:
-  version: "0.4.5"
+  version: "0.4.6"
   upstream: "https://github.com/mars-tw/open-seo-advisor-skill"
 ---
 

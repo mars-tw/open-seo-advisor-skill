@@ -125,6 +125,9 @@ class PageSnapshot(BaseModel):
     redirect_chain: list[str] = Field(default_factory=list)
     headers: dict[str, str] = Field(default_factory=dict)
     html: str = ""
+    # Bounded decoded response body; None means not captured. Empty text is valid.
+    # Legacy connectors can keep supplying only html.
+    text: str | None = None
     fetched_at: str
     fetch_error_type: str | None = None
     fetch_error_message: str | None = None

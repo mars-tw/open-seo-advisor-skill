@@ -154,8 +154,13 @@ class PageSnapshot:
     redirect_chain: list[str]
     headers: dict[str, str]
     html: str
+    text: str | None            # 有界文字回應；None＝未擷取／非文字，""＝空文字回應
     fetched_at: str             # ISO8601，由呼叫端傳入，不在 connector 內產生
 ```
+
+`PageSnapshot.text` 自 v0.4.6 起保留 HTTP 文字回應（包括 robots.txt／XML／JSON）。
+`html` 仍只供 HTML／XHTML 頁面解析；文字回應不可混入 headers。
+舊 connector 可省略 `text`，crawler 會回讀其既有 `html`。兩者都必須遵守原有下載大小限制。
 
 ## 貢獻新 Connector 的檢查清單
 

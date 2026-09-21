@@ -35,6 +35,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from seo_advisor.connectors.base import WebsiteConnector
+from seo_advisor.connectors.text_response import snapshot_body_fields
 from seo_advisor.errors import redact_secrets
 from seo_advisor.models import ConnectorProfile, PageSnapshot, SafetyPolicy, UrlRecord
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
@@ -431,21 +432,15 @@ class WordPressAPIConnector(WebsiteConnector):
                         break
                 body = b"".join(chunks) if not truncated else b"".join(chunks)[:_MAX_HTML_BYTES]
 
-                is_html = "text/html" in resp.headers.get("content-type", "")
-                html_text = ""
-                if is_html:
-                    try:
-                        html_text = body.decode(resp.encoding or "utf-8", errors="replace")
-                    except (LookupError, ValueError):
-                        html_text = body.decode("utf-8", errors="replace")
-
                 return PageSnapshot(
                     url=url,
                     status_code=resp.status_code,
                     final_url=str(resp.url),
                     redirect_chain=redirect_chain,
                     headers=dict(resp.headers),
-                    html=html_text,
+                    **snapshot_body_fields(
+                        body, resp.headers.get("content-type", ""), resp.encoding or "utf-8"
+                    ),
                     fetched_at=fetched_at,
                 )
 

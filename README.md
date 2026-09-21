@@ -10,7 +10,10 @@
 工筆畫像先點「開始作畫動畫」再捲動，也可 [直接看勾線](https://open-seo-gongbi-demo.digimkt.workers.dev/#outline)。
 兩站皆為 GPT 圖像與互動示範，不提供預約或收款。
 
-## v0.4.5：引導式 SEO／AEO 敘事建站
+## v0.4.6：引導式 SEO／AEO 敘事建站
+
+本版修正 SEO 健檢對 robots.txt／sitemap.xml 的誤判、頁內錨點造成的重複頁面，
+以及部分語系環境的 shell 安裝錯誤；詳見 [更新紀錄](CHANGELOG.md)。
 
 沉浸式動畫以「主角要做什麼、遇到什麼、訪客怎麼參與、最後改變什麼」設計。
 範例《一片葉的回家路》有四張 GPT 場景、獨立透明主角、可倒帶的路徑與分幕環境變化，

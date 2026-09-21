@@ -188,6 +188,7 @@ console.log("deterministic path, departure, landing, action and mobile projectio
         capture_output=True,
         text=True,
         check=False,
-        timeout=20,
+        # Shared Windows CI runners can take longer to start Node under load.
+        timeout=60,
     )
     assert result.returncode == 0, result.stdout + result.stderr

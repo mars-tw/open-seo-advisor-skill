@@ -24,9 +24,10 @@ for candidate in python3 python; do
         major_minor="$("$candidate" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")' 2>/dev/null || echo "0.0")"
         major="${major_minor%%.*}"
         minor="${major_minor##*.}"
-        if [ "$major" -ge 3 ] && [ "$minor" -ge 10 ]; then
+        if [[ "$major_minor" =~ ^[0-9]+\.[0-9]+$ ]] &&
+            { [ "$major" -gt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -ge 10 ]; }; }; then
             PYTHON_CMD="$candidate"
-            success "找到 Python：$version（使用指令：$candidate）"
+            success "找到 Python：${version}（使用指令：${candidate}）"
             break
         fi
     fi
