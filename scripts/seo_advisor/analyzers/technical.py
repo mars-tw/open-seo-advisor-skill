@@ -217,7 +217,10 @@ def _check_robots_txt(result: CrawlResult, next_id) -> list[Finding]:
 
 def _check_sitemap(result: CrawlResult, next_id) -> list[Finding]:
     findings: list[Finding] = []
-    if result.sitemap_xml is None:
+    # 空字串也視為「無法讀取」：避免對 "" 呼叫 ElementTree.fromstring 觸發
+    # ParseError 而誤報「非合法 XML」。真正的修正在 http connector（保留
+    # 文字類 body），此處為防禦性後盾。
+    if not result.sitemap_xml:
         findings.append(
             Finding(
                 id=next_id("sitemap_missing"),
