@@ -10,7 +10,7 @@
 工筆畫像先點「開始作畫動畫」再捲動，也可 [直接看勾線](https://open-seo-gongbi-demo.digimkt.workers.dev/#outline)。
 兩站皆為 GPT 圖像與互動示範，不提供預約或收款。
 
-## v0.4.4：引導式 SEO／AEO 敘事建站
+## v0.4.5：引導式 SEO／AEO 敘事建站
 
 沉浸式動畫以「主角要做什麼、遇到什麼、訪客怎麼參與、最後改變什麼」設計。
 範例《一片葉的回家路》有四張 GPT 場景、獨立透明主角、可倒帶的路徑與分幕環境變化，
@@ -20,7 +20,19 @@
 使用者說明品牌與目的，agent 引導設計故事分幕、用 GPT 產生圖文、實作網站、驗收並選擇
 Cloudflare、Firebase Hosting 或 GCP Cloud Run。免費額度與帳務條件分別查核。
 
-在已安裝技能的 coding agent 輸入：
+支援 **Codex 與 [OpenCode](https://opencode.ai/zht)** 等能載入 `SKILL.md` 的 coding agent。
+OpenCode 使用者可依 [安裝與使用指南](docs/opencode.md)，在網站專案執行：
+
+```bash
+git clone https://github.com/mars-tw/open-seo-advisor-skill.git .opencode/skills/open-seo-advisor
+opencode
+```
+
+上述 clone 是獨立的技能 Git 副本；若要隨網站一起版控，請用指南中的 ZIP 安裝方式。
+在 OpenCode 的 Build 模式輸入「請載入 open-seo-advisor 技能，帶我建立沉浸式 SEO／AEO 網站」。
+指南也附可選的 `/seo-website` 指令與 GPT 產圖工具設定說明。
+
+在已安裝技能的 Codex 輸入：
 
 > 使用 $open-seo-advisor，帶我建立有 GPT 圖文與沉浸式滾動動畫的購物網站，優先用免費主機。
 

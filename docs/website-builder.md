@@ -1,5 +1,8 @@
 # 引導式建站
 
+使用 [OpenCode](https://opencode.ai/zht) 的讀者，先依 [OpenCode 指南](opencode.md)放置完整技能並在
+網站專案的 Build 模式啟用。它與 Codex 共用下列建站流程，模型、產圖工具與部署帳號按宿主的實際能力接入。
+
 這份文件給執行技能的 agent 使用。先推進網站，不要把整份規格丟給新手。
 
 **[直接體驗：一片葉的回家路](https://open-seo-advisor-demo.digimkt.workers.dev/)**

@@ -15,6 +15,9 @@ GPT 依 brief 寫標題、故事、商品介紹、CTA、FAQ、meta description �
 
 ## 產圖路由
 
+OpenCode 使用者另見 [工具與安裝說明](opencode.md)：文字模型登入及圖片附件不等於產圖工具。
+僅呼叫當前已列出的 MCP／自訂產圖工具，不假設 Codex 的 `image_gen` 或帳號額度可跨工具直接使用。
+
 1. 宿主有 GPT image／imagegen 工具：優先使用，不要求 API key，也不稱無限制免費。
    依實際工具 schema 呼叫，不發明參數；若有 imagegen 技能就讀取其工作流。
 2. 宿主沒有工具：交素材 brief、每張 prompt 與可預覽骨架，讓使用者選 ChatGPT 產圖

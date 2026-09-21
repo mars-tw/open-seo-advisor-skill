@@ -1,5 +1,9 @@
 # 3 分鐘上手：一個指令搞定
 
+**使用 OpenCode？** 先看 [OpenCode 安裝與建站指南](docs/opencode.md)。完整技能可放入網站專案的
+`.opencode/skills/open-seo-advisor/`，在 Build 模式用自然語言啟用，也可安裝附帶的 `/seo-website` 指令。
+以下 Python 安裝步驟供需要離線 CLI 的使用者，不是啟用 OpenCode 技能的必要條件。
+
 **[直接體驗：一片葉的回家路](https://open-seo-advisor-demo.digimkt.workers.dev/)**
 
 不用安裝、下載或登入，就能先看技能做出的故事網站。往下捲動、點亮茶葉，看看結尾

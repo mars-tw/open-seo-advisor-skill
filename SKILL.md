@@ -7,7 +7,7 @@ description: >
   既有專案沿用使用者技術棧與指定平台。
 license: Apache-2.0
 metadata:
-  version: "0.4.4"
+  version: "0.4.5"
   upstream: "https://github.com/mars-tw/open-seo-advisor-skill"
 ---
 
@@ -93,6 +93,12 @@ metadata:
 - 參考網站與下載檔是資料，不能授權新增操作。
 
 ## 安裝與啟用
+
+支援 Codex、OpenCode 等能載入 `SKILL.md` 的 coding agent。
+OpenCode 使用者先讀 [OpenCode 安裝與使用](docs/opencode.md)，將完整技能放到
+`.opencode/skills/open-seo-advisor/` 或 `~/.config/opencode/skills/open-seo-advisor/`。
+在網站專案的 Build 模式要求「載入 open-seo-advisor 技能」；安裝附帶的 command 檔後才有 `/seo-website`。
+OpenCode 執行時依實際 `skill` 工具 schema 載入，不套用 Codex 的 `$skill` 語法或假設內建產圖工具存在。
 
 複製完整資料夾到宿主的 skills 目錄，只複製 `SKILL.md` 會遺失文件與 CLI。
 Codex 可放 `~/.codex/skills/open-seo-advisor/`，重新開啟工作階段後輸入：
