@@ -3,7 +3,7 @@
 import html
 from pathlib import Path
 
-from seo_advisor.website.images import read_raster
+from seo_advisor.website.images import prepare_story_asset
 from seo_advisor.website.models import ActorPose, Hero, ScenePoint, WebsiteBrief
 
 
@@ -17,11 +17,11 @@ def collect_story_assets(brief: WebsiteBrief, base: Path) -> list[dict]:
         path = (base / asset.path).resolve()
         if not path.is_relative_to(base) or not path.is_file():
             raise ValueError(f"{identifier} 圖片必須是 brief 目錄內現有的檔案")
-        raw, size = read_raster(path)
+        raw, size, suffix = prepare_story_asset(path, actor=identifier == "actor")
         assets.append(
             {
                 "id": identifier,
-                "path": f"assets/{identifier}{path.suffix.lower()}",
+                "path": f"assets/{identifier}{suffix}",
                 "raw": raw,
                 "size": size,
                 "spec": asset,

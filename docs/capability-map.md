@@ -3,6 +3,10 @@
 一頁看懂 Open SEO Advisor 目前有什麼、各自的實作狀態、怎麼呼叫。這是給
 使用者與貢獻者的權威總覽——若與其他文件敘述衝突，以本表為準。
 
+狀態只說明程式能力，不代表某個網站的 SEO 成效。公開的茶屋與工筆網址是單頁
+敘事展示，沒有可用來證明收錄、非品牌搜尋流量或 AI 引用的數據；建站工作流也不是
+一鍵產生可收款商店。逐頁驗收標準見[網站品質](website-quality.md)。
+
 ## 狀態圖例
 
 - ✅ **implemented**：核心邏輯已實作、有測試、可實際產出結果。
@@ -16,9 +20,9 @@
 
 | 能力 | 狀態 | 使用方式與範圍 |
 |---|---|---|
-| 引導式客製建站 | 技能工作流 | 依 `SKILL.md` 與 `docs/website-*.md`，agent 設計、產圖文、實作、驗收、部署；受宿主工具與帳號可用性限制 |
-| 離線網站骨架 | ✅ | `website init/build/demo`：sales／shop／experience，語意 HTML、滾動動畫、無 JS 與 reduced-motion 基線 |
-| 離線檢查 | ✅ | `website check --site DIR`：JSON；exit 0 基線、2 草稿、1 錯誤，不等於商務或正式發布驗收 |
+| 引導式客製建站 | 技能工作流 | 依 `SKILL.md` 與 `docs/website-*.md`，agent 依品牌需求實作頁面、素材、功能與驗收；能否產圖、部署取決於宿主工具與帳號，CLI 不會代做 |
+| 離線網站骨架 | ✅ | `website init/build/demo`：sales／shop／experience 的可編輯起點；預設文案、假資料與展示互動不能當成正式站內容或真實收款 |
+| 離線檢查 | ✅ | `website check --site DIR`：JSON；exit 0 基線、2 草稿、1 錯誤。未量測現場 LCP、收錄、非品牌搜尋曝光或 AI 引用 |
 | 免費額度部署 | 設定產出＋agent 引導 | CLI 產生 Workers Static Assets／Firebase Hosting／Cloud Run 設定；不自動登入、部署或開 Billing |
 | GPT 網站素材 | agent 真工具產圖 | CLI 只列 prompt 與待補素材；內建 GPT image 優先，無工具就如實列待補，API 路徑另計費 |
 | 收款商店 | agent 客製整合 | CLI 的示範 cart 不收款，外部 checkout 為逐商品連結；完整後端需另實作與交易測試 |
@@ -29,7 +33,7 @@
 
 | 能力 | 狀態 | CLI | 說明 |
 |---|---|---|---|
-| 顧問 Consultant | ✅ | `seo-advisor audit consultant --url <url>` | 技術 SEO 全站健檢，產出 Finding + 健康分數 + 白話報告 |
+| 顧問 Consultant | ✅ | `seo-advisor audit consultant --url <url>` | 對可爬取的指定範圍做技術 SEO 健檢，產出 Finding、健康分數與報告；分數不代表排名或 Search Console 成效 |
 | 文章寫手 Content Writer | ✅ | `seo-advisor write --topic <主題>` | LLM brief→outline→draft→QA；免金鑰用 `--llm-provider mock` |
 | 工程師 Engineer | ✅（robots/sitemap/canonical）/ 🚧（hreflang/結構化資料/redirect/CWV） | `seo-advisor fix engineer/rollback` | 自動修復三種問題，dry-run 預覽 + 二次確認才寫入，有備份/回滾；其餘修復類型仍是規劃中 |
 | 資安 Security | ✅ | `seo-advisor security audit` | 被動式資安掃描（暴露檔案/目錄列表/cloaking/HTTPS/HSTS/spam/CMS 版本）；暴露檔案/目錄列表/cloaking 需 `--confirm-authorized` 明確授權，不做任何攻擊性測試 |
@@ -62,6 +66,11 @@
 - **完全新手**：`seo-advisor auto <你的網址>`（一個指令）或直接 `seo-advisor`
   進精靈選第一個。
 - **免金鑰試玩任何能力**：找對應的 `... demo` 指令（見上表）。
+
+若要展示「多頁 SEO 站」或「購物站」能力，驗收對應的獨立頁面、商品／分類路徑與
+實際商務狀態。若要展示 SEO 成效，先有可收錄正式站、逐頁 metadata／標題／效能驗證，
+再提供 Search Console 索引及非品牌查詢資料。AI 搜尋引用只可作具時間與查詢條件的
+觀察，不能以品牌名搜尋截圖或 demo 分數替代。
 
 ## 誠實聲明
 

@@ -65,9 +65,33 @@ class Chapter(StrictModel):
     body: str = Field(min_length=1, max_length=1600)
 
 
+class ContentPage(StrictModel):
+    """One crawlable page for a distinct topic, separate from the homepage."""
+
+    slug: str = Field(min_length=2, max_length=60, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(min_length=1, max_length=350)
+    headline: str = Field(min_length=1, max_length=160)
+    intro: str = Field(min_length=1, max_length=1600)
+    sections: list[Chapter] = Field(min_length=2, max_length=8)
+
+    @field_validator("slug")
+    @classmethod
+    def reserved_slug(cls, value):
+        if value in {"assets", "index", "robots", "sitemap", "404"}:
+            raise ValueError("頁面網址使用了系統保留名稱")
+        return value
+
+
 class Answer(StrictModel):
     question: str = Field(min_length=1, max_length=160)
     answer: str = Field(min_length=1, max_length=1600)
+
+
+class ExperienceOption(StrictModel):
+    key: str = Field(min_length=2, max_length=32, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    label: str = Field(min_length=1, max_length=40)
+    note: str = Field(min_length=1, max_length=300)
 
 
 class CTA(StrictModel):
@@ -155,7 +179,13 @@ class WebsiteBrief(StrictModel):
     description: str = Field(default="", max_length=350)
     headline: str = Field(default="", max_length=160)
     intro: str = Field(default="", max_length=1600)
+    selection_heading: str = Field(default="", max_length=160)
+    faq_heading: str = Field(default="", max_length=160)
+    contact_heading: str = Field(default="", max_length=160)
+    experience_intro: str = Field(default="", max_length=1600)
+    experience_options: list[ExperienceOption] = Field(default_factory=list, max_length=5)
     chapters: list[Chapter] = Field(default_factory=list, max_length=8)
+    pages: list[ContentPage] = Field(default_factory=list, max_length=12)
     qa: list[Answer] = Field(default_factory=list, max_length=12)
     cta: CTA = Field(default_factory=CTA)
     products: list[Product] = Field(default_factory=list, max_length=24)
@@ -174,6 +204,18 @@ class WebsiteBrief(StrictModel):
             raise ValueError("story_scenes 需至少兩幕，且依序對應每一個 chapters 段落")
         if (self.story_actor or self.story_start_pose) and not self.story_scenes:
             raise ValueError("story_actor／story_start_pose 需搭配 story_scenes")
+        if len({page.slug for page in self.pages}) != len(self.pages):
+            raise ValueError("pages.slug 不可重複")
+        if len({option.key for option in self.experience_options}) != len(self.experience_options):
+            raise ValueError("experience_options.key 不可重複")
+        for name, values in (
+            ("title", [self.title, *(page.title for page in self.pages)]),
+            ("description", [self.description, *(page.description for page in self.pages)]),
+            ("headline", [self.headline, *(page.headline for page in self.pages)]),
+        ):
+            filled = [value.strip().casefold() for value in values if value.strip()]
+            if len(set(filled)) != len(filled):
+                raise ValueError(f"首頁與內頁的 {name} 不可重複")
         return self
 
     @field_validator("canonical")
@@ -197,6 +239,74 @@ class WebsiteBrief(StrictModel):
         for field in ("title", "description", "headline", "intro"):
             if not getattr(self, field):
                 items.append(f"{field} 尚未填寫")
+        if self.publication == "production":
+            for field in ("selection_heading", "faq_heading", "contact_heading"):
+                if not getattr(self, field):
+                    items.append(f"{field} 尚未填寫")
+            if self.site_type in {"sales", "shop"} and self.cta.url.startswith("#"):
+                items.append("銷售／購物站需要可用的 HTTPS 聯絡或結帳入口")
+            if self.cta.label == "查看詳細資訊":
+                items.append("行動按鈕仍是通用文字，請說明訪客會去哪裡")
+            if self.site_type == "experience":
+                if not self.experience_intro:
+                    items.append("experience_intro 尚未填寫")
+                if len(self.experience_options) < 2:
+                    items.append("互動體驗至少需要兩個已確認的選項")
+            draft_terms = (
+                "示範",
+                "草稿",
+                "待確認",
+                "請填",
+                "虛構",
+                "示意",
+                "用來放品牌",
+                "placeholder",
+                "lorem ipsum",
+            )
+            visible_copy = [
+                ("title", self.title),
+                ("description", self.description),
+                ("headline", self.headline),
+                ("intro", self.intro),
+                ("selection_heading", self.selection_heading),
+                ("faq_heading", self.faq_heading),
+                ("contact_heading", self.contact_heading),
+                ("experience_intro", self.experience_intro),
+                *(
+                    (f"chapters.{index}.{field}", getattr(chapter, field))
+                    for index, chapter in enumerate(self.chapters, 1)
+                    for field in ("title", "body")
+                ),
+                *(
+                    (f"qa.{index}.{field}", getattr(answer, field))
+                    for index, answer in enumerate(self.qa, 1)
+                    for field in ("question", "answer")
+                ),
+                *(
+                    (f"pages.{page.slug}.{field}", getattr(page, field))
+                    for page in self.pages
+                    for field in ("title", "description", "headline", "intro")
+                ),
+                *(
+                    (f"pages.{page.slug}.sections.{index}.{field}", getattr(section, field))
+                    for page in self.pages
+                    for index, section in enumerate(page.sections, 1)
+                    for field in ("title", "body")
+                ),
+                *(
+                    (f"products.{index}.{field}", getattr(product, field))
+                    for index, product in enumerate(self.products, 1)
+                    for field in ("name", "description")
+                ),
+                *(
+                    (f"experience_options.{index}.{field}", getattr(option, field))
+                    for index, option in enumerate(self.experience_options, 1)
+                    for field in ("label", "note")
+                ),
+            ]
+            for name, value in visible_copy:
+                if any(term in value.casefold() for term in draft_terms):
+                    items.append(f"{name} 仍含示範或待確認文字")
         if len(self.chapters) < 2:
             items.append("至少需要兩個品牌故事段落")
         if len(self.qa) < 2:

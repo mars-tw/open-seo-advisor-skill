@@ -8,8 +8,15 @@ from importlib.resources import files
 from pathlib import Path
 from string import Template
 
-from seo_advisor.website.images import read_raster
-from seo_advisor.website.models import Answer, Chapter, Product, WebsiteBrief
+from seo_advisor.website.images import prepare_hero
+from seo_advisor.website.models import (
+    Answer,
+    Chapter,
+    ContentPage,
+    ExperienceOption,
+    Product,
+    WebsiteBrief,
+)
 from seo_advisor.website.story import collect_story_assets, render_story
 
 LABELS = {"sales": "服務提案", "shop": "商品選購", "experience": "互動體驗"}
@@ -35,6 +42,23 @@ def demo_brief(site_type: str = "sales", hosting: str = "cloudflare") -> Website
         description="山嵐茶屋的虛構網站示範。沿著山霧、茶葉與茶席，體驗自然滾動的品牌敘事；商品與服務內容皆待正式確認。",
         headline=headlines[site_type],
         intro="留一口呼吸的空間。從山間的光，到杯裡的暖，讓注意力回到眼前這一刻。",
+        selection_heading={
+            "sales": "認識茶席的安排",
+            "shop": "比較三種茶飲",
+            "experience": "挑一個字，記住這段旅程",
+        }[site_type],
+        faq_heading="山嵐茶屋常見問題",
+        contact_heading="查看山嵐茶屋的下一步",
+        experience_intro="選一個字，為這段頁面體驗留下註記。這不是性格測驗。",
+        experience_options=(
+            [
+                ExperienceOption(key="quiet", label="靜", note="聽一段沒有急著回答的空白。"),
+                ExperienceOption(key="light", label="光", note="找找今天曾被你忽略的一小片光。"),
+                ExperienceOption(key="warm", label="暖", note="把手邊的溫度，多留一會兒。"),
+            ]
+            if site_type == "experience"
+            else []
+        ),
         chapters=[
             Chapter(
                 title="山，先說了話。",
@@ -81,6 +105,25 @@ def demo_brief(site_type: str = "sales", hosting: str = "cloudflare") -> Website
             if site_type == "shop"
             else []
         ),
+        pages=[
+            ContentPage(
+                slug="about-the-experience",
+                title="山嵐茶屋｜體驗內容示意",
+                description="這是山嵐茶屋的虛構內頁，示意如何把一個明確主題放在獨立網址，補上可閱讀的內容、操作方式與下一步。正式發布前需以真實資料改寫。",
+                headline="這段體驗，從哪裡開始？",
+                intro="以下是內頁結構示意，供填入真實的服務或商品資訊。",
+                sections=[
+                    Chapter(
+                        title="適合誰來閱讀",
+                        body="說明這個主題要回答誰的問題，以及訪客想完成什麼。",
+                    ),
+                    Chapter(
+                        title="如何開始",
+                        body="把實際步驟與注意事項寫清楚，並連到已確認的服務入口。",
+                    ),
+                ],
+            )
+        ],
     )
 
 
@@ -99,17 +142,22 @@ def _json(value: object) -> str:
 
 def _asset(
     brief: WebsiteBrief, base: Path
-) -> tuple[str | None, bytes | None, tuple[int, int] | None]:
+) -> tuple[str | None, bytes | None, tuple[int, int] | None, bytes | None, tuple[int, int] | None]:
     hero = brief.assets.hero
     if not hero:
-        return None, None, None
+        return None, None, None, None, None
     base = base.resolve()
     path = (base / hero.path).resolve()
     if not path.is_relative_to(base) or not path.is_file():
         raise ValueError("圖片必須是 brief 目錄內現有的檔案")
-    raw, dimensions = read_raster(path)
-    suffix = path.suffix.lower()
-    return "assets/hero" + suffix, raw, dimensions
+    raw, dimensions, suffix, mobile = prepare_hero(path)
+    return (
+        "assets/hero" + suffix,
+        raw,
+        dimensions,
+        mobile[0] if mobile else None,
+        mobile[1] if mobile else None,
+    )
 
 
 def _new_output(out: Path) -> Path:
@@ -125,16 +173,28 @@ def _new_output(out: Path) -> Path:
 
 
 def _figure(
-    brief: WebsiteBrief, src: str | None, dimensions: tuple[int, int] | None, *, main: bool = False
+    brief: WebsiteBrief,
+    src: str | None,
+    dimensions: tuple[int, int] | None,
+    *,
+    main: bool = False,
+    mobile_dimensions: tuple[int, int] | None = None,
 ) -> str:
     if src:
         attrs = 'fetchpriority="high" loading="eager"' if main else 'loading="lazy"'
         size = f' width="{dimensions[0]}" height="{dimensions[1]}"' if dimensions else ""
-        return f'<img src="{src}" alt="{_e(brief.assets.hero.alt)}"{size} {attrs} decoding="async">'
-    return '<div class="visual-draft" role="img" aria-label="待生成的品牌主視覺佔位"><span>山</span><small>DRAFT VISUAL · 主視覺待生成</small></div>'
+        responsive = (
+            f' srcset="assets/hero-mobile.webp {mobile_dimensions[0]}w, {src} {dimensions[0]}w"'
+            ' sizes="(max-width: 850px) 100vw, 50vw"'
+            if main and mobile_dimensions and dimensions
+            else ""
+        )
+        return f'<img src="{src}"{responsive} alt="{_e(brief.assets.hero.alt)}"{size} {attrs} decoding="async">'
+    return '<div class="visual-draft" role="img" aria-label="待生成的品牌主視覺佔位"><span>圖</span><small>主視覺待生成</small></div>'
 
 
 def _mode_content(brief: WebsiteBrief) -> str:
+    heading = _e(brief.selection_heading or "請填寫此區的主題")
     if brief.site_type == "shop":
         products = brief.products or demo_brief("shop").products
         cards = []
@@ -149,10 +209,32 @@ def _mode_content(brief: WebsiteBrief) -> str:
         cart = ""
         if any(not p.checkout_url for p in products):
             cart = '<aside class="demo-cart" id="cart" aria-label="示範購物清單"><h3>你的示範清單</h3><p>只在此頁暫存，不收款、不送單、不保留個人資料。</p><p id="cart-status" role="status" aria-live="polite">清單目前是空的。</p><ul id="cart-items"></ul><button id="clear-cart" class="text-button" type="button" hidden>清空清單</button><noscript><p>清單互動需要 JavaScript；商品介紹及外部結帳連結仍可閱讀。</p></noscript></aside>'
-        return f'<section class="selection section-pad" id="selection"><div class="section-heading"><span class="eyebrow">THE COLLECTION</span><h2>選一份，帶進日常。</h2></div><div class="products">{"".join(cards)}</div>{cart}</section>'
+        return f'<section class="selection section-pad" id="selection"><div class="section-heading"><h2>{heading}</h2></div><div class="products">{"".join(cards)}</div>{cart}</section>'
     if brief.site_type == "experience":
-        return """<section class="experience section-pad" id="selection"><span class="eyebrow">A MOMENT FOR YOU</span><h2>此刻，想把時間留給什麼？</h2><p>選一個字，替這段旅程留下一個註記。這是頁面互動，不是性格測驗。</p><div class="mood-options" aria-label="選擇此刻的心情"><button type="button" data-mood="quiet" aria-pressed="false" hidden>靜</button><button type="button" data-mood="light" aria-pressed="false" hidden>光</button><button type="button" data-mood="warm" aria-pressed="false" hidden>暖</button></div><div class="mood-notes"><article id="quiet"><h3>靜</h3><p>聽一段沒有急著回答的空白。</p></article><article id="light"><h3>光</h3><p>找找今天曾被你忽略的一小片光。</p></article><article id="warm"><h3>暖</h3><p>把手邊的溫度，多留一會兒。</p></article></div><p id="mood-status" class="fineprint" role="status" aria-live="polite">三種感受，都可以慢慢讀。</p></section>"""
-    return f"""<section class="invitation section-pad" id="selection"><span class="eyebrow">AN INVITATION</span><h2>留下一段，<br>好好相處的時間。</h2><p>{_e(brief.intro or '在這裡說明服務適合誰、能提供什麼，以及下一步如何開始。')}</p><a class="button" href="{_e(brief.cta.url)}">{_e(brief.cta.label)}</a><div class="service-steps"><p><span>01</span>了解內容與適用情境</p><p><span>02</span>確認方案與服務細節</p><p><span>03</span>透過正式管道聯繫</p></div></section>"""
+        options = brief.experience_options or demo_brief("experience").experience_options
+        buttons = "".join(
+            f'<button type="button" data-mood="{option.key}" aria-pressed="false" hidden>{_e(option.label)}</button>'
+            for option in options
+        )
+        notes = "".join(
+            f'<article id="{option.key}"><h3>{_e(option.label)}</h3><p>{_e(option.note)}</p></article>'
+            for option in options
+        )
+        intro = _e(brief.experience_intro or "請填入此互動的目的與操作說明。")
+        return (
+            '<section class="experience section-pad" id="selection">'
+            f"<h2>{heading}</h2><p>{intro}</p>"
+            f'<div class="mood-options" aria-label="體驗選項">{buttons}</div>'
+            f'<div class="mood-notes">{notes}</div>'
+            '<p id="mood-status" class="fineprint" role="status" aria-live="polite">'
+            "可選擇上方選項，閱讀不同內容。</p></section>"
+        )
+    return (
+        '<section class="invitation section-pad" id="selection">'
+        f"<h2>{heading}</h2>"
+        f'<p>{_e(brief.intro or "請填入服務內容、適用對象及下一步。")}</p>'
+        f'<a class="button" href="{_e(brief.cta.url)}">{_e(brief.cta.label)}</a></section>'
+    )
 
 
 def _hosting(brief: WebsiteBrief) -> dict[str, str]:
@@ -161,8 +243,12 @@ def _hosting(brief: WebsiteBrief) -> dict[str, str]:
             "wrangler.jsonc": _json(
                 {
                     "name": "my-immersive-site",
-                    "compatibility_date": "2026-09-01",
-                    "assets": {"directory": "./public", "not_found_handling": "404-page"},
+                    "compatibility_date": "2026-09-23",
+                    "assets": {
+                        "directory": "./public",
+                        "html_handling": "auto-trailing-slash",
+                        "not_found_handling": "404-page",
+                    },
                 }
             )
         }
@@ -190,10 +276,78 @@ def _hosting(brief: WebsiteBrief) -> dict[str, str]:
     }
 
 
+def _render_page(brief: WebsiteBrief, page: ContentPage) -> str:
+    canonical_url = f"{brief.canonical}{page.slug}/" if brief.canonical else None
+    template = (
+        files("seo_advisor.website").joinpath("templates", "page.html").read_text(encoding="utf-8")
+    )
+    sections = "".join(
+        f'<section class="topic-section section-pad"><h2>{_e(section.title)}</h2>'
+        f"<p>{_e(section.body)}</p></section>"
+        for section in page.sections
+    )
+    related = "".join(
+        f'<li><a href="../{other.slug}/">{_e(other.headline)}</a></li>'
+        for other in brief.pages
+        if other.slug != page.slug
+    )
+    related_section = (
+        '<nav class="topic-related section-pad" aria-label="相關主題">'
+        f"<h2>相關主題</h2><ul>{related}</ul></nav>"
+        if related
+        else ""
+    )
+    graph = {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": page.title,
+        "description": page.description,
+        "inLanguage": brief.lang,
+    }
+    if canonical_url:
+        graph["url"] = canonical_url
+        graph["isPartOf"] = {"@type": "WebSite", "url": brief.canonical}
+    return Template(template).substitute(
+        lang=_e(brief.lang),
+        title=_e(page.title),
+        description=_e(page.description),
+        robots="noindex,follow" if brief.publication == "draft" else "index,follow",
+        canonical=(
+            f'  <link rel="canonical" href="{_e(canonical_url)}">\n'
+            f'  <meta property="og:url" content="{_e(canonical_url)}">'
+            if canonical_url
+            else ""
+        ),
+        structured_data=_json(graph),
+        kind=brief.site_type,
+        brand=_e(brief.brand),
+        label=LABELS[brief.site_type],
+        draft_banner=(
+            '<div class="draft-banner" role="note">網站草稿／設計示意 · 內容與交易功能尚待確認</div>'
+            if brief.publication == "draft"
+            else ""
+        ),
+        headline=_e(page.headline),
+        intro=_e(page.intro),
+        sections=sections,
+        related_pages=related_section,
+        cta_url=_e(f"../{brief.cta.url}" if brief.cta.url.startswith("#") else brief.cta.url),
+        cta_label=_e(brief.cta.label),
+        contact_heading=_e(brief.contact_heading or "請填寫下一步的標題"),
+        contact_note=(
+            "正式聯絡方式、服務條款與交易資訊待品牌確認。"
+            if brief.publication == "draft"
+            else "請透過正式連結查看最新服務資訊。"
+        ),
+    )
+
+
 def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
     brief = WebsiteBrief.model_validate(brief.model_dump())
     out = _new_output(out)
-    image_path, image_bytes, image_dimensions = _asset(brief, base_dir)
+    image_path, image_bytes, image_dimensions, mobile_bytes, mobile_dimensions = _asset(
+        brief, base_dir
+    )
     story_assets = collect_story_assets(brief, base_dir)
     if image_bytes:
         identical = next((asset for asset in story_assets if asset["raw"] == image_bytes), None)
@@ -258,6 +412,18 @@ def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
     answers = "".join(
         f"<details><summary>{_e(a.question)}</summary><p>{_e(a.answer)}</p></details>" for a in qa
     )
+    pages_section = ""
+    if brief.pages:
+        page_links = "".join(
+            f'<li><a href="{page.slug}/"><h3>{_e(page.headline)}</h3>'
+            f"<p>{_e(page.intro)}</p></a></li>"
+            for page in brief.pages
+        )
+        pages_section = (
+            '<section class="topic-pages section-pad" id="more">'
+            "<h2>深入了解</h2>"
+            f"<ul>{page_links}</ul></section>"
+        )
     story_section = (
         render_story(brief, story_assets)
         if brief.story_scenes
@@ -265,7 +431,7 @@ def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
             '<section class="story section-pad" id="story" aria-label="品牌故事">'
             '<div class="story-visual"><figure>'
             + _figure(brief, image_path, image_dimensions)
-            + '<figcaption><span>STORY IN MOTION</span><span id="chapter-progress" aria-hidden="true">01</span></figcaption></figure><p class="fineprint">沿著自然捲動的節奏，讀完每一段。</p></div>'
+            + '<figcaption><span>品牌故事</span><span id="chapter-progress" aria-hidden="true">01</span></figcaption></figure><p class="fineprint">依序閱讀每個段落。</p></div>'
             + f'<div class="chapters">{story}</div></section>'
         )
     )
@@ -283,6 +449,8 @@ def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
         kind=brief.site_type,
         brand=brand,
         label=LABELS[brief.site_type],
+        page_nav='<a href="#more">深入了解</a>' if brief.pages else "",
+        pages_section=pages_section,
         draft_banner=(
             '<div class="draft-banner" role="note">網站草稿／設計示意 · 內容與交易功能尚待確認</div>'
             if draft
@@ -290,10 +458,14 @@ def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
         ),
         headline=_e(brief.headline or "從一個故事，\n開始一段相遇。").replace("\n", "<br>"),
         intro=_e(brief.intro or "用可核對的品牌內容，讓訪客讀懂你想提供的價值。"),
-        hero=_figure(brief, image_path, image_dimensions, main=True),
+        hero=_figure(
+            brief, image_path, image_dimensions, main=True, mobile_dimensions=mobile_dimensions
+        ),
         story_section=story_section,
         mode_content=_mode_content(brief),
         qa=answers,
+        faq_heading=_e(brief.faq_heading or "請填寫常見問題標題"),
+        contact_heading=_e(brief.contact_heading or "請填寫下一步的標題"),
         cta_url=_e(brief.cta.url),
         cta_label=_e(brief.cta.label),
         contact_note=(
@@ -323,10 +495,22 @@ def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
             else "# Draft: pages carry noindex; sitemap has no draft entries.\n"
         ),
         "public/sitemap.xml": '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-        + (f"<url><loc>{_e(brief.canonical)}</loc></url>" if brief.canonical and not draft else "")
+        + (
+            "".join(
+                f"<url><loc>{_e(url)}</loc></url>"
+                for url in [
+                    brief.canonical,
+                    *(f"{brief.canonical}{page.slug}/" for page in brief.pages),
+                ]
+            )
+            if brief.canonical and not draft
+            else ""
+        )
         + "</urlset>\n",
         "public/404.html": '<!doctype html><html lang="zh-TW"><meta charset="utf-8"><meta name="robots" content="noindex"><title>找不到頁面</title><h1>找不到這個頁面</h1><p><a href="/">回到首頁</a></p></html>',
     }
+    for page in brief.pages:
+        data[f"public/{page.slug}/index.html"] = _render_page(brief, page)
     saved = brief.model_dump(mode="json")
     if image_path:
         saved["assets"]["hero"]["path"] = "public/" + image_path
@@ -371,9 +555,9 @@ def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
         f"# {brief.brand} 網站專案\n\n"
         "目前是離線產出的可預覽網站；未部署、未生圖、未呼叫 API。\n\n"
         "1. 在本目錄執行 `python -m http.server 8000 --bind 127.0.0.1 --directory public`，開啟 http://localhost:8000。只公開 public，不要公開專案根目錄。\n"
-        "2. 將 brief.json 交給網站技能繼續引導。填入真實內容，依 asset-manifest.json 透過 GPT Image 生成並審核圖片。\n"
+        "2. 將 brief.json 交給網站技能繼續引導。為不同搜尋意圖填入 pages 內頁的獨立內容與 metadata，依 asset-manifest.json 生成並審核圖片。\n"
         "3. 以 `seo-advisor website build --brief brief.json --out ./next-version` 重建到新目錄；不會覆蓋原目錄。\n"
-        "4. 執行 `seo-advisor website check --site .`。exit 2 表示草稿待補；exit 0 只表示離線 SEO 基線通過，仍須人工／瀏覽器驗證、交易測試及部署後檢查。\n\n"
+        "4. 執行 `seo-advisor website check --site .`。exit 2 表示草稿待補；exit 0 只表示離線技術與內容檢查通過，仍須量測手機 LCP、人工檢查文案與頁面、測試交易及部署後驗證。排名與 AI 引用無法保證。\n\n"
         f"選擇的主機：{brief.hosting}。部署前先查核當時免費額度、帳務需求、網域與費用；主機免費不等於生圖、金流、網域全都免費。\n"
         + {
             "cloudflare": "設定 wrangler.jsonc 的唯一專案名稱。Cloudflare 橘雲是 DNS 代理；此設定使用 Workers Static Assets 託管 public。確認帳號與目標後再部署。\n",
@@ -397,6 +581,10 @@ def build_site(brief: WebsiteBrief, out: Path, *, base_dir: Path) -> dict:
         target = out / "public" / image_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(image_bytes)
+    if mobile_bytes:
+        target = out / "public/assets/hero-mobile.webp"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(mobile_bytes)
     for asset in story_assets:
         target = out / "public" / asset["path"]
         target.parent.mkdir(parents=True, exist_ok=True)

@@ -116,6 +116,20 @@ def test_story_assets_and_nav_are_checked_after_tampering(tmp_path):
     assert not report["checks"]["story_navigation"]
 
 
+def test_large_story_scene_is_bounded_before_delivery(tmp_path):
+    brief = scene_brief(tmp_path)
+    source = tmp_path / "large-scene.png"
+    Image.effect_noise((1400, 900), 30).save(source)
+    brief.story_scenes[0].image.path = source.name
+    brief.assets.hero.path = source.name
+    out = tmp_path / "story"
+    report = build_site(brief, out, base_dir=tmp_path)
+    assert report["status"] == "scaffold", report["errors"]
+    scene = out / "public/assets/scene-01.webp"
+    assert scene.is_file() and scene.stat().st_size <= 500_000
+    assert report["checks"]["scene_1_budget"] is True
+
+
 @pytest.mark.parametrize("mutation", ["count", "path", "effect", "pose", "nan"])
 def test_story_declarations_reject_unsafe_or_incomplete_inputs(tmp_path, mutation):
     data = scene_brief(tmp_path).model_dump()

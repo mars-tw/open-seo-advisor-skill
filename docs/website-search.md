@@ -1,6 +1,9 @@
 # 沉浸式網站的 SEO／AEO 實作
 
-官方文件查核日期：2026-09-18。這裡的 AEO 指讓使用者與搜尋／回答系統更容易理解、查證網站內容；不保證排名、收錄、精選摘要或 AI 引用。
+官方文件查核日期：2026-09-23。這裡的 AEO 指讓使用者與搜尋／回答系統更容易理解、
+查證網站內容；Google 對生成式 AI 搜尋仍以 SEO 基礎為先，沒有可人為控制引用的
+特殊標記或保證方法。本技能不保證排名、收錄、精選摘要或 AI 引用。
+[Google AI 搜尋指引](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide)
 
 ## 先決定每頁要回答什麼
 
@@ -15,6 +18,10 @@
 | 誰負責、遇到問題找誰？ | 品牌資訊、聯絡、服務與交易政策 | 關於／聯絡／政策頁 |
 
 每頁記錄 URL、主要意圖、標題、h1、摘要、內部連結、主要行動、依據與維護責任。不要為每個近義關鍵字複製一頁。GPT 可寫初稿，經營者仍須核實價格、規格、資格與案例；沒有證據的評價、得獎、療效或銷量不生成為事實。
+
+單頁網站適合一個清楚的主要任務，不因「SEO 必須多頁」而無端拆頁。購物站若有多個
+可獨立尋找的商品、分類或政策，應給它們可直接開啟、分享與內部連結的 URL；首頁
+`#hash` 只是同一份文件的章節，不會變成個別商品頁。先驗收這個資訊架構，再投入動畫。
 
 ## 讓動畫建立在可讀內容上
 
@@ -32,13 +39,25 @@
 | 項目 | 實作與驗證 |
 | --- | --- |
 | HTTP | 正常頁 200；搬家 301／308；不存在的內容真實 404，不能一律回首頁 200 |
-| 標題與摘要 | 描述本頁實際用途；各頁避免相同預設標題，主要 h1 清楚且與可見內容一致 |
+| 標題與摘要 | 每個重要頁面的 `<title>` 與 meta description 要準確、具體、盡量獨特，與可見內容一致；缺少品牌、商品或實際事實時不要用空泛模板補位。Google 可能改寫標題或從頁面正文擷取摘要，標籤不能保證搜尋結果照抄。[標題](https://developers.google.com/search/docs/appearance/title-link)／[摘要](https://developers.google.com/search/docs/appearance/snippet) |
+| 標題結構 | 用清楚的主標說明頁面主題，H2／H3 按內容分節，便於讀者及輔助技術導覽。逐頁檢查標題是否描述真實內容；不指定 H2 數量，也不把層級跳躍說成 Google 排名錯誤。[SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide) |
 | canonical | 使用最終 HTTPS 網址；預覽網域、參數頁與正式站處理一致，不把所有商品 canonical 到首頁 |
 | 收錄控制 | 正式可收錄頁無意外 `noindex`；CDN、WAF、登入及 robots 不阻擋需要的 HTML、CSS、JS 與圖片 |
 | sitemap | 列出想收錄的 canonical URL；排除購物車、結帳、登入、搜尋結果與敏感個人資料；`lastmod` 使用實際重要修改日期 |
 | 社群分享 | title、description、絕對網址的預覽圖、頁面 URL 可讀回；這是分享呈現，不保證搜尋排名 |
 | 內部連結 | 從首頁／分類可走到重要頁，連結文字說明目的，不只寫「點這裡」 |
 | 多語 | 有真實翻譯才建語言頁與對應關係；不生成大量空白地區頁 |
+
+meta description 是讓人理解該頁的摘要，Google 不保證顯示它，也沒有固定字數可保證
+截斷方式。品質檢查重點是準確、能區分頁面、能讀懂；不要用同一段通用廣告詞覆蓋所有頁。
+
+沉浸式首頁的首屏主圖可能是 LCP 元素。從瀏覽器量測確定元素後，讓它在初始 HTML
+容易被發現，不對首屏 LCP 圖套 `loading="lazy"`；只有量測證明有幫助時才選擇
+`fetchpriority="high"` 或 preload。其他場景可延後載入，避免搶首屏頻寬。
+[web.dev LCP 最佳化](https://web.dev/articles/optimize-lcp/)。
+良好 LCP 參考門檻為實際使用者手機與桌面各自第 75 百分位 ≤ 2.5 秒；
+本機 Lighthouse 是實驗室診斷，沒有現場資料就標「尚無現場數據」，不能宣稱通過。
+[web.dev LCP 定義](https://web.dev/articles/lcp/)
 
 robots.txt 控制爬取；要讓爬蟲讀到 `noindex`，該頁不能同時被 robots 阻擋。[noindex 指引](https://developers.google.com/search/docs/crawling-indexing/block-indexing) 私人頁面須用登入與授權保護，不能靠 robots 保密。Sitemap 是發現提示，提交不保證收錄。[Sitemap 指引](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
 
@@ -60,18 +79,23 @@ robots.txt 控制爬取；要讓爬蟲讀到 `noindex`，該頁不能同時被 r
 
 **查核更新：Google 自 2026-05-07 起停止呈現 FAQ rich results，並於 2026 年 6 月移除該功能文件。** FAQ 仍可作為有用的頁面內容；舊版「加 FAQ schema 就有搜尋問答展開」或「只限政府／健康站」說法不可沿用。[Google 官方更新](https://developers.google.com/search/updates)
 
-Google AI 搜尋呈現以可爬取、已收錄、可顯示摘要的內容為基礎；符合文件也不保證收錄或被引用。[AI Features 技術說明](https://developers.google.com/search/docs/appearance/ai-features) 部署後也檢查 Search Console 當時提供的 generative AI 收錄／排除控制，依經營者意圖設定；各回答引擎的控制方式分別查核，不把 Google 規則套成全部 AI 平台的規則。
+Google AI 搜尋的引用候選需先被索引，且符合一般搜尋可顯示摘要的條件；符合文件也不保證收錄或被引用。[AI Features 技術說明](https://developers.google.com/search/docs/appearance/ai-features) 部署後也檢查 Search Console 當時提供的 generative AI 收錄／排除控制，依經營者意圖設定；各回答引擎的控制方式分別查核，不把 Google 規則套成全部 AI 平台的規則。
 
 ## 上線前與上線後怎麼驗收
 
 上線前完成可確定的檢查：
 
 1. 檢視建置後原始 HTML，確認主要內容與連結存在；停用 JavaScript、減少動態效果各測一次。
-2. 抽查首頁、商品頁、文章頁、404，核對 HTTP、canonical、title、h1、可見答案與 JSON-LD。
+2. 抽查首頁、每一種重要商品／服務頁、文章頁與 404，核對 HTTP、canonical、title、
+   meta description、主標、章節語義、可見答案、內部連結與適用的 JSON-LD。
 3. 確認 robots 與 sitemap 使用正式網域；測試搜尋引擎需要的資源可公開存取。
 4. 用手機與桌面檢查遮擋、橫向溢出、字級、焦點、動態效果與圖片失敗情況；確認主要 CTA 在不同顯示模式仍可用。
 5. 用 Rich Results Test／Schema 驗證工具檢查適用標記。語法通過與搜尋呈現資格分開記錄，工具不支援的 schema 不自動算錯誤。
+6. 在可測環境記錄手機與桌面的 LCP 元素、時間、網路／裝置條件及造成延遲的資源；
+   修復後重測。若沒有真實使用者資料，實驗室結果只作診斷。
 
-上線後在授權範圍內建立 Search Console 驗證、提交 sitemap、檢查 URL 渲染與收錄。量測實際曝光、點擊、到站行為、有效詢問或交易，不把本機 Lighthouse 分數、schema 通過率換成「SEO／AEO 已成功」。若檢查某回答引擎引用情形，記錄引擎、日期、題目、語言／地區與引用 URL，標為觀察樣本。
+上線後在授權範圍內建立 Search Console 驗證、提交 sitemap、檢查 URL 渲染與收錄。先設定網站主題相關的非品牌需求查詢與頁面基線，再觀察曝光、點擊、到站行為、有效詢問或交易；品牌名搜尋另列，不能用來充當非品牌觸及成果。[Search Console 指引](https://developers.google.com/search/docs/monitor-debug/search-console-start) 不把本機 Lighthouse 分數、schema 通過率換成「SEO／AEO 已成功」。若檢查某回答引擎引用情形，記錄引擎、日期、具體問題、語言／地區、是否含品牌名與引用 URL，標為可能變動的觀察樣本；一次自問品牌名稱不能當成成效證據。
+
+對 Google 的生成式搜尋，另讀 Search Console 的 [Generative AI performance report](https://support.google.com/webmasters/answer/16984139)：它提供 AI Overviews／AI Mode 的曝光、頁面、國家、裝置與日期維度。紀錄觀察期間、適用頁面及曝光變化；報表未顯示查詢字詞，不能直接從這份報表推定「非品牌 AEO 曝光」。若帳戶看不到報表或尚無足夠曝光，標為無法觀察，不能填零當成果。一般搜尋的非品牌查詢、這份生成式搜尋報表，以及逐題人工抽樣要分開記錄，也不能從任何一項推論能控制 AI 引用。[Google 官方 AI 搜尋指引](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide)
 
 交付報告分別寫清楚：`已實作`、`已測試`、`尚待搜尋引擎處理`、`無法驗證`。搜尋收錄與 AI 引用需要後續觀察；不可冒稱已達成。

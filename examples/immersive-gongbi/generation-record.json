@@ -6,7 +6,7 @@
   "assets": [
     {
       "id": "final",
-      "file": "public/assets/final.png",
+      "file": "assets/final.png",
       "dimensions": [
         1024,
         1536
@@ -16,27 +16,27 @@
     },
     {
       "id": "linework",
-      "file": "public/assets/linework.png",
+      "file": "assets/linework.png",
       "dimensions": [
         1024,
         1536
       ],
       "prompt": "Edit this exact supplied Mazu gongbi portrait into its UNCOLORED FINE INK LINE DRAWING stage. This must remain precisely registered to the reference: identical 2:3 canvas dimensions, crop, borders, figure size, head position, crown silhouette and every bead placement, face identity and expression, both hands and tablet, seated posture, chair and robe outline. Do not recompose, redraw into a different pose, shift or enlarge anything. REMOVE ALL red, turquoise, gold, flesh-color washes and all fully painted areas. Retain only very delicate warm-gray/brown ink outlines of the identical crown, facial features, hands, tablet, embroidery guide contours, chair and flowing robe folds over the SAME warm ivory silk substrate. Hair should be sparse fine line guidance with unpainted ivory between, not a filled black mass. No painted eyes, filled pupils or lip color; fine contour indications only. It should look like an exquisite traditional gongbi baimiao preparatory line drawing before any pigment is applied, never a desaturated photo. Thin subtle lines, no heavy black outlines, no shadows or 3D effects. Keep the blank silk background and textile texture consistent with reference. No text, labels, seals, new motifs, watermarks, hands or tools.",
-      "reference": "public/assets/final.png"
+      "reference": "assets/final.png"
     },
     {
       "id": "underpaint",
-      "file": "public/assets/underpaint.png",
+      "file": "assets/underpaint.png",
       "dimensions": [
         1024,
         1536
       ],
       "prompt": "Edit this exact supplied Mazu gongbi portrait into an EARLY TRANSLUCENT UNDERPAINTING stage. Preserve EXACT 2:3 canvas dimensions, crop, figure position, face identity/expression, crown silhouette and bead layout, hand/tablet geometry, chair, every robe fold and outline so this is registered to the original finished painting. Keep the same warm ivory silk substrate. Apply only pale flat first washes: very dilute dusty cinnabar pink-red on outer robes, very pale mineral jade/blue on sleeve lining and borders, faint warm skin wash, pale gray hair indications. Retain the thin brown ink contours. OMIT all final dense gold embroidery, shiny gold points, deep shadows, dark hair fill, strong saturation, fully painted dark pupils, and final detailed highlights. Intricate motifs can remain faint preparatory outlines, but no final metallic color. The result should be an authentic unfinished gongbi painting halfway through initial pigment washes: 30 percent of the final color intensity, abundant paper showing through, elegant and clearly distinct from the finished richly colored portrait. No added or removed objects, text, labels, seals, signatures, tool marks, brushes or people.",
-      "reference": "public/assets/final.png"
+      "reference": "assets/final.png"
     },
     {
       "id": "studio",
-      "file": "public/assets/studio.png",
+      "file": "assets/studio.png",
       "dimensions": [
         1672,
         941

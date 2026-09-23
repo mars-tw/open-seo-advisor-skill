@@ -2,6 +2,14 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.5.0] - 2026-09-23
+
+- 重寫建站引導與 README 的證據界線：公開示範是虛構、`noindex` 的體驗站，不能證明自然搜尋流量、AI 引用、真實交易或 Core Web Vitals 通過。對外成果須分開記錄逐頁技術檢查、實際使用者效能、非品牌搜尋與轉換資料。
+- CLI 加入獨立內容頁輸出與內部連結，為不同訪客問題提供真實 URL、逐頁 title、description、H1、canonical 與 sitemap 項目；正式發布前攔下示範文案與不完整的基線。
+- 為兩個互動示範準備較小的 WebP 及手機首屏圖片，改善茶站量測出的主圖載入瓶頸；保留減少動態與純文字可讀內容。
+- 更新兩個 Cloudflare 公開預覽；同版手機 Lighthouse 模擬中，茶站 LCP 11.0→1.29 秒、工筆 2.11→1.05 秒。這些是實驗室結果，不代表真實使用者的 Core Web Vitals 達標。
+- 主機指南區分 Cloudflare／Firebase 的靜態免費路線，以及 Cloud Run 的帳務要求與超額風險；AEO 指引以 Google 官方文件為界，不保證搜尋或回答引擎引用。
+
 ## [0.4.6] - 2026-09-21
 
 - 修正使用者回報的 robots.txt／sitemap.xml 誤判：HTTP 與 WordPress connector 保留有大小限制的文字回應，首次讀取與快取都能交給分析器；有效檔案不再因內容遺失而被扣分。空白、格式錯誤的 sitemap 及缺少 Sitemap 宣告的 robots.txt 仍會正常列出問題。

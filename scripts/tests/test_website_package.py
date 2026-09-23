@@ -29,6 +29,7 @@ def test_wheel_packages_templates_and_installed_demo_runs(tmp_path):
         names = archive.namelist()
         for name in (
             "index.html",
+            "page.html",
             "styles.css",
             "story.css",
             "site.js",

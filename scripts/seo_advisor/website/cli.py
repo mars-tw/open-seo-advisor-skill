@@ -10,7 +10,7 @@ from seo_advisor.website.builder import build_site, demo_brief, load_brief
 from seo_advisor.website.check import check_site
 from seo_advisor.website.models import WebsiteBrief
 
-website_app = typer.Typer(help="引導建立 SEO／AEO 沉浸式網站（離線產出，不會自動部署或收款）")
+website_app = typer.Typer(help="建立沉浸式網站草稿並檢查離線基線；不保證搜尋排名或 AI 引用")
 DEFAULT_INIT_OUT = Path("./my-website")
 DEFAULT_DEMO_OUT = Path("./website-demo")
 

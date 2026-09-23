@@ -171,7 +171,7 @@
     $("#stage-technique").textContent = beats[index].dataset.technique;
     $("#stage-count").textContent = `${["一","二","三","四","五"][index]} / 五`;
     $("#mobile-eyebrow").textContent = beats[index].querySelector(".eyebrow").textContent;
-    $("#mobile-title").textContent = beats[index].querySelector("h2").textContent;
+    $("#mobile-title").textContent = beats[index].querySelector("h3").textContent;
     $("#mobile-copy").textContent = beats[index].querySelector(".beat-copy > p").textContent;
     $(".mobile-seals").hidden = index !== 4 || reduced;
     $(".mobile-end-actions").hidden = index !== 4 || reduced;

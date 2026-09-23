@@ -8,11 +8,26 @@
 | [一筆敬意｜工筆媽祖畫像](https://open-seo-gongbi-demo.digimkt.workers.dev/) | 五段作畫敘事、捲動畫筆、訪客落印 | [工筆畫像範例](examples/immersive-gongbi/README.md) |
 
 工筆畫像先點「開始作畫動畫」再捲動，也可 [直接看勾線](https://open-seo-gongbi-demo.digimkt.workers.dev/#outline)。
-兩站皆為 GPT 圖像與互動示範，不提供預約或收款。
+茶站有故事首頁與獨立製作說明頁；工筆站是單頁互動示範。兩站皆使用 GPT 圖像，
+不提供預約或收款。它們展示捲動敘事，
+不代表多頁商店、已通過 Core Web Vitals、取得自然搜尋流量或被 AI 搜尋引用。
 
-## v0.4.6：引導式 SEO／AEO 敘事建站
+**公開示範站查核（2026-09-23）：**
 
-本版修正 SEO 健檢對 robots.txt／sitemap.xml 的誤判、頁內錨點造成的重複頁面，
+| 實際讀回或量測 | 茶屋示範 | 工筆示範 |
+|---|---|---|
+| 收錄設定 | `noindex,follow` | `noindex,follow` |
+| sitemap | 空檔案 | 未提供 |
+| 修正前手機 Lighthouse 模擬 LCP | 11.0 秒，主圖 PNG | 2.11 秒，主標文字 |
+| v0.5.0 部署後手機 Lighthouse 模擬 LCP | 1.29 秒，主圖 WebP | 1.05 秒，主標文字 |
+
+Lighthouse 是特定網路與裝置條件下的實驗室結果，不能當作實際使用者的 Core Web Vitals。
+這份快照說明公開示範目前只供體驗；新版本已讀回檔案並重測。兩站維持 `noindex`，
+沒有可驗證的收錄、非品牌查詢或 AI 引用成果。
+
+## 能做什麼，哪些仍須驗證
+
+近期版本修正 SEO 健檢對 robots.txt／sitemap.xml 的誤判、頁內錨點造成的重複頁面，
 以及部分語系環境的 shell 安裝錯誤；詳見 [更新紀錄](CHANGELOG.md)。
 
 沉浸式動畫以「主角要做什麼、遇到什麼、訪客怎麼參與、最後改變什麼」設計。
@@ -22,6 +37,19 @@
 本衍生版本在原有 SEO 顧問能力上，加入銷售站、購物站、互動體驗站的建置工作流。
 使用者說明品牌與目的，agent 引導設計故事分幕、用 GPT 產生圖文、實作網站、驗收並選擇
 Cloudflare、Firebase Hosting 或 GCP Cloud Run。免費額度與帳務條件分別查核。
+
+目前 CLI 提供離線建站骨架與技術檢查；完整網站需要 agent 按品牌實作頁面、內容、功能
+與圖像。單頁示範不能代替商品頁、分類頁或實際結帳。每個重要頁面要核對獨特且準確的
+title／meta description、清楚的主標與章節、可讀 HTML、內部連結與收錄設定；沉浸式
+首屏尤其要量測 LCP。H2 沒有保證排名的固定數量或順序，結構應方便人閱讀。
+建好站不等於搜尋引擎已收錄；搜尋曝光、非品牌查詢與 AI 引用須上線後另行觀察，
+其中品牌名查詢不能充當 AEO 成效證據。
+
+對外宣稱也依證據分級：交付「可建站」須有能直接開啟的適用頁面與功能；宣稱「SEO
+技術基線已驗證」須逐頁檢查 metadata、標題、索引設定、內部連結與手機效能；宣稱
+「SEO 成效」須有上線後的索引與 Search Console 非品牌查詢資料；若主張詢問或銷售改善，
+還須提供對應的有效行動資料。
+AI 搜尋引用只能記錄特定引擎、題目、日期與引用 URL 的觀察，不能保證重現。
 
 支援 **Codex 與 [OpenCode](https://opencode.ai/zht)** 等能載入 `SKILL.md` 的 coding agent。
 OpenCode 使用者可依 [安裝與使用指南](docs/opencode.md)，在網站專案執行：
@@ -59,19 +87,19 @@ python -m http.server 8080 --bind 127.0.0.1 --directory ./my-site/public
 保留 [mars-tw/open-seo-advisor-skill](https://github.com/mars-tw/open-seo-advisor-skill) 原作者
 與 Apache-2.0 授權；以下既有稽核、內容與行銷能力繼續保留。
 
-> 開源、可攜、不綁定單一廠商的**全域行銷營運技能**。從 SEO 健檢出發，延伸到
-> 內容、廣告、產圖、成長行銷、電商 listing，並用 AI 矩陣與一鍵代操把它們串成
-> 「一個指令搞定」——蒸餾業界公認方法論與 Google 官方標準，結合爬蟲與 LLM，
-> 服務任何產業、任何規模。全程免金鑰可試玩、安全優先。
+> 這是開源的網站健檢 CLI 與 coding agent 技能。離線 demo 可以免金鑰體驗；
+> 真實網站仍需要逐頁內容、瀏覽器效能驗證及上線後的 Search Console 觀察。
+> 產圖、進階 API、網域與交易可能產生費用，依選用的工具和服務計算。
 >
 > 想快速看全貌？先看 [`docs/capability-map.md`](docs/capability-map.md) 能力地圖。
 
 [![CI](https://github.com/mars-tw/open-seo-advisor-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/mars-tw/open-seo-advisor-skill/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-> **第一次使用？不用懂程式，也不用懂 SEO。**
-> 裝好後就一個指令：`seo-advisor auto https://你的網站.com`——它會自動分析、
-> 產出一份白話懶人包 + 待辦清單。**預設只做分析、不花錢、不會改動你的網站**；
+> **第一次使用？**
+> 裝好後可執行：`seo-advisor auto https://你的網站.com`。它會檢查可取得的頁面，
+> 產出一份白話報告與待辦清單；未取得的資料、無法量測的體驗及搜尋成效須另行驗證。
+> **預設只做分析，不呼叫付費 API，也不會改動你的網站**；
 > 若之後有任何付費或寫入動作，一定先列明細、你同意一次才執行。想先看範例就跑
 > `seo-advisor auto-demo`。完整步驟見 [`QUICKSTART.md`](QUICKSTART.md)。
 
@@ -79,16 +107,15 @@ python -m http.server 8080 --bind 127.0.0.1 --directory ./my-site/public
 
 Open SEO Advisor 是一套設計給 [Claude Code](https://claude.com/claude-code) 之類
 的 AI coding agent 使用的「技能（Skill）」，也可以獨立當作 CLI 工具使用。它把
-「資深 SEO 顧問怎麼做網站健檢」「工程師怎麼修技術 SEO 問題」「資安人員怎麼檢查
-SEO 相關風險」「SEO 內容編輯怎麼寫符合 E-E-A-T 的文章」「外掛工程師怎麼開發
-WordPress SEO 外掛」這五種專業角色的方法論，蒸餾成可執行的檢查清單、報告格式
+「SEO 技術檢查」「技術修復建議」「SEO 相關資安檢查」「內容草稿」與「WordPress
+SEO 外掛開發」等工作流，整理成可執行的檢查清單、報告格式
 與程式碼。
 
 ## 七大模式
 
 1. **顧問模式 Consultant** — 全站 SEO 健檢，產出診斷報告與 P0–P3 優先順序建議。
-2. **工程師模式 Engineer** — 直接修復 sitemap、robots.txt、canonical、hreflang、
-   結構化資料、Core Web Vitals 等技術問題。
+2. **工程師模式 Engineer** — 在支援的檔案與站點來源中規劃並修復 sitemap、robots.txt、
+   canonical、hreflang 等技術問題；效能與 Core Web Vitals 須在目標站另行量測複驗。
 3. **資安模式 Security** — 檢查與 SEO 相關的資安風險（外洩檔案、過時 CMS、
    垃圾內容注入、惡意重導、HTTPS 問題等）。
 4. **文章寫手模式 Content Writer** — 呼叫 LLM（Anthropic Claude / OpenAI GPT /
@@ -99,8 +126,8 @@ WordPress SEO 外掛」這五種專業角色的方法論，蒸餾成可執行的
 7. **產圖素材 Image Material** — 為廣告/社群/文章產生圖像素材，圖像 provider
    可換（OpenAI / 未來可加其他），並有合規前置檢查。
 
-已完整實作：Consultant、Content Writer、Meta Ads、Image Material。
-詳細規格見 [`SKILL.md`](SKILL.md)、[`docs/meta_ads_mode.md`](docs/meta_ads_mode.md)、
+各模式的已實作功能、限制及需要的 API 見 [`docs/capability-map.md`](docs/capability-map.md)、
+[`SKILL.md`](SKILL.md)、[`docs/meta_ads_mode.md`](docs/meta_ads_mode.md)、
 [`docs/image_material_mode.md`](docs/image_material_mode.md)。
 
 ## 上層統籌層：AI 矩陣營運系統
@@ -156,8 +183,8 @@ seo-advisor ecommerce audit --input listing.json    # 健檢自己的 listing
 - **預設唯讀、預設 dry-run**：任何寫入或部署動作都需要人工確認。
 - **可攜**：可接入 SSH、本地原始碼包／zip、Git repo、WordPress REST API、
   Cloudflare API、cPanel 等多種來源，透過統一的 `WebsiteConnector` 介面。
-- **全球全產業**：涵蓋 B2B／B2C、電商／SaaS／在地服務／內容媒體／企業官網，
-  並考慮多語言、多地區 SEO（hreflang、Local SEO）。
+- **依站型調整**：B2B／B2C、電商／SaaS／在地服務／內容媒體與企業官網的
+  內容、商務與搜尋需求不同；多語言或多地區站另驗證翻譯、hreflang 與當地資訊。
 
 ## 快速開始
 

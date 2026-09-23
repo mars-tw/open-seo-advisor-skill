@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="${lang}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${title}</title>
+  <meta name="description" content="${description}">
+  <meta name="robots" content="${robots}">
+${canonical}
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+  <link rel="stylesheet" href="../styles.css">
+  <script type="application/ld+json">${structured_data}</script>
+</head>
+<body class="site-${kind}">
+  <a class="skip-link" href="#main">跳到主要內容</a>
+  ${draft_banner}
+  <header class="site-header">
+    <a href="../" class="brand">${brand}</a>
+    <nav aria-label="主要導覽"><a href="../">首頁</a><a href="../#more">其他主題</a></nav>
+  </header>
+  <main id="main" tabindex="-1" class="topic-main">
+    <article>
+      <header class="topic-hero section-pad">
+        <p class="eyebrow">${label}</p>
+        <h1>${headline}</h1>
+        <p class="intro">${intro}</p>
+      </header>
+      <div class="topic-sections">
+        ${sections}
+      </div>
+      ${related_pages}
+      <section class="contact section-pad" id="contact" aria-labelledby="topic-contact">
+        <h2 id="topic-contact">${contact_heading}</h2>
+        <a class="button" href="${cta_url}">${cta_label}</a>
+        <p class="fineprint">${contact_note}</p>
+      </section>
+    </article>
+  </main>
+  <footer><a href="../" class="brand">${brand}</a><a href="../">回到首頁 ↑</a></footer>
+</body>
+</html>

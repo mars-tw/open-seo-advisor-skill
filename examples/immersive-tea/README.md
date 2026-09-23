@@ -23,6 +23,11 @@ python -m http.server 8787 --bind 127.0.0.1 --directory site/public
 開啟 `http://127.0.0.1:8787`，即可在本機查看同一份故事。
 預覽保留 noindex，未連接正式商品或支付帳號。
 
+這個網站有[獨立的製作說明頁](site/public/about/index.html)，可從首頁導覽與頁尾進入。
+兩頁有各自的 title、description 和 H1，故事章節以 H2／H3 整理。它們都設為
+`noindex`，所以不能拿來證明自然搜尋曝光、排名或 AI 回答引用；要評估正式品牌的 SEO，
+還須以實際搜尋需求、可收錄頁面和上線後資料驗證。
+
 ## 素材與原始碼
 
 - `storyboard.md`：敘事因果、每幕動作與畫面驗收。
@@ -33,6 +38,13 @@ python -m http.server 8787 --bind 127.0.0.1 --directory site/public
 - `generation-record.json`／`assets/tea-mountains.png`：最初視覺方向的來源紀錄。
 - `experience.css`：本範例 hero 的全幅視覺，並非所有品牌的固定風格。
 - `site/`：預覽輸出；只有 `public/` 是網站公開目錄。
+- `site/public/assets/*.webp`：從 GPT PNG 原圖壓縮的傳輸版本；首屏提供 960px
+  變體。原始 PNG 保留在 `assets/`，不放進網站公開目錄；`optimize_assets.py`
+  可在更新原圖後重建，需安裝 Pillow。
+
+2026-09-23 本機檢查：首頁首屏原圖 2,014,904 bytes，完整 WebP 170,016 bytes，
+960px WebP 78,554 bytes。公開站在此修改部署前的模擬手機 Lighthouse LCP 為 11.0 秒；
+圖片縮小只是修正傳輸瓶頸，新的 LCP 必須在更新後重新量測，不能預先宣稱達標。
 
 ## 重新建置
 

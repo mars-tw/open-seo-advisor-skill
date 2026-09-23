@@ -13,7 +13,7 @@ from typer.testing import CliRunner
 from seo_advisor.website.builder import build_site, demo_brief
 from seo_advisor.website.check import check_site
 from seo_advisor.website.cli import website_app
-from seo_advisor.website.models import WebsiteBrief
+from seo_advisor.website.models import Hero, WebsiteBrief
 
 
 def encoded_image(format_name):
@@ -46,7 +46,8 @@ def test_modes_are_readable_offline_and_draft(tmp_path, kind, hosting):
     elif kind == "experience":
         assert len(doc.select(".mood-notes article")) == 3
     else:
-        assert len(doc.select(".service-steps p")) == 3
+        assert doc.select_one("#selection h2").get_text() == "認識茶席的安排"
+        assert doc.select_one("#selection a.button")
     assert doc.find("meta", attrs={"name": "robots"})["content"] == "noindex,follow"
     assert len(ElementTree.parse(out / "public/sitemap.xml").getroot()) == 0
     assert "Disallow: /" not in (out / "public/robots.txt").read_text()
@@ -140,11 +141,64 @@ def production_brief(tmp_path, kind="sales"):
         canonical="https://tea.example.com",
         publication="production",
         content_verified=True,
+        title="山嵐茶屋｜預約茶席與茶飲體驗",
+        description="山嵐茶屋提供預約制茶席與茶飲體驗。這裡說明服務內容、茶品選擇方式，以及如何預約與取得最新資訊。",
+        headline="預約茶席，認識適合自己的茶",
+        intro="查看茶席安排、茶飲選擇與預約方式，找到適合自己的體驗。",
+        selection_heading="比較茶席與茶飲內容",
+        faq_heading="茶席預約與茶飲常見問題",
+        contact_heading="查看預約方式",
+        experience_intro="依照頁面說明選擇一項內容，閱讀對應的品茶建議。",
+        experience_options=(
+            [
+                {"key": "light-tea", "label": "清香茶", "note": "先閱讀茶品的香氣與沖泡說明。"},
+                {"key": "roasted-tea", "label": "焙香茶", "note": "比較焙火程度與適合的飲用情境。"},
+            ]
+            if kind == "experience"
+            else []
+        ),
+        chapters=[
+            {
+                "title": "預約茶席的安排",
+                "body": "茶席採預約制，訪客可先查看服務內容，再由正式預約管道確認時間。",
+            },
+            {
+                "title": "茶飲如何選擇",
+                "body": "茶品依香氣與沖泡方式分類，訪客可比較各品項說明後選擇。",
+            },
+        ],
+        qa=[
+            {"question": "如何預約茶席？", "answer": "請使用頁面上的預約連結查看可選時段。"},
+            {
+                "question": "可以先閱讀茶品資訊嗎？",
+                "answer": "可以。商品頁列出品項與用途，購買前可先比較。",
+            },
+        ],
+        pages=[
+            {
+                "slug": "tea-service",
+                "title": "茶席服務安排｜山嵐茶屋",
+                "description": "了解山嵐茶屋預約制茶席的內容、適用情境和預約步驟，確認服務是否符合你的需求。",
+                "headline": "茶席服務如何安排",
+                "intro": "預約前先認識茶席內容與參與方式。",
+                "sections": [
+                    {
+                        "title": "茶席包含什麼",
+                        "body": "茶席以沖泡與品飲為主，實際內容依預約頁面的方案資訊為準。",
+                    },
+                    {
+                        "title": "預約前要確認什麼",
+                        "body": "請確認可選時段、參與人數與服務條款，再完成預約。",
+                    },
+                ],
+            }
+        ],
         assets={"hero": {"path": "hero.png", "alt": "茶席概念示意圖", "source": "gpt-image"}},
         cta={"label": "預約茶席", "url": "https://tea.example.com/book"},
     )
     if kind == "shop":
-        for product in data["products"]:
+        for i, product in enumerate(data["products"], 1):
+            product["description"] = f"第 {i} 款茶飲，以香氣與沖泡方式供訪客比較選購。"
             product["price_label"] = "NT$ 600"
             product["checkout_url"] = "https://checkout.example.com/tea?sku=1&lang=zh"
     return WebsiteBrief.model_validate(data)
@@ -155,7 +209,7 @@ def test_production_has_image_canonical_and_indexable_sitemap(tmp_path, kind):
     out = tmp_path / "site"
     brief = production_brief(tmp_path, kind)
     report = build_site(brief, out, base_dir=tmp_path)
-    assert report["status"] == "baseline_ready", report
+    assert report["status"] == "baseline_ready", report["errors"]
     assert (out / "public/assets/hero.png").read_bytes() == PNG
     doc = BeautifulSoup((out / "public/index.html").read_text(encoding="utf-8"), "html.parser")
     assert doc.find("link", attrs={"rel": "canonical"})["href"] == "https://tea.example.com/"
@@ -163,7 +217,20 @@ def test_production_has_image_canonical_and_indexable_sitemap(tmp_path, kind):
     assert doc.find("img")["width"] == "1"
     assert doc.find("img")["height"] == "1"
     assert "https://tea.example.com/" in (out / "public/sitemap.xml").read_text()
+    assert "https://tea.example.com/tea-service/" in (out / "public/sitemap.xml").read_text()
     assert "Sitemap: https://tea.example.com/sitemap.xml" in (out / "public/robots.txt").read_text()
+    detail = BeautifulSoup(
+        (out / "public/tea-service/index.html").read_text(encoding="utf-8"), "html.parser"
+    )
+    assert detail.title.get_text() == "茶席服務安排｜山嵐茶屋"
+    assert detail.find("link", attrs={"rel": "canonical"})["href"] == (
+        "https://tea.example.com/tea-service/"
+    )
+    assert [heading.get_text() for heading in detail.select("main h2")][:2] == [
+        "茶席包含什麼",
+        "預約前要確認什麼",
+    ]
+    assert doc.select_one('a[href="tea-service/"]')
     if kind == "shop":
         assert not doc.select(".demo-add")
         assert len(doc.select('a[href^="https://checkout.example.com"]')) == 3
@@ -178,6 +245,62 @@ def test_incomplete_production_rejected_before_output(tmp_path):
     with pytest.raises(ValueError, match="production"):
         build_site(brief, tmp_path / "nope", base_dir=tmp_path)
     assert not (tmp_path / "nope").exists()
+
+
+def test_marking_demo_copy_verified_does_not_publish_placeholders(tmp_path):
+    (tmp_path / "hero.png").write_bytes(PNG)
+    brief = demo_brief()
+    brief.canonical = "https://tea.example.com/"
+    brief.publication = "production"
+    brief.content_verified = True
+    brief.assets.hero = Hero(path="hero.png", alt="茶席")
+    brief.cta.url = "https://tea.example.com/book"
+    with pytest.raises(ValueError, match="description"):
+        build_site(brief, tmp_path / "unsafe-demo", base_dir=tmp_path)
+    assert not (tmp_path / "unsafe-demo").exists()
+
+
+def test_draft_inner_page_links_return_to_home_sections(tmp_path):
+    out = tmp_path / "draft"
+    brief = demo_brief()
+    brief.cta.url = "#selection"
+    build_site(brief, out, base_dir=tmp_path)
+    page = BeautifulSoup(
+        (out / "public/about-the-experience/index.html").read_text(encoding="utf-8"),
+        "html.parser",
+    )
+    assert page.select_one('a.button[href="../#selection"]')
+    assert page.select_one('a[href="../#more"]')
+    assert page.find("meta", attrs={"name": "robots"})["content"] == "noindex,follow"
+    assert check_site(out)["status"] == "scaffold"
+
+
+def test_hero_is_resized_for_mobile_without_claiming_lcp_result(tmp_path):
+    source = tmp_path / "large.png"
+    Image.effect_noise((1800, 1200), 30).save(source)
+    brief = production_brief(tmp_path)
+    brief.assets.hero.path = source.name
+    out = tmp_path / "responsive"
+    report = build_site(brief, out, base_dir=tmp_path)
+    assert report["status"] == "baseline_ready", report["errors"]
+    doc = BeautifulSoup((out / "public/index.html").read_text(encoding="utf-8"), "html.parser")
+    hero = doc.select_one(".hero-image img")
+    assert hero["src"] == "assets/hero.webp"
+    assert "assets/hero-mobile.webp" in hero["srcset"]
+    assert hero["loading"] == "eager" and hero["fetchpriority"] == "high"
+    assert (out / "public/assets/hero.webp").stat().st_size <= 650_000
+    assert (out / "public/assets/hero-mobile.webp").stat().st_size <= 220_000
+    assert "LCP" in report["scope"] and "live verification" in report["scope"]
+    (out / "public/assets/hero-mobile.webp").unlink()
+    assert check_site(out)["status"] == "invalid"
+
+
+@pytest.mark.parametrize("slug", ["../escape", "assets", "Tea Service", "index"])
+def test_inner_page_slug_rejects_unsafe_or_reserved_paths(slug):
+    page = demo_brief().pages[0].model_dump()
+    page["slug"] = slug
+    with pytest.raises(ValueError):
+        WebsiteBrief(brand="Test", pages=[page])
 
 
 def test_cli_four_question_init_and_json_exit_status(tmp_path):
@@ -205,6 +328,80 @@ def test_check_detects_tampered_public_metadata(tmp_path):
     report = check_site(out)
     assert report["status"] == "invalid"
     assert not report["checks"]["indexing_intent"]
+
+
+def test_check_rejects_unrelated_production_home_title(tmp_path):
+    brief = production_brief(tmp_path)
+    out = tmp_path / "site"
+    build_site(brief, out, base_dir=tmp_path)
+    page = out / "public/index.html"
+    page.write_text(
+        page.read_text(encoding="utf-8").replace(
+            f"<title>{brief.title}</title>", "<title>與本站無關的活動資訊</title>"
+        ),
+        encoding="utf-8",
+    )
+    report = check_site(out)
+    assert report["status"] == "invalid"
+    assert report["checks"]["title_matches"] is False
+    assert report["checks"]["social_metadata"] is False
+
+
+def test_check_rejects_unrelated_production_home_headings(tmp_path):
+    brief = production_brief(tmp_path)
+    out = tmp_path / "site"
+    build_site(brief, out, base_dir=tmp_path)
+    page = out / "public/index.html"
+    page.write_text(
+        page.read_text(encoding="utf-8").replace(brief.selection_heading, "無關的優惠活動"),
+        encoding="utf-8",
+    )
+    report = check_site(out)
+    assert report["status"] == "invalid"
+    assert report["checks"]["home_headings_match"] is False
+
+
+@pytest.mark.parametrize("kind", ["sales", "shop"])
+@pytest.mark.parametrize("anchor", ["#main", "#story", "#selection"])
+def test_production_sales_or_shop_requires_real_cta(tmp_path, kind, anchor):
+    brief = production_brief(tmp_path, kind)
+    brief.cta.url = anchor
+    with pytest.raises(ValueError, match="HTTPS"):
+        build_site(brief, tmp_path / "bad-cta", base_dir=tmp_path)
+
+
+def test_production_experience_can_link_to_real_onsite_action(tmp_path):
+    brief = production_brief(tmp_path, "experience")
+    brief.cta.url = "#selection"
+    out = tmp_path / "experience"
+    report = build_site(brief, out, base_dir=tmp_path)
+    assert report["status"] == "baseline_ready", report["errors"]
+    doc = BeautifulSoup((out / "public/index.html").read_text(encoding="utf-8"), "html.parser")
+    assert [element.get_text() for element in doc.select(".mood-notes h3")] == [
+        "清香茶",
+        "焙香茶",
+    ]
+
+
+def test_robots_check_distinguishes_private_path_from_full_site_block(tmp_path):
+    brief = production_brief(tmp_path)
+    out = tmp_path / "site"
+    build_site(brief, out, base_dir=tmp_path)
+    robots = out / "public/robots.txt"
+    original = robots.read_text(encoding="utf-8")
+    robots.write_text(original + "Disallow: /private\nDisallow: /cart\n", encoding="utf-8")
+    assert check_site(out)["checks"]["robots_crawlable"] is True
+    robots.write_text(original + "Disallow: /\n", encoding="utf-8")
+    report = check_site(out)
+    assert report["status"] == "invalid"
+    assert report["checks"]["robots_crawlable"] is False
+    robots.write_text(original.replace("Allow: /\n", ""), encoding="utf-8")
+    assert check_site(out)["checks"]["robots_crawlable"] is True
+    robots.write_text(
+        "User-agent: BadBot\nDisallow: /\n\n" + original,
+        encoding="utf-8",
+    )
+    assert check_site(out)["checks"]["robots_crawlable"] is True
 
 
 def test_resources_and_example_are_available():

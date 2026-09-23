@@ -1,16 +1,25 @@
 # 免費額度與網站部署引導
 
-官方文件查核日期：2026-09-18。額度、付款條件及產品功能會變；每次部署前重新開啟下列官方來源，記錄實際方案與日期。這份文件協助選型，不代表已登入、已部署或已驗證帳務。
+官方文件查核日期：2026-09-23。額度、付款條件及產品功能會變；每次部署前重新開啟下列官方來源，記錄實際方案與日期。這份文件協助選型，不代表已登入、已部署或已驗證帳務。
 
 ## 先讓使用者做一個容易回答的選擇
 
 依已有對話填好網站類型、是否需要付款／訂單後台，再問缺少的選項：
 
 > 你想先用哪一種上線方式？
-> 1. Cloudflare 免費方案：適合圖文與滾動動畫網站，之後可接 API。
-> 2. Google Firebase Hosting Spark：適合希望用 Google 帳號管理的靜態網站。
-> 3. Google Cloud Run：適合需要自己的後端，須啟用帳務並管理用量。
+> 1. Cloudflare Pages Free 或 Workers Static Assets：適合純靜態圖文與滾動動畫網站。
+> 2. Google Firebase **Hosting** Spark：不綁付款方式即可開始的靜態網站方案。
+> 3. Google Cloud Run：需要自己的後端時才考慮，須啟用帳務並管理用量。
 > 如果還沒決定，我先做好可搬移的靜態版本，預設準備 Cloudflare 設定。
+
+使用者要求「免費且不啟用帳務」時，先用靜態輸出配 Cloudflare Pages Free／Workers
+Static Assets，或 Firebase Hosting Spark；取得具體發布授權後，在免費額度內完成發布
+並讀回網址。這條路線可做品牌、內容、型錄與不收款的互動頁。需要真實訂單、會員或伺服器處理時，另確認
+所選服務與成本；不能把靜態展示頁叫成可營業商店。Cloud Run 有免費額度，但需要
+Billing account，超額會計費，不符合「不用啟用帳務」的選項。
+[Pages 限額](https://developers.cloudflare.com/pages/platform/limits/)／
+[Workers Static Assets 計費](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)／
+[Firebase 價格](https://firebase.google.com/pricing)／[Cloud Run 價格](https://cloud.google.com/run/pricing)
 
 「CF 黃雲」是 DNS 的代理狀態，讓流量經過 Cloudflare 的快取、防護與代理服務；網站檔案仍要放在 Workers Static Assets、Pages 或另一個來源主機。開黃雲不等於建立免費主機。[Cloudflare Proxy status](https://developers.cloudflare.com/dns/proxy-status/)
 
@@ -23,7 +32,7 @@
 | Firebase Hosting Spark | 靜態銷售頁、型錄、體驗站 | 不需付款資訊起步；Hosting 有儲存與傳輸配額，超額可能停止提供網站 | 選 **Hosting**；不可把需 Blaze 的其他 Firebase 產品混稱為 Spark 功能 |
 | Google Cloud Run | 自訂伺服器、SSR、付款 webhook、訂單 API | 有免費額度，須 Cloud Billing；超額與其他服務可能收費 | 使用者需要後端且接受帳務條件時才選 |
 
-這是本技能的架構建議；免費條件以各產品官方說明及帳戶狀態為準。網域購買、金流手續費、GPT 產圖、郵件、資料庫、第三方服務與付費 API 不因主機有免費額度而免費。
+這是本技能的架構建議；免費條件以各產品官方說明及帳戶狀態為準。網域購買、金流手續費、GPT 產圖、郵件、資料庫、第三方服務與付費 API 不因主機有免費額度而免費。使用者既有聊天方案的產圖額度也不等於免費、無上限的 API 額度。
 
 ## Cloudflare：靜態優先
 
@@ -52,7 +61,7 @@ Spark 可不填付款資訊開始；連結 Cloud Billing 或在同一專案啟�
 
 本次查核發現兩個官方頁面口徑不同：
 
-| 官方頁 | 2026-09-18 讀到的 Hosting 免費額度 |
+| 官方頁 | 2026-09-23 讀到的 Hosting 免費額度 |
 | --- | --- |
 | [Firebase 價格表](https://firebase.google.com/pricing) | 儲存 10 GB、傳輸 360 MB/day |
 | [Hosting 用量文件](https://firebase.google.com/docs/hosting/usage-quotas-pricing) | 儲存 10 GB、傳輸 10 GB/month；Spark 傳輸超額經短暫寬限後停站至下個月 |

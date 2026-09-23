@@ -6,7 +6,7 @@
       "id": "hero",
       "status": "provided",
       "source": "gpt-image",
-      "path": "public/assets/scene-01.png",
+      "path": "public/assets/scene-01.webp",
       "alt": "晨霧中的虛構茶山與石階，遠方山坡上有一間等待天亮的茶屋。GPT 生成場景。",
       "prompt": "Create an original editorial website hero for the brand 山嵐茶屋. The website purpose is experience. Atmospheric landscape or product still life informed by the approved brand brief. Cinematic natural light, generous negative space for live HTML text, wide 3:2 composition. No text, logos, watermarks, fake certifications or copied reference composition. Do not imply real locations or product details without supplied evidence.",
       "required_variants": [
@@ -19,7 +19,7 @@
       "id": "scene-01",
       "status": "provided",
       "source": "gpt-image",
-      "path": "public/assets/scene-01.png",
+      "path": "public/assets/scene-01.webp",
       "alt": "茶葉出發的晨霧茶山，石階通往遠方。 GPT 生成示意。",
       "dimensions": [
         1672,
@@ -31,7 +31,7 @@
       "id": "scene-02",
       "status": "provided",
       "source": "gpt-image",
-      "path": "public/assets/scene-02.png",
+      "path": "public/assets/scene-02.webp",
       "alt": "山谷中的吊橋，茶葉要越過風與深霧。 GPT 生成示意。",
       "dimensions": [
         1672,
@@ -43,7 +43,7 @@
       "id": "scene-03",
       "status": "provided",
       "source": "gpt-image",
-      "path": "public/assets/scene-03.png",
+      "path": "public/assets/scene-03.webp",
       "alt": "石階盡頭的山中茶屋，屋簷下有兩盞還未點亮的紙燈。 GPT 生成示意。",
       "dimensions": [
         1672,
@@ -55,7 +55,7 @@
       "id": "scene-04",
       "status": "provided",
       "source": "gpt-image",
-      "path": "public/assets/scene-04.png",
+      "path": "public/assets/scene-04.webp",
       "alt": "青瓷茶杯放在茶屋門前的石台上，等待茶葉落入。 GPT 生成示意。",
       "dimensions": [
         1672,
@@ -67,7 +67,7 @@
       "id": "actor",
       "status": "provided",
       "source": "gpt-image",
-      "path": "public/assets/actor.png",
+      "path": "public/assets/actor.webp",
       "alt": "帶著金色葉脈微光的茶葉，是這段故事的主角。",
       "dimensions": [
         1254,
