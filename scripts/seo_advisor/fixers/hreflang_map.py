@@ -63,7 +63,17 @@ def _normalized_url_key(url: str) -> str:
     """
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().rstrip(".")
-    return f"{parsed.scheme}://{host}:{parsed.port or ''}{parsed.path}?{parsed.query}"
+    port = parsed.port
+    if (parsed.scheme, port) in {("http", 80), ("https", 443)}:
+        port = None
+    return f"{parsed.scheme}://{host}:{port or ''}{parsed.path or '/'}?{parsed.query}"
+
+
+def _normalized_language(code: str) -> str:
+    if code.casefold() == "x-default":
+        return "x-default"
+    language, *subtags = code.lower().split("-")
+    return "-".join([language, *(tag.title() if len(tag) == 4 else tag.upper() for tag in subtags)])
 
 
 def _validate_alternate_url(url: str, *, context: str) -> None:
@@ -135,9 +145,13 @@ def parse_language_map(raw: dict) -> HreflangMap:
                 raise InvalidLanguageMapError(f"{context}（id={cluster_id!r}）：alternates 的鍵值必須都是字串。")
             _validate_language_code(code, context=f"{context}（id={cluster_id!r}）")
             _validate_alternate_url(url, context=f"{context}（id={cluster_id!r}）")
-            normalized_alternates[code] = url
-
+            code = _normalized_language(code)
             url_key = _normalized_url_key(url)
+            if code in normalized_alternates:
+                if _normalized_url_key(normalized_alternates[code]) != url_key:
+                    raise InvalidLanguageMapError(f"{context}：同一語系 {code} 指向不同網址，請選定目標。")
+                continue
+            normalized_alternates[code] = url
             if url_key in seen_urls and seen_urls[url_key] != cluster_id:
                 raise InvalidLanguageMapError(
                     f"{context}（id={cluster_id!r}）：網址 {url!r} 同時出現在 cluster "
@@ -145,11 +159,15 @@ def parse_language_map(raw: dict) -> HreflangMap:
                 )
             seen_urls[url_key] = cluster_id
 
+        if len(normalized_alternates) < 2:
+            raise InvalidLanguageMapError(f"{context}：至少需要兩種不同的語言或地區版本。")
+
         raw_targets = raw_cluster.get("targets", {})
         if not isinstance(raw_targets, dict):
             raise InvalidLanguageMapError(f"{context}（id={cluster_id!r}）：'targets' 必須是物件。")
         normalized_targets: dict[str, str] = {}
         for code, path in raw_targets.items():
+            code = _normalized_language(code)
             if code not in normalized_alternates:
                 raise InvalidLanguageMapError(
                     f"{context}（id={cluster_id!r}）：targets 裡的語言代碼 {code!r} "
@@ -157,6 +175,8 @@ def parse_language_map(raw: dict) -> HreflangMap:
                 )
             if not isinstance(path, str) or not path:
                 raise InvalidLanguageMapError(f"{context}（id={cluster_id!r}）：targets[{code!r}] 必須是非空字串路徑。")
+            if code in normalized_targets and normalized_targets[code] != path:
+                raise InvalidLanguageMapError(f"{context}：{code} 的目標檔案不一致，請選定一個檔案。")
             normalized_targets[code] = path
 
         clusters.append(

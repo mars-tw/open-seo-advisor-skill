@@ -53,7 +53,7 @@ def test_reachable_site_scans_normally(tmp_path):
     respx.get("https://example.com/robots.txt").mock(return_value=httpx.Response(404))
     respx.get("https://example.com/sitemap.xml").mock(return_value=httpx.Response(404))
     respx.get("https://example.com/").mock(
-        return_value=httpx.Response(200, text="<html><title>Home</title></html>")
+        return_value=httpx.Response(200, headers={"content-type": "text/html"}, text="<html><title>Home</title></html>")
     )
 
     outcome = run_consultant_scan(

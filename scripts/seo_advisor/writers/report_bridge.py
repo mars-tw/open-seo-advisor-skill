@@ -57,6 +57,7 @@ class ContentOpportunity(BaseModel):
     related_finding_ids: list[str] = Field(default_factory=list)
     source_notes: str
     internal_links: list[str] = Field(default_factory=list)
+    affected_urls: list[str] = Field(default_factory=list)
 
 
 class NoContentOpportunityError(ValueError):
@@ -112,7 +113,8 @@ def extract_content_opportunities(report: Report) -> list[ContentOpportunity]:
                 severity=f.severity,
                 related_finding_ids=[f.id],
                 source_notes=_finding_note(f),
-                internal_links=f.affected_urls[:10] if otype == "internal_linking" else [],
+                affected_urls=list(dict.fromkeys(f.affected_urls)),
+                internal_links=list(dict.fromkeys(f.affected_urls)) if otype == "internal_linking" else [],
             )
         )
     opportunities.sort(key=lambda o: o.priority_score, reverse=True)
@@ -143,7 +145,7 @@ def _suggest_intent(f: Finding, otype: OpportunityType) -> SearchIntent:
 
 
 def _finding_note(f: Finding) -> str:
-    urls = "、".join(f.affected_urls[:3]) or "（未指定）"
+    urls = "、".join(dict.fromkeys(f.affected_urls)) or "（未指定）"
     return (
         f"- {f.severity.value} / {f.category}: {f.title}\n"
         f"  影響頁面：{urls}\n"
@@ -173,6 +175,13 @@ def build_content_request_from_report(
 
     primary = opportunities[0] if opportunities else None
     topic = topic_override or (primary.suggested_topic if primary else "")
+    custom_topic = bool(primary and topic.strip() != primary.suggested_topic.strip())
+    batch_urls = []
+    if primary and primary.opportunity_type == "metadata_batch" and not custom_topic:
+        batch_urls = list(dict.fromkeys(
+            url for opportunity in opportunities[:5] if opportunity.opportunity_type == "metadata_batch"
+            for url in opportunity.affected_urls
+        ))
 
     return ContentRequest(
         topic=topic,
@@ -182,19 +191,21 @@ def build_content_request_from_report(
         intent=primary.suggested_intent if primary else None,
         industry=industry,
         brand_context=brand_context,
-        source_notes=_build_source_notes(report, opportunities, primary, topic_override),
+        source_notes=_build_source_notes(report, opportunities, primary, custom_topic),
         internal_links=primary.internal_links if primary else [],
         target_url=primary.target_url if primary else None,
+        metadata_batch_urls=batch_urls,
         auto_revise=auto_revise,
     )
 
 
-def _build_source_notes(report, opportunities, primary, topic_override) -> str:
+def _build_source_notes(report, opportunities, primary, custom_topic) -> str:
     target = primary.target_url if primary else "全站/多頁"
     lines = [
         "[顧問報告轉內容任務]",
-        f"網站健康分數：{report.site_health_score:.0f}/100",
+        f"網站健康分數：{report.score_display}",
         f"目標頁：{target}",
+        "任務目的：依使用者指定的主題撰稿，以下 SEO 問題供參考。" if custom_topic else
         "任務目的：用內容補足以下 SEO 缺口，不要泛泛寫新文章。",
         "",
         "[需要解決的 SEO 問題]",
@@ -210,6 +221,9 @@ def _build_source_notes(report, opportunities, primary, topic_override) -> str:
         lines.append("（報告未發現明確內容缺口，以下主題由使用者指定，報告僅作背景。）")
 
     lines += ["", "[寫作要求]"]
+    if custom_topic:
+        lines.append("- 依已指定的主題和格式交付。")
+        return "\n".join(lines)
     ptype = primary.opportunity_type if primary else None
     if ptype == "metadata_batch":
         # 關鍵：批次 metadata 任務不要產出長文，只要 title/meta/H1 清單。

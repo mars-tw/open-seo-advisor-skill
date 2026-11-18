@@ -31,12 +31,15 @@ _MODE_ALIASES: dict[str, Mode] = {
     "listing": Mode.ECOMMERCE,
 }
 
-_IMPLEMENTED_MODES = {
-    Mode.CONSULTANT,
-    Mode.CONTENT_WRITER,
-    Mode.META_ADS,
-    Mode.IMAGE_MATERIAL,
-    Mode.ECOMMERCE,
+_MODE_COMMANDS = {
+    Mode.CONSULTANT: "seo-advisor audit consultant --help",
+    Mode.CONTENT_WRITER: "seo-advisor write --help",
+    Mode.ENGINEER: "seo-advisor fix --help",
+    Mode.SECURITY: "seo-advisor security --help",
+    Mode.PLUGIN_DEV: "WordPress schema-generator（seo-advisor plugin dev --help）",
+    Mode.META_ADS: "seo-advisor ads --help",
+    Mode.IMAGE_MATERIAL: "seo-advisor image --help",
+    Mode.ECOMMERCE: "seo-advisor ecommerce --help",
 }
 
 
@@ -57,10 +60,12 @@ def resolve_mode(raw: str) -> Mode:
     return _MODE_ALIASES[key]
 
 
+def mode_command(mode: Mode) -> str:
+    try:
+        return _MODE_COMMANDS[mode]
+    except KeyError as exc:
+        raise ModeNotImplementedError(f"模式 {mode.value} 的 CLI 尚未實作。") from exc
+
+
 def ensure_implemented(mode: Mode) -> None:
-    if mode not in _IMPLEMENTED_MODES:
-        raise ModeNotImplementedError(
-            f"模式 {mode.value} 尚未實作執行邏輯（目前完整實作 consultant 與 content_writer），"
-            f"目前僅提供 prompt 模板（見 prompts/{mode.value}.md）與規格"
-            f"（見 docs/modes.md），詳見 docs/roadmap.md 的版本規劃。"
-        )
+    mode_command(mode)

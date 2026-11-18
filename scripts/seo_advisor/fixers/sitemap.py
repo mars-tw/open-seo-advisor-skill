@@ -16,6 +16,8 @@ from __future__ import annotations
 import difflib
 from xml.sax.saxutils import escape
 
+from seo_advisor.url_utils import sitemap_url
+
 from seo_advisor.fixers.models import FixTarget, PatchPlan, ensure_write_target_allowed
 from seo_advisor.models import Finding
 
@@ -44,7 +46,7 @@ def plan_fix(finding: Finding, *, indexable_urls: list[str]) -> PatchPlan:
     由呼叫端（fixers/runner.py）從 CrawlResult 篩選後傳入。
     """
     urls_xml = "\n".join(
-        f"  <url>\n    <loc>{escape(url)}</loc>\n  </url>" for url in indexable_urls
+        f"  <url>\n    <loc>{escape(sitemap_url(url))}</loc>\n  </url>" for url in indexable_urls
     )
     fixed = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'

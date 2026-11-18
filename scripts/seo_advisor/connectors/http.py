@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from itertools import islice
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
@@ -14,7 +15,13 @@ from seo_advisor.models import ConnectorProfile, PageSnapshot, ProbeResult, Safe
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
 from seo_advisor.security.rate_limiter import RateLimiter
 from seo_advisor.security.robots_policy import RobotsPolicy
-from seo_advisor.sitemaps import read_sitemaps, sitemap_candidates
+from seo_advisor.sitemaps import (
+    MAX_FILES,
+    SitemapFetch,
+    decode_sitemap_bytes,
+    read_sitemaps,
+    sitemap_candidates,
+)
 from seo_advisor.url_utils import normalize_host
 
 # probe_path() 讀取內容的上限：只需要極少量內容判斷特徵（例如 ".env" 檔案開頭
@@ -77,6 +84,7 @@ class HTTPConnector(WebsiteConnector):
         user_agent: str = "OpenSEOAdvisor/0.1",
         timeout_seconds: float = 15.0,
         max_redirects: int = 10,
+        max_sitemap_files: int = MAX_FILES,
         policy: SafetyPolicy | None = None,
         rate_limiter: RateLimiter | None = None,
         extra_headers: dict[str, str] | None = None,
@@ -112,6 +120,7 @@ class HTTPConnector(WebsiteConnector):
         self._rate_limiter = rate_limiter or RateLimiter(self.policy.rate_limit_per_second)
         self._robots_policy: RobotsPolicy | None = None
         self._max_redirects = max_redirects
+        self._max_sitemap_files = max_sitemap_files
         # 單次掃描內，同一個 URL（robots.txt/sitemap.xml/首頁等）常被 probe()、
         # 前置檢查、crawl_site、list_urls() 各自呼叫一次；用小型記憶體快取避免
         # 對同一目標網站重複發送相同請求（省時間、也減少對被掃網站的負擔）。
@@ -266,8 +275,12 @@ class HTTPConnector(WebsiteConnector):
         except (httpx.HTTPError, PrivateNetworkBlockedError) as exc:
             notes.append(f"robots.txt 檢查失敗：{exc}")
 
-        roots = sitemap_candidates(self.base_url, robots_text, self.is_url_in_scope)
-        has_sitemap = any(self.read_sitemap(url) is not None for url in roots)
+        roots = sitemap_candidates(self.base_url, robots_text)
+        scoped = (url for url in roots if self.is_url_in_scope(url))
+        has_sitemap = any(
+            self.read_sitemap_file(url).status == 200
+            for url in islice(scoped, self._max_sitemap_files)
+        )
 
         try:
             home_resp = self._safe_get(self.base_url, use_cache=True)
@@ -293,20 +306,25 @@ class HTTPConnector(WebsiteConnector):
             notes=notes,
         )
 
-    def read_sitemap(self, url: str) -> str | None:
+    def read_sitemap_file(self, url: str) -> SitemapFetch:
         if not self.is_url_in_scope(url):
-            return None
+            return SitemapFetch(0, error="超出掃描範圍")
         try:
             if _document_key(url) not in self._response_cache:
                 self._rate_limiter.wait()
             response = self._safe_get(
                 url, max_bytes=_MAX_SITEMAP_BYTES, use_cache=True, same_origin_only=True
             )
-        except (httpx.HTTPError, PrivateNetworkBlockedError):
-            return None
+        except (httpx.HTTPError, PrivateNetworkBlockedError) as exc:
+            return SitemapFetch(0, error=type(exc).__name__)
+        if response.truncated:
+            return SitemapFetch(response.status_code, error="超過本次讀取大小上限", limited=True)
         if response.status_code == 200 and self.is_url_in_scope(response.final_url):
-            return _decode_body(response)
-        return None
+            return decode_sitemap_bytes(response.body, status=response.status_code)
+        return SitemapFetch(response.status_code)
+
+    def read_sitemap(self, url: str) -> str | None:
+        return self.read_sitemap_file(url).body
 
     def list_urls(self, seed: str, limit: int) -> list[UrlRecord]:
         try:
@@ -315,7 +333,12 @@ class HTTPConnector(WebsiteConnector):
         except (httpx.HTTPError, PrivateNetworkBlockedError):
             robots = None
         discovery = read_sitemaps(
-            self.base_url, robots, self.is_url_in_scope, self.read_sitemap, limit
+            self.base_url,
+            robots,
+            self.is_url_in_scope,
+            self.read_sitemap_file,
+            limit,
+            max_files=self._max_sitemap_files,
         )
         return discovery.records or [UrlRecord(url=seed or self.base_url, source="seed")]
 

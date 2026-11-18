@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 
 from seo_advisor.indexability import google_noindex
+from seo_advisor.robots_rules import googlebot_blocked_paths, robots_fields
+from seo_advisor.sitemaps import parse_sitemap
+from seo_advisor.url_utils import canonical_destination
 from seo_advisor.website.images import read_raster
 from seo_advisor.website.models import WebsiteBrief
 from seo_advisor.website.validation import (
+    canonical_targets,
+    commercial_claims,
+    missing_page_copy,
     images_have_alt,
     jsonld_nodes,
     node_types,
@@ -19,50 +24,12 @@ from seo_advisor.website.validation import (
 )
 
 
-def _googlebot_blocked_paths(content: str, paths: list[str]) -> list[str]:
-    """Merge matching Googlebot groups, falling back to * only if none exist."""
-    groups: dict[str, list[tuple[str, str]]] = {}
-    agents: set[str] = set()
-    has_rules = False
-    for raw_line in content.lstrip("\ufeff").splitlines():
-        name, sep, value = raw_line.split("#", 1)[0].partition(":")
-        name, value = name.strip().casefold(), value.strip()
-        if not sep:
-            continue
-        if name == "user-agent":
-            if has_rules:
-                agents.clear()
-                has_rules = False
-            agents.add(value.casefold())
-            groups.setdefault(value.casefold(), [])
-        elif name in {"allow", "disallow"}:
-            has_rules = True
-            if value.startswith("/"):
-                for agent in agents:
-                    groups[agent].append((name, value))
-
-    agent = "googlebot" if "googlebot" in groups else "*"
-    blocked = []
-    for path in paths:
-        matches = []
-        for name, pattern in groups.get(agent, []):
-            end = pattern.endswith("$")
-            literal = pattern[:-1] if end else pattern
-            regex = ".*".join(re.escape(part) for part in literal.split("*"))
-            if re.match(regex + (r"\Z" if end else ""), path):
-                matches.append((len(pattern.encode("utf-8")), name == "allow", pattern))
-        if matches:
-            _, allowed, rule = max(matches)
-            if not allowed:
-                blocked.append(f"{path} (User-agent: {agent}, Disallow: {rule})")
-    return blocked
-
-
 def check_site(site: Path) -> dict:
     errors: list[str] = []
     pending: list[str] = []
     checks: dict[str, bool] = {}
     live_checks: set[str] = set()
+    responsive_images = []
     scope = "offline technical and content baseline only; LCP, accessibility, indexing, AI citations, payments and deployment require separate live verification"
 
     def require(name: str, condition: bool, message: str) -> None:
@@ -167,11 +134,11 @@ def check_site(site: Path) -> dict:
             images_have_alt(soup),
             "圖片缺少替代文字",
         )
-        canonical = soup.find("link", attrs={"rel": "canonical"})
+        canonical = canonical_targets(soup, origin)
         require(
             "canonical_matches",
-            (canonical.get("href") if canonical else None) == brief.canonical,
-            "canonical 與 brief 不一致",
+            canonical == ({canonical_destination("", brief.canonical)} if brief.canonical else set()),
+            f"/ 的 canonical 與 brief 不一致，實際目標：{sorted(canonical)}",
         )
         draft = brief.publication == "draft"
         restrictions = google_noindex(soup)
@@ -184,22 +151,20 @@ def check_site(site: Path) -> dict:
             ),
             "首頁收錄指令與發布狀態不一致：" + (", ".join(restrictions) or "缺少 noindex"),
         )
-        sitemap = ElementTree.fromstring((public / "sitemap.xml").read_text(encoding="utf-8"))
-        locs = [
-            item.text
-            for item in sitemap.findall(
-                "{http://www.sitemaps.org/schemas/sitemap/0.9}url/{http://www.sitemaps.org/schemas/sitemap/0.9}loc"
-            )
-        ]
+        sitemap = parse_sitemap((public / "sitemap.xml").read_text(encoding="utf-8"))
+        locs = sitemap.urls
         expected_locs = (
             [brief.canonical, *(f"{brief.canonical}{page.slug}/" for page in brief.pages)]
             if brief.publication == "production"
             else []
         )
-        require("sitemap", locs == expected_locs, "sitemap 與已發布頁面不一致")
+        require("sitemap", sitemap.kind == "urlset"
+                and (not sitemap.problem or (draft and sitemap.count == 0))
+                and set(locs) == set(expected_locs), "sitemap 格式或網址與已發布頁面不一致")
+        require("sitemap_unique", len(locs) == len(set(locs)), "sitemap 有重複網址")
         robots_text = (public / "robots.txt").read_text(encoding="utf-8")
         # Preview URLs must also be crawlable for Google to see their noindex.
-        blocked = _googlebot_blocked_paths(
+        blocked = googlebot_blocked_paths(
             robots_text, ["/", *(f"/{p.slug}/" for p in brief.pages)]
         )
         require(
@@ -210,16 +175,22 @@ def check_site(site: Path) -> dict:
         if brief.publication == "production":
             require(
                 "sitemap_discovery",
-                f"Sitemap: {brief.canonical}sitemap.xml" in robots_text,
+                f"{brief.canonical}sitemap.xml" in {v for k, v in robots_fields(robots_text) if k == "sitemap"},
                 "robots.txt 缺少 sitemap",
             )
 
+        unverified_claims = []
+
         def page_nodes(doc, label):
             try:
-                return jsonld_nodes(doc)
+                nodes = jsonld_nodes(doc)
             except ValueError as exc:
                 errors.append(f"{label} JSON-LD 解析失敗：{exc}")
                 return []
+            claims = commercial_claims(nodes)
+            if claims:
+                unverified_claims.append(f"{label}（{'、'.join(sorted(claims))}）")
+            return nodes
 
         nodes = page_nodes(soup, "/")
         require(
@@ -227,18 +198,9 @@ def check_site(site: Path) -> dict:
             {"WebSite", "Organization"}.issubset(node_types(nodes)),
             "缺少 WebSite／Organization JSON-LD",
         )
-        require(
-            "no_unverified_ratings",
-            all(
-                "aggregateRating" not in node and "review" not in node and "offers" not in node
-                for node in nodes
-            ),
-            "此 starter 不支援未核對的評價、Offer",
-        )
-
         def check_resources(document: Path, document_soup: BeautifulSoup) -> set[Path]:
             issues, linked_files = check_page_resources(
-                document, document_soup, public, origin, remote_actions, live_checks, documents
+                document, document_soup, public, origin, remote_actions, live_checks, documents, responsive_images
             )
             errors.extend(issues)
             return linked_files
@@ -257,7 +219,16 @@ def check_site(site: Path) -> dict:
             page_description_text = page_description.get("content", "") if page_description else ""
             page_og_title = page_soup.find("meta", attrs={"property": "og:title"})
             page_og_description = page_soup.find("meta", attrs={"property": "og:description"})
-            page_canonical = page_soup.find("link", attrs={"rel": "canonical"})
+            expected_canonical = f"{brief.canonical}{page.slug}/" if brief.canonical else None
+            canonical = canonical_targets(page_soup, f"{origin}{page.slug}/")
+            require(f"page_{page.slug}_canonical", canonical == ({canonical_destination("", expected_canonical)} if expected_canonical else set()),
+                    f"/{page.slug}/ 的 canonical 與 brief 不一致，實際目標：{sorted(canonical)}")
+            require(f"page_{page.slug}_language", bool(page_soup.html) and
+                    page_soup.html.get("lang", "").casefold() == brief.lang.casefold(),
+                    f"/{page.slug}/ 的 HTML lang 應為 {brief.lang}")
+            missing_copy = missing_page_copy(page_soup, page)
+            require(f"page_{page.slug}_copy", not missing_copy,
+                    f"/{page.slug}/ 缺少已核定內容：{'、'.join(missing_copy)}")
             page_restrictions = google_noindex(page_soup)
             page_h1 = page_soup.select("main h1")
             page_h2 = [tag.get_text(strip=True) for tag in page_soup.select("main h2")]
@@ -269,8 +240,7 @@ def check_site(site: Path) -> dict:
                 and bool(
                     page_og_description and page_og_description.get("content") == page.description
                 )
-                and (page_canonical.get("href") if page_canonical else None)
-                == (f"{brief.canonical}{page.slug}/" if brief.canonical else None)
+                and checks[f"page_{page.slug}_canonical"]
                 and (
                     any(rule.startswith("meta robots:") for rule in page_restrictions)
                     if draft
@@ -305,6 +275,8 @@ def check_site(site: Path) -> dict:
             check_resources(path, page_soup)
             titles.append(page_title)
             descriptions.append(page_description_text)
+        require("no_unverified_ratings", not unverified_claims,
+                "頁面的評價或報價缺少可核對的來源與可見內容：" + "、".join(unverified_claims))
         require(
             "unique_page_metadata",
             len(titles) == len(set(title.casefold() for title in titles))
@@ -435,6 +407,7 @@ def check_site(site: Path) -> dict:
         "network_requests": False,
         "url_validation": "static files and HTML fragments checked offline; deployed HTTP headers, dynamic routes and remote checkout require live verification",
         "links_to_verify_live": sorted(live_checks),
+        "responsive_images": responsive_images,
         "checks": checks,
         "errors": errors,
         "pending": pending,

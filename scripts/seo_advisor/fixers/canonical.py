@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import difflib
 import re
-from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlparse, urlsplit
 
 from bs4 import BeautifulSoup
 
 from seo_advisor.crawler import CrawlResult
 from seo_advisor.fixers.models import FixTarget, NotFixableError, PatchPlan, ensure_write_target_allowed
 from seo_advisor.models import Finding
+from seo_advisor.url_utils import canonical_destination
 
 # 常見樣板引擎語法（Jinja/Django/Handlebars/Liquid/PHP/ASP 等）的粗略偵測。
 # BeautifulSoup 重新序列化整份 HTML 時，樣板語法本身雖然通常會被完整保留
@@ -32,8 +33,10 @@ def _to_relative_path(url: str) -> str:
     （沒有副檔名，例如 /about）比照同樣的慣例補上 .html。
     """
     parsed = urlparse(url)
-    path = parsed.path if parsed.scheme else url
-    rel_path = path.lstrip("/") or "index.html"
+    path = unquote(parsed.path)
+    rel_path = path.lstrip("/")
+    if not rel_path or rel_path.endswith("/"):
+        return rel_path + "index.html"
     if "." not in rel_path.rsplit("/", 1)[-1]:
         rel_path = rel_path.rstrip("/") + ".html"
     return rel_path
@@ -54,18 +57,6 @@ def can_fix(finding: Finding) -> bool:
     return "CANONICAL_CONFLICT" in finding.id
 
 
-def _destination(base: str, href: str) -> str:
-    if not href.strip():
-        return ""
-    parsed = urlsplit(urljoin(base, href.strip()))
-    authority = parsed.netloc.lower()
-    if parsed.scheme == "https":
-        authority = authority.removesuffix(":443")
-    elif parsed.scheme == "http":
-        authority = authority.removesuffix(":80")
-    return urlunsplit((parsed.scheme, authority, parsed.path or "/", parsed.query, ""))
-
-
 def plan_fix(
     finding: Finding, *, pages: dict[str, str], crawl: CrawlResult | None = None,
     seed_url: str = "",
@@ -78,12 +69,16 @@ def plan_fix(
     warnings: list[str] = []
     decisions: list[str] = []
 
+    handled_paths = set()
     for url in finding.affected_urls:
         rel_path = _to_relative_path(url)
         original = pages.get(url) or pages.get(rel_path)
         if original is None:
             warnings.append(f"找不到 {url} 的內容，已略過此頁面。")
             continue
+        if rel_path in handled_paths:
+            continue
+        handled_paths.add(rel_path)
 
         if _looks_like_template(original):
             warnings.append(
@@ -102,7 +97,7 @@ def plan_fix(
         document = urljoin(seed_url, url)
         base = soup.find("base", href=True)
         base_url = urljoin(document, base["href"]) if base else document
-        candidates = {_destination(base_url, tag.get("href") or "") for tag in canonical_tags}
+        candidates = {canonical_destination(base_url, tag.get("href") or "") for tag in canonical_tags}
         if len(candidates) != 1 or not all(candidates) or any(urlsplit(c).scheme not in ("", "http", "https") for c in candidates):
             evidence = []
             for candidate in sorted(candidates):
@@ -110,9 +105,9 @@ def plan_fix(
                 inbound = []
                 if crawl is not None:
                     snapshot = next((page for key, page in crawl.pages.items()
-                                     if _destination(seed_url, key) == candidate), None)
+                                     if canonical_destination(seed_url, key) == candidate), None)
                     inbound = [source for source, links in crawl.link_graph.items()
-                               if any(_destination(seed_url, link) == candidate for link in links)]
+                               if any(canonical_destination(seed_url, link) == candidate for link in links)]
                 status = f"HTTP {snapshot.status_code}，最終網址 {snapshot.final_url}" if snapshot else "HTTP 與最終網址待查"
                 links = "、".join(inbound[:3]) or "本次未觀察到"
                 evidence.append(f"{candidate or '空白目標'}（{status}，站內連入：{links}）")

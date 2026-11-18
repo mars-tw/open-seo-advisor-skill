@@ -16,17 +16,16 @@ from __future__ import annotations
 import json
 from collections import Counter
 from urllib.parse import urljoin, urlparse
-from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 
 from seo_advisor.crawler import CrawlResult, document_base, find_orphan_pages
 from seo_advisor.indexability import google_noindex, valid_hreflang
 from seo_advisor.models import Finding, Mode, Severity
-from seo_advisor.sitemaps import NS, absolute_web_url, sitemap_root
+from seo_advisor.robots_rules import googlebot_blocks, robots_fields
+from seo_advisor.sitemaps import parse_sitemap
 from seo_advisor.url_utils import normalize_host as _normalize_host
 
-_MAX_URLS_PER_SITEMAP_FILE = 50_000
 
 def _canonicalize_url_for_comparison(url: str) -> str:
     """Preserve path and query identity; only the fragment is document-local."""
@@ -72,12 +71,28 @@ def analyze_technical_seo(
     parsed = _parsed_pages(result)
 
     noindex = {}
+    preview_directives = {}
     for url, snapshot in result.pages.items():
         final = _canonicalize_url_for_comparison(snapshot.final_url or url)
         if snapshot.status_code == 200:
             rules = google_noindex(parsed.get(final), snapshot.indexing_headers)
             if rules:
                 noindex[final] = rules
+            elif not expect_indexing and final in parsed:
+                tags = parsed[final].find_all("meta", attrs={"name": True, "content": True})
+                observed = [
+                    f"meta {tag['name']}: {tag['content']}"
+                    for tag in tags
+                    if tag["name"].strip().casefold() in {"robots", "googlebot"}
+                ]
+                header_lines = snapshot.x_robots_fields or [
+                    value
+                    for key, value in snapshot.headers.items()
+                    if key.casefold() == "x-robots-tag"
+                ]
+                preview_directives[final] = observed + [
+                    f"X-Robots-Tag: {value}" for value in header_lines
+                ]
     preview_excludes_all_pages = not expect_indexing and bool(parsed) and parsed.keys() <= noindex.keys()
     findings.extend(_check_status_codes(result, next_id))
     findings.extend(_check_redirect_chains(result, next_id))
@@ -85,12 +100,47 @@ def analyze_technical_seo(
     findings.extend(_check_sitemap(result, next_id, require_urls=not preview_excludes_all_pages))
     findings.extend(_check_https(result, seed_url, next_id))
     findings.extend(_check_page_metadata(parsed, next_id))
+    excluded_from_link_advice = set(noindex)
     if expect_indexing:
         findings.extend(_check_noindex(noindex, next_id))
+        candidates = set(parsed) - set(noindex)
+        candidates.update(
+            url
+            for url, snap in result.pages.items()
+            if snap.fetch_error_type == "blocked_by_robots_txt" and url in result.sitemap_page_urls
+        )
+        googlebot_findings = _check_googlebot_crawl(candidates, result.robots_txt, next_id)
+        findings.extend(googlebot_findings)
+        for finding in googlebot_findings:
+            excluded_from_link_advice.update(finding.affected_urls)
+    elif exposed := sorted(set(parsed) - set(noindex)):
+        findings.append(
+            Finding(
+                id=next_id("preview_indexable"),
+                title="預覽頁缺少針對 Google 的 noindex",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P1,
+                impact=4,
+                effort=1,
+                confidence=1.0,
+                affected_urls=exposed,
+                evidence={
+                    "html_without_noindex": len(exposed),
+                    "observed_directives": {
+                        url: preview_directives.get(url, []) for url in exposed
+                    },
+                },
+                recommendation="確認預覽範圍，為不應出現在搜尋結果的預覽頁加入有效 noindex 或限制存取。",
+                validation=["在預覽頁 HTML 或 HTTP 標頭中讀回 Google 適用的索引指令。"],
+                owner=Mode.ENGINEER,
+                sources=["google-search-essentials"],
+            )
+        )
     findings.extend(_check_canonical_target(parsed, result, noindex, next_id))
     findings.extend(_check_social_metadata(parsed, noindex, next_id))
     findings.extend(_check_structured_data(parsed, next_id))
-    findings.extend(_check_orphan_pages(result, seed_url, next_id))
+    findings.extend(_check_orphan_pages(result, seed_url, next_id, excluded_from_link_advice))
     findings.extend(_check_hreflang(parsed, result, seed_url, next_id))
     findings.extend(_check_cwv_static_hints(parsed, next_id))
 
@@ -201,7 +251,9 @@ def _check_robots_txt(result: CrawlResult, next_id, *, require_sitemap: bool = T
                 sources=["robots-txt-intro"],
             )
         )
-    elif require_sitemap and "sitemap:" not in result.robots_txt.lower():
+    elif require_sitemap and not any(
+        key == "sitemap" and value for key, value in robots_fields(result.robots_txt)
+    ):
         findings.append(
             Finding(
                 id=next_id("robots_no_sitemap"),
@@ -224,13 +276,73 @@ def _check_robots_txt(result: CrawlResult, next_id, *, require_sitemap: bool = T
     return findings
 
 
+def _check_googlebot_crawl(urls, content, next_id):
+    paths = {}
+    for url in sorted(urls):
+        parts = urlparse(url)
+        path = parts.path or "/"
+        if parts.query:
+            path += "?" + parts.query
+        paths.setdefault(path, []).append(url)
+    blocked = googlebot_blocks(content or "", list(paths))
+    if not blocked:
+        return []
+    return [
+        Finding(
+            id=next_id("googlebot_blocked"),
+            title="robots.txt 阻擋 Googlebot 抓取預定收錄頁面",
+            mode=Mode.CONSULTANT,
+            category="indexability",
+            severity=Severity.P1,
+            impact=4,
+            effort=2,
+            confidence=1.0,
+            affected_urls=[url for path in blocked for url in paths[path]],
+            evidence={
+                "rules": {
+                    path: {"agent": agent, "disallow": rule}
+                    for path, (agent, rule) in blocked.items()
+                }
+            },
+            recommendation="確認頁面用途，對預定收錄的頁面調整 Googlebot 實際命中的群組與路徑規則。",
+            validation=["對網站正式網址重新檢查 Googlebot 規則及 Search Console URL 檢查結果。"],
+            owner=Mode.ENGINEER,
+            sources=["robots-txt-intro"],
+        )
+    ]
+
+
 def _check_sitemap(result: CrawlResult, next_id, *, require_urls: bool = True) -> list[Finding]:
     findings: list[Finding] = []
     documents = result.sitemap_documents
     if not documents and result.sitemap_xml is not None:
         documents = {"/sitemap.xml": result.sitemap_xml}
+    if result.sitemap_errors:
+        findings.append(
+            Finding(
+                id=next_id("sitemap_unreadable"),
+                title="sitemap 未能完整讀取",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P2,
+                impact=3,
+                effort=2,
+                confidence=1.0,
+                affected_urls=list(result.sitemap_errors),
+                evidence={
+                    "errors": result.sitemap_errors,
+                    "statuses": {
+                        url: result.sitemap_statuses.get(url) for url in result.sitemap_errors
+                    },
+                },
+                recommendation="檢查受影響檔案的狀態與來源宣告，確認檔案可供讀取後再掃描。",
+                validation=["核對每個 sitemap 或子檔的回應及網址清單。"],
+                owner=Mode.ENGINEER,
+                sources=["sitemaps-protocol"],
+            )
+        )
     if not documents:
-        if not require_urls:
+        if not require_urls or result.sitemap_errors or result.sitemap_pending:
             return findings
         findings.append(
             Finding(
@@ -254,19 +366,11 @@ def _check_sitemap(result: CrawlResult, next_id, *, require_urls: bool = True) -
         return findings
 
     for url, body in documents.items():
-        try:
-            root = sitemap_root(body)
-        except (ElementTree.ParseError, ValueError) as exc:
-            message = str(exc)
-            category = "sitemap_invalid_xml"
-        else:
-            if not require_urls and root.tag == NS + "urlset" and len(root) == 0:
-                continue
-            message = _sitemap_problem(root)
-            category = "sitemap_invalid_structure"
-            if len(root) > _MAX_URLS_PER_SITEMAP_FILE:
-                message = f"檔案含 {len(root)} 筆，單檔上限為 50,000 筆"
-                category = "sitemap_too_large"
+        parsed = parse_sitemap(body)
+        if not require_urls and parsed.kind == "urlset" and not parsed.count:
+            continue
+        message = parsed.problem
+        category = parsed.category
         if message:
             findings.append(
                 Finding(
@@ -280,7 +384,7 @@ def _check_sitemap(result: CrawlResult, next_id, *, require_urls: bool = True) -
                     confidence=1.0,
                     affected_urls=[url],
                     evidence={"reason": message, "source": result.sitemap_sources.get(url)},
-                    recommendation="提供有效且在單檔限制內的 sitemap XML，並確認每個項目的 loc 是完整網址。",
+                    recommendation="依 sitemap 格式修正網址清單，使用完整網址並確認檔案可讀取。",
                     validation=["核對 sitemap 命名空間、根元素、項目與 loc，再重新抓取。"],
                     owner=Mode.ENGINEER,
                     sources=["sitemaps-protocol"],
@@ -288,22 +392,6 @@ def _check_sitemap(result: CrawlResult, next_id, *, require_urls: bool = True) -
             )
 
     return findings
-
-
-def _sitemap_problem(root):
-    if root.tag not in {NS + "urlset", NS + "sitemapindex"}:
-        return "根元素應為 sitemap 命名空間下的 urlset 或 sitemapindex"
-    tag = NS + ("url" if root.tag == NS + "urlset" else "sitemap")
-    if not len(root):
-        return "缺少網址或子 sitemap 項目"
-    for index, entry in enumerate(root, 1):
-        if entry.tag != tag:
-            return f"第 {index} 個項目不符合根元素的類型"
-        locations = entry.findall(NS + "loc")
-        value = (locations[0].text or "").strip() if len(locations) == 1 else ""
-        if not absolute_web_url(value):
-            return f"第 {index} 個項目需要一個完整的 HTTP(S) loc"
-    return ""
 
 
 def _check_https(result: CrawlResult, seed_url: str, next_id) -> list[Finding]:
@@ -385,7 +473,7 @@ def _check_page_metadata(parsed: dict[str, BeautifulSoup], next_id) -> list[Find
     if duplicate_title_groups:
         affected = [url for urls in duplicate_title_groups.values() for url in urls]
         # evidence 只保留前幾組範例，避免重複標題組數量很多時報告過於冗長
-        example_groups = dict(list(duplicate_title_groups.items())[:5])
+        example_groups = {title: urls[:5] for title, urls in list(duplicate_title_groups.items())[:5]}
         findings.append(
             Finding(
                 id=next_id("title_duplicate"),
@@ -396,7 +484,7 @@ def _check_page_metadata(parsed: dict[str, BeautifulSoup], next_id) -> list[Find
                 impact=3,
                 effort=2,
                 confidence=0.8,
-                affected_urls=affected[:50],
+                affected_urls=affected,
                 evidence={
                     "duplicate_title_groups": len(duplicate_title_groups),
                     "examples": example_groups,
@@ -487,7 +575,7 @@ def _metadata_finding(
         impact=impact,
         effort=2,
         confidence=0.9,
-        affected_urls=affected_urls[:50],
+        affected_urls=affected_urls,
         evidence={"affected_count": len(affected_urls)},
         recommendation=recommendation,
         validation=["重新爬取確認問題已修正"],
@@ -709,9 +797,16 @@ def _check_structured_data(parsed: dict[str, BeautifulSoup], next_id) -> list[Fi
     return findings
 
 
-def _check_orphan_pages(result: CrawlResult, seed_url: str, next_id) -> list[Finding]:
+def _check_orphan_pages(
+    result: CrawlResult, seed_url: str, next_id, excluded: set[str]
+) -> list[Finding]:
     findings: list[Finding] = []
-    orphans = find_orphan_pages(result, seed_url)
+    orphans = [
+        url
+        for url in find_orphan_pages(result, seed_url)
+        if _canonicalize_url_for_comparison(result.pages[url].final_url or url) not in excluded
+        and not result.pages[url].redirect_chain
+    ]
     if orphans:
         findings.append(
             Finding(
@@ -796,6 +891,18 @@ def _check_hreflang(
     site_origin = seed_url if seed_url.startswith(("http://", "https://")) else None
 
     page_declarations = _extract_page_hreflang_declarations(parsed)
+    aliases = {
+        _canonicalize_url_for_comparison(requested): _canonicalize_url_for_comparison(
+            snapshot.final_url
+        )
+        for url, snapshot in result.pages.items()
+        if snapshot.status_code == 200 and snapshot.final_url
+        for requested in (*snapshot.redirect_chain, url)
+    }
+
+    def resolved(key):
+        return aliases.get(key, key)
+
     missing_self_ref: list[str] = []
     duplicate_language: list[str] = []
     invalid_code_pages: dict[str, list[str]] = {}
@@ -833,8 +940,8 @@ def _check_hreflang(
                     out_of_scope.append(href)
 
         has_self_reference = any(
-            _canonicalize_url_for_comparison(urljoin(document_base(url, soup), href))
-            == _canonicalize_url_for_comparison(url)
+            resolved(_canonicalize_url_for_comparison(urljoin(document_base(url, soup), href)))
+            == url
             for href in declarations.values()
         )
         if not has_self_reference:
@@ -859,28 +966,56 @@ def _check_hreflang(
     canonical_to_crawled_page = {
         _canonicalize_url_for_comparison(url): url for url in parsed
     }
+    redirected = {}
     non_reciprocal_pairs: list[str] = []
     for source_url, declarations in page_declarations.items():
         for code, href in declarations.items():
-            if code.casefold() == "x-default":
-                continue
             target_absolute = urljoin(document_base(source_url, parsed[source_url]), href)
             target_key = _canonicalize_url_for_comparison(target_absolute)
-            target_original = canonical_to_crawled_page.get(target_key)
+            final_key = resolved(target_key)
+            if final_key != target_key:
+                redirected.setdefault(source_url, []).append(
+                    {"declared": target_absolute, "final": final_key}
+                )
+            if code.casefold() == "x-default":
+                continue
+            target_original = canonical_to_crawled_page.get(final_key)
             if target_original is None or target_original == source_url:
                 # 目標頁不在本次 crawl 範圍內：無法驗證是否指回，不誤報。
                 continue
             target_declarations = page_declarations.get(target_original, {})
             source_key = _canonicalize_url_for_comparison(source_url)
             points_back = any(
-                _canonicalize_url_for_comparison(
-                    urljoin(document_base(target_original, parsed[target_original]), back_href)
+                resolved(
+                    _canonicalize_url_for_comparison(
+                        urljoin(document_base(target_original, parsed[target_original]), back_href)
+                    )
                 )
                 == source_key
                 for back_href in target_declarations.values()
             )
             if not points_back:
                 non_reciprocal_pairs.append(f"{source_url} -> {href}")
+
+    if redirected:
+        findings.append(
+            Finding(
+                id=next_id("hreflang_redirect"),
+                title="hreflang 仍指向轉址前的網址",
+                mode=Mode.CONSULTANT,
+                category="indexability",
+                severity=Severity.P3,
+                impact=2,
+                effort=1,
+                confidence=1.0,
+                affected_urls=list(redirected),
+                evidence={"targets": redirected},
+                recommendation="將語系標記更新為實際回應的最終網址。",
+                validation=["核對轉址來源、最終頁及相互參照。"],
+                owner=Mode.ENGINEER,
+                sources=["hreflang"],
+            )
+        )
 
     if missing_self_ref:
         findings.append(
@@ -1043,6 +1178,18 @@ def _check_cwv_static_hints(parsed: dict[str, BeautifulSoup], next_id) -> list[F
                 "application/javascript",
                 "text/ecmascript",
                 "application/ecmascript",
+                "application/x-ecmascript",
+                "application/x-javascript",
+                "text/x-ecmascript",
+                "text/x-javascript",
+                "text/jscript",
+                "text/livescript",
+                "text/javascript1.0",
+                "text/javascript1.1",
+                "text/javascript1.2",
+                "text/javascript1.3",
+                "text/javascript1.4",
+                "text/javascript1.5",
             }
         ]
         if len(blocking_scripts) >= 3:

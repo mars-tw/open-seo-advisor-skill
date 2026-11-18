@@ -12,6 +12,7 @@ import json
 from typing import Callable
 
 from seo_advisor.writers.models import LLMRequest, LLMResponse
+from seo_advisor.writers.prompts import METADATA_DRAFT_SYSTEM, METADATA_URLS_LABEL
 from seo_advisor.writers.providers.base import LLMProvider
 
 ResponseFactory = Callable[[LLMRequest], str]
@@ -64,6 +65,13 @@ def _default_response_for(request: LLMRequest) -> str:
             if schema_field in request.system:
                 return json.dumps(payload, ensure_ascii=False)
         return json.dumps({}, ensure_ascii=False)
+    if request.system == METADATA_DRAFT_SYSTEM:
+        line = request.messages[0].content.split("\n", 1)[0]
+        urls = json.loads(line.removeprefix(METADATA_URLS_LABEL))
+        return json.dumps([
+            {"url": url, "title": f"示範標題 {i}", "meta_description": f"第 {i} 頁示範摘要。", "h1": f"示範主標 {i}"}
+            for i, url in enumerate(urls, 1)
+        ], ensure_ascii=False, indent=2)
     return "# （示範資料）文章草稿\n\n這是 mock provider 產生的示範草稿內容，並非真實文章。"
 
 

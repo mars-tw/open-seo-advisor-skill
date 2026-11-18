@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.models import PageSnapshot
-from seo_advisor.sitemaps import read_sitemaps
+from seo_advisor.sitemaps import MAX_FILES, SitemapFetch, read_sitemaps
 from seo_advisor.url_utils import normalize_host
 
 
@@ -28,6 +28,10 @@ class CrawlResult:
     skipped_urls: list[str] = field(default_factory=list)
     sitemap_documents: dict[str, str] = field(default_factory=dict)
     sitemap_sources: dict[str, str] = field(default_factory=dict)
+    sitemap_page_urls: set[str] = field(default_factory=set)
+    sitemap_statuses: dict[str, int] = field(default_factory=dict)
+    sitemap_errors: dict[str, str] = field(default_factory=dict)
+    sitemap_pending: dict[str, str] = field(default_factory=dict)
     unverified_canonicals: dict[str, str] = field(default_factory=dict)
 
 
@@ -83,6 +87,7 @@ def crawl_site(
     seed_url: str,
     max_urls: int = 1000,
     max_depth: int = 6,
+    max_sitemap_files: int = MAX_FILES,
     fetched_at: str = "",
 ) -> CrawlResult:
     """從 seed_url 開始做站內廣度優先爬取，回傳收集到的所有頁面快照。"""
@@ -106,35 +111,47 @@ def crawl_site(
     def fetch_sitemap(url):
         try:
             snapshot = connector.fetch_url(url, fetched_at=fetched_at)
-            if snapshot.status_code == 200:
-                body = snapshot.text if snapshot.text is not None else snapshot.html
-                return body if isinstance(body, str) else None
-        except (OSError, ValueError):
-            pass
-        return None
+        except (OSError, ValueError) as exc:
+            return SitemapFetch(0, error=type(exc).__name__)
+        body = snapshot.text if snapshot.text is not None else snapshot.html
+        if snapshot.status_code == 200 and isinstance(body, str):
+            return SitemapFetch(200, body)
+        return SitemapFetch(snapshot.status_code, error=snapshot.fetch_error_type or "")
 
-    http_reader = (
-        connector.read_sitemap if callable(getattr(type(connector), "read_sitemap", None)) else None
-    )
+    reader = getattr(type(connector), "read_sitemap_file", None)
     sitemap_data = read_sitemaps(
         seed_url,
         result.robots_txt,
         is_in_scope or (lambda url: _same_site(base_netloc, url)),
-        http_reader or fetch_sitemap,
+        connector.read_sitemap_file if callable(reader) else fetch_sitemap,
         max_urls,
+        max_files=max_sitemap_files,
     )
+    result.sitemap_page_urls = {record.url for record in sitemap_data.records}
     result.sitemap_sources = sitemap_data.sources
     result.sitemap_documents = sitemap_data.documents
+    result.sitemap_statuses = sitemap_data.statuses
+    result.sitemap_errors = sitemap_data.errors
+    result.sitemap_pending = sitemap_data.pending
     result.sitemap_xml = next(iter(sitemap_data.documents.values()), None)
+    http_reader = callable(getattr(type(connector), "read_sitemap", None))
     seed_records = (
         sitemap_data.records if http_reader else connector.list_urls(seed_url, limit=max_urls)
     )
+    local_url = getattr(type(connector), "local_url", None)
+    if callable(local_url) and getattr(connector, "site_origin", None):
+        seed_records.extend(
+            record.model_copy(update={"url": connector.local_url(record.url)})
+            for record in sitemap_data.records
+        )
     queue: deque[tuple[str, int]] = deque()
     queued_depths: dict[str, int] = {}
     visited: set[str] = set()
 
     def enqueue(url: str, depth: int) -> None:
         url = _document_url(url, seed_url)
+        if callable(local_url):
+            url = connector.local_url(url)
         if url in visited or (url in queued_depths and queued_depths[url] <= depth):
             return
         queued_depths[url] = depth
@@ -167,6 +184,8 @@ def crawl_site(
                 same_site_links = [link for link in links if is_in_scope(link)]
             else:
                 same_site_links = [link for link in links if _same_site(base_netloc, link)]
+            if callable(local_url):
+                same_site_links = [connector.local_url(link) for link in same_site_links]
             result.link_graph[url] = set(same_site_links)
             for link in same_site_links:
                 enqueue(link, depth + 1)
@@ -206,7 +225,11 @@ def find_orphan_pages(result: CrawlResult, seed_url: str) -> list[str]:
 
     orphans = [
         url
-        for url in result.pages
-        if url not in entry_points and url not in linked_targets
+        for url, snapshot in result.pages.items()
+        if snapshot.status_code == 200
+        and snapshot.html
+        and not snapshot.fetch_error_type
+        and url not in entry_points
+        and url not in linked_targets
     ]
     return orphans

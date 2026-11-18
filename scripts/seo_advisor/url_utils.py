@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import quote, urljoin, urlparse, urlsplit, urlunsplit
 
 _DOMAIN_PATTERN = re.compile(
     r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
@@ -19,6 +19,45 @@ _DOMAIN_PATTERN = re.compile(
 
 class InvalidUrlError(ValueError):
     """使用者輸入的內容看起來不像網址時拋出，附帶人話說明。"""
+
+
+def http_origin(url: str) -> str:
+    """Compare exact origins; only scheme/host casing and default ports are equivalent."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise InvalidUrlError("請提供不含帳號密碼的 HTTP(S) 網站網址。")
+    port = parsed.port
+    host = parsed.hostname
+    if ":" in host:
+        host = f"[{host}]"
+    if port is not None and (parsed.scheme, port) not in {("https", 443), ("http", 80)}:
+        host += f":{port}"
+    return f"{parsed.scheme}://{host}"
+
+
+def sitemap_url(url: str) -> str:
+    """Encode URI components once, preserving delimiters and valid percent escapes."""
+    parts = urlsplit(url)
+
+    def encoded(value, safe):
+        return quote(re.sub(r"%(?![0-9a-fA-F]{2})", "%25", value), safe=safe + "%")
+
+    path = encoded(parts.path, "/:@!$&'()*+,;=")
+    query = encoded(parts.query, "/?:@!$&'()*+,;=")
+    return urlunsplit((parts.scheme, parts.netloc, path, query, ""))
+
+
+def canonical_destination(base: str, href: str) -> str:
+    """Resolve a document identity while preserving path and query semantics."""
+    if not href.strip():
+        return ""
+    parsed = urlsplit(urljoin(base, href.strip()))
+    authority = parsed.netloc.lower()
+    if parsed.scheme == "https":
+        authority = authority.removesuffix(":443")
+    elif parsed.scheme == "http":
+        authority = authority.removesuffix(":80")
+    return sitemap_url(urlunsplit((parsed.scheme, authority, parsed.path or "/", parsed.query, "")))
 
 
 def normalize_url(raw: str) -> str:

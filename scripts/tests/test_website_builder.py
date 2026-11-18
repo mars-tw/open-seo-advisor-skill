@@ -511,6 +511,123 @@ def test_detail_jsonld_block_reports_its_url_and_accepts_graph_and_array(tmp_pat
     assert any("/tea-service/ JSON-LD" in msg for msg in result["errors"])
 
 
+def test_googlebot_aliases_merge_rules_but_keep_other_crawlers_separate(tmp_path):
+    from seo_advisor.robots_rules import googlebot_blocks
+
+    rules = ("User-agent: *\nDisallow: /\nUser-agent: Googlebot/2.1\nDisallow: /private/\n"
+             "User-agent: googlebot*\nAllow: /private/public/\nDisallow: /%74ea-service/\n"
+             "User-agent: Googlebot-News\nDisallow: /news/\n")
+    paths = ["/", "/private/", "/private/public/", "/tea-service/", "/news/"]
+    assert googlebot_blocks(rules, paths) == {
+        "/private/": ("googlebot/2.1", "/private/"), "/tea-service/": ("googlebot*", "/%74ea-service/"),
+    }
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    (out / "public/robots.txt").write_text(rules + "sitemap: https://tea.example.com/sitemap.xml\n")
+    report = check_site(out)
+    assert not report["checks"]["robots_crawlable"] and report["checks"]["sitemap_discovery"]
+    assert any("/tea-service/" in item and "googlebot*" in item for item in report["errors"])
+
+
+@pytest.mark.parametrize("relative,extra", [
+    ("index.html", "https://tea.example.com/tea-service/"),
+    ("tea-service/index.html", "https://tea.example.com/"),
+])
+def test_every_canonical_is_checked(tmp_path, relative, extra):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    page = out / "public" / relative
+    original = page.read_text(encoding="utf-8")
+    for url, status in [(extra, "invalid"), ("./", "baseline_ready")]:
+        page.write_text(original.replace("</head>", f'<link rel="Canonical" href="{url}"></head>'), encoding="utf-8")
+        report = check_site(out)
+        assert report["status"] == status
+        if status == "invalid":
+            assert any("https://tea.example.com/tea-service/" in e and "'https://tea.example.com/'" in e for e in report["errors"])
+
+
+@pytest.mark.parametrize("label,valid", [
+    ('aria-labelledby="missing"', False), ('aria-label="   "', False),
+    ('aria-labelledby="empty"', False), ('aria-labelledby="empty label"', True),
+    ('aria-labelledby="missing" aria-label="預約"', True),
+])
+def test_image_only_link_has_meaningful_name(tmp_path, label, valid):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    home = out / "public/index.html"
+    markup = (f'<span id="empty"> </span><span hidden id="label">預約茶席</span><a href="/tea-service/" {label}>'
+              '<img src="/assets/hero.png" alt=""></a>')
+    home.write_text(home.read_text(encoding="utf-8").replace("</main>", markup + "</main>"), encoding="utf-8")
+    assert check_site(out)["checks"]["image_alt"] is valid
+
+
+def test_detail_commercial_claims_in_nested_jsonld_are_reported(tmp_path):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    path = out / "public/tea-service/index.html"
+    product = {"@context": "https://schema.org", "@type": "WebPage", "mainEntity": {
+        "@type": "Product", "name": "茶", "aggregateRating": {"ratingValue": 5, "ratingCount": 9999}}}
+    markup = '<script type="application/ld+json">' + json.dumps(product) + '</script>'
+    path.write_text(path.read_text(encoding="utf-8").replace("</head>", markup + "</head>"), encoding="utf-8")
+    result = check_site(out)
+    assert result["status"] == "invalid" and not result["checks"]["no_unverified_ratings"]
+    assert any("/tea-service/" in e and "aggregateRating" in e for e in result["errors"])
+
+
+def test_inner_language_and_approved_section_copy(tmp_path):
+    out = tmp_path / "site"
+    brief = production_brief(tmp_path)
+    build_site(brief, out, base_dir=tmp_path)
+    path = out / "public/tea-service/index.html"
+    original = path.read_text(encoding="utf-8")
+    section = brief.pages[0].sections[0]
+    for old, new, expected in [
+        ('lang="zh-TW"', 'lang="de"', "lang"), (brief.pages[0].intro, "", "導言"),
+        (section.body, "", section.title),
+    ]:
+        path.write_text(original.replace(old, new), encoding="utf-8")
+        report = check_site(out)
+        assert report["status"] == "invalid"
+        assert any("/tea-service/" in e and expected in e for e in report["errors"])
+
+
+def test_picture_and_img_srcset_check_every_candidate(tmp_path):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    path = out / "public/tea-service/index.html"
+    markup = ('<picture><source media="(max-width: 640px)" srcset="../assets/hero.png 1x, /assets/missing.webp 2x">'
+              '<img alt="茶席" src="../assets/hero.png" srcset="../assets/hero.png 1x, https://cdn.example.com/a.webp 2x"></picture>')
+    path.write_text(path.read_text(encoding="utf-8").replace("</main>", markup + "</main>"), encoding="utf-8")
+    report = check_site(out)
+    assert report["status"] == "invalid"
+    assert any("/tea-service/" in e and "/assets/missing.webp" in e for e in report["errors"])
+    rows = [row for row in report["responsive_images"] if row["page"] == "/tea-service/index.html"]
+    assert [(r["media"], r["descriptor"], r["status"]) for r in rows] == [
+        ("(max-width: 640px)", "1x", "present"), ("(max-width: 640px)", "2x", "invalid"),
+        ("fallback", "", "present"), ("all", "1x", "present"), ("all", "2x", "verify_live"),
+    ]
+
+
+def test_sitemap_order_duplicates_and_robots_comments(tmp_path):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    root = out / "public"
+    robots = root / "robots.txt"
+    original = robots.read_text(encoding="utf-8")
+    robots.write_text(original.replace("Sitemap:", "# Sitemap:"), encoding="utf-8")
+    assert not check_site(out)["checks"]["sitemap_discovery"]
+    robots.write_text(original.replace("Sitemap:", "sItEmAp :  ") + " # comment", encoding="utf-8")
+    sitemap = root / "sitemap.xml"
+    tree = ElementTree.parse(sitemap)
+    doc = tree.getroot()
+    doc[:] = list(reversed(doc))
+    tree.write(sitemap, encoding="utf-8")
+    assert check_site(out)["status"] == "baseline_ready"
+    doc.append(doc[0])
+    tree.write(sitemap, encoding="utf-8")
+    assert not check_site(out)["checks"]["sitemap_unique"]
+
+
 def test_resources_and_example_are_available():
     resources = files("seo_advisor.website").joinpath("templates")
     for name in (
@@ -598,3 +715,19 @@ def test_production_cannot_have_self_loop_contact_cta(tmp_path, kind):
 def test_starter_rejects_language_it_does_not_localize():
     with pytest.raises(ValueError, match="zh-TW"):
         WebsiteBrief(brand="Test", lang="en")
+
+
+def test_website_cli_compares_equivalent_canonical_origins_preserving_query(tmp_path):
+    brief = production_brief(tmp_path)
+    brief_path, out = tmp_path / "source.json", tmp_path / "site"
+    brief_path.write_text(brief.model_dump_json(), encoding="utf-8")
+    built = runner.invoke(website_app, ["build", "--brief", str(brief_path), "--out", str(out)])
+    assert built.exit_code == 0, built.output
+    detail = out / "public/tea-service/index.html"
+    initial = detail.read_text(encoding="utf-8")
+    for suffix, expected in [("", 0), ("?lang=de", 1), ("other/", 1)]:
+        tag = f'<link rel="canonical" href="https://TEA.EXAMPLE.COM:443/tea-service/{suffix}">'
+        detail.write_text(initial.replace("</head>", tag + "</head>"), encoding="utf-8")
+        checked = runner.invoke(website_app, ["check", "--site", str(out)])
+        assert checked.exit_code == expected, checked.output
+        assert json.loads(checked.output)["checks"]["page_tea-service_canonical"] == (expected == 0)

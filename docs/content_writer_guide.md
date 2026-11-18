@@ -108,6 +108,8 @@ Content Writer Mode 不綁定單一 LLM 供應商。`writers/` 模組定義
 
 ## 從顧問報告一鍵產內容（`write --from-report`）
 
+報告交接時，每項選定問題的受影響網址都會進入寫作任務。若啟用 `--auto-revise` 且初稿需要修改，工具會對修訂稿再執行一次審查，使用付費模型時會多一次審稿呼叫。交付的 `draft.md` 對應 `content-report.json` 的 `qa`，初稿審核另存於 `initial_qa`。
+
 把顧問模式找出的 SEO 缺口，直接轉成寫作 brief——「找到問題 → 直接產內容補洞」：
 
 ```bash
@@ -123,8 +125,12 @@ seo-advisor write --from-report ./report/report.json --llm-provider mock
   title、meta、H1、內容）與 `internal_linking`（孤兒頁、內鏈不足）。
 - **純技術/資安問題一律排除**：4xx、canonical 跨網域、noindex、HTTPS、
   security 等不會被誤轉成文章。
-- **批次 metadata 任務不寫長文**：多頁重複 metadata 會要求 LLM 只產出各頁的
-  title/meta/H1 清單，而不是硬寫一篇文章。
+- **批次改寫各頁的 metadata**：當報告選出多頁標題或摘要問題，且使用者沿用該主題時，
+  `content-report.json` 的 `request.metadata_batch_urls` 列出本批要交付的網址。
+  `draft.md` 內是一個 JSON 陣列，可包在單一個 JSON 程式碼區塊。每個網址恰好一筆，例如
+  `{"url":"/parts/a","title":"A 系列零件規格","meta_description":"比較 A 系列各型號的尺寸與安裝條件。","h1":"A 系列零件"}`。
+  每筆需有完整、非空的四個字串欄位，網址需與清單逐字一致，包含路徑和查詢參數。
+  初稿和修訂稿都會檢查缺頁、重複、額外網址與空欄位；批次終稿 QA 未過時，CLI 保留草稿及報告並回傳 2。
 - **沒有內容缺口時友善停止**：若報告全是技術問題且未給 `--topic`，會提示改用
   `--topic` 指定主題，而不是硬產空 brief。
 - 使用者的 `--topic` 永遠優先；`--from-report` 則補上針對性的

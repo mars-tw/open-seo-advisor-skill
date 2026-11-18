@@ -23,8 +23,13 @@ def file_snapshot_fields(path: str, body: bytes) -> dict:
     }.get(suffix)
     if not media_type:
         media_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
-        if not suffix and body[:256].lstrip().lower().startswith((b"<!doctype html", b"<html")):
-            media_type = "text/html"
+        if not suffix:
+            try:
+                prefix = body[:512].decode(detect_html_encoding(body), errors="ignore")
+            except LookupError:
+                prefix = body[:512].decode("ascii", errors="ignore")
+            if prefix.lstrip("\ufeff").lstrip().casefold().startswith(("<!doctype html", "<html")):
+                media_type = "text/html"
     encoding = detect_html_encoding(body)
     fields = snapshot_body_fields(body, media_type, encoding)
     return {

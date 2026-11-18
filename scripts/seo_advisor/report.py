@@ -18,7 +18,9 @@ def build_report(
     coverage_notes: list[str] | None = None,
     scan_stats: dict | None = None,
 ) -> Report:
-    health_score = compute_site_health_score(findings)
+    stats = scan_stats or {}
+    insufficient = mode == Mode.CONSULTANT and stats.get("analyzed_html_pages") == 0
+    health_score = None if insufficient else compute_site_health_score(findings)
     top = top_findings(findings, limit=10)
 
     summary = _build_executive_summary(target, health_score, findings)
@@ -37,7 +39,9 @@ def build_report(
     )
 
 
-def _build_executive_summary(target: ReportTarget, health_score: float, findings: list[Finding]) -> str:
+def _build_executive_summary(target: ReportTarget, health_score: float | None, findings: list[Finding]) -> str:
+    if health_score is None:
+        return "未取得可分析的 HTML 內容頁，涵蓋不足，無法評分。請提供可存取的網站網址或匯出後的 HTML，再執行健檢。"
     if not findings:
         return f"{target.identifier} 本次檢查未發現需要處理的問題，網站健康分數為 {health_score}/100。"
 
@@ -77,7 +81,7 @@ def render_markdown(report: Report) -> str:
 
     lines.append("## Site Health Score")
     lines.append("")
-    lines.append(f"**{report.site_health_score} / 100**")
+    lines.append(f"**{report.score_display}**")
     lines.append("")
 
     lines.append("## Top Findings")
