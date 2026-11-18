@@ -1,5 +1,7 @@
 # 3 分鐘上手：一個指令搞定
 
+**要優化商品、詢價、訂閱或預約頁？** 複製[五步提示詞](skills/commercial-seo/references/workflow.md)貼到 Claude Code 或 Codex，接著輸入「目標是台灣製造業詢價，先從第 1 步挑選」，並附上手邊的資料。也能把技能裝進網站專案，往後在 Codex 輸入 `$commercial-seo`、在 Claude Code 輸入 `/commercial-seo`。這個流程可獨立使用。[安裝位置、模型與資料準備](skills/commercial-seo/references/setup.md)
+
 **使用 OpenCode？** 先看 [OpenCode 安裝與建站指南](docs/opencode.md)。完整技能可放入網站專案的
 `.opencode/skills/open-seo-advisor/`，在 Build 模式用自然語言啟用，也可安裝附帶的 `/seo-website` 指令。
 以下 Python 安裝步驟供需要離線 CLI 的使用者，不是啟用 OpenCode 技能的必要條件。

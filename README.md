@@ -1,5 +1,13 @@
 # Open SEO Advisor
 
+## 找出買家正在搜的詞，決定該改哪一頁
+
+把[商業 SEO 五步提示詞](skills/commercial-seo/references/workflow.md)整段貼到 Claude Code 或 Codex，附上目標市場與資料，就能開始。流程會先查 GSC 有沒有現成頁面，再比較當地前三個自然結果、撰寫交易頁、逐項審稿。每週一可用同一份提示詞，從平均排名 5～15 的頁面挑出三個優先改善的機會。
+
+模型可從帳號當前可用的旗艦選擇，例如 Codex 的 GPT-6.2 Astra。資料可用 ChatSEO MCP，也可用自己的 GSC 匯出、關鍵字工具和當地搜尋結果。台灣電商的超商取貨、日本製造業的見積、美國 SaaS 的方案比較，各有不同的選頁與驗證方式。[技能安裝與模型設定](skills/commercial-seo/references/setup.md)｜[十個市場與四種產業的做法](skills/commercial-seo/references/markets.md)
+
+## 體驗網站建置範例
+
 免下載、免登入，直接體驗兩種敘事網站：
 
 | 線上示範 | 可以體驗什麼 | 素材與本機預覽 |

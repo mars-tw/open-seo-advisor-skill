@@ -3,11 +3,11 @@ name: open-seo-advisor
 description: >
   引導設計與建立 SEO／AEO 網站，包含沉浸式滾動敘事、銷售頁、購物網站、互動體驗、
   GPT 圖文素材及 Cloudflare／Google 免費額度部署；也保留既有網站的 SEO 健檢、
-  技術修復、內容、廣告與電商分析。使用者要求建立網站、滾動動畫、AEO 或 SEO 時使用；
+  技術修復、內容、廣告與電商分析，以及商業關鍵字選頁、交易頁撰寫與跨市場 GSC 週檢。
   既有專案沿用使用者技術棧與指定平台。
 license: Apache-2.0
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
   upstream: "https://github.com/mars-tw/open-seo-advisor-skill"
 ---
 
@@ -31,6 +31,7 @@ metadata:
 
 | 需求 | 執行方式與文件 |
 |---|---|
+| 找商業關鍵字、決定優化哪頁、寫交易頁或做 GSC 週檢 | 讀[商業 SEO 技能](skills/commercial-seo/SKILL.md)，依使用者的國家、產業與成交方式進入對應步驟 |
 | 新建／改版、沉浸式銷售站、購物站、體驗站 | [建站流程](docs/website-builder.md)，按階段讀設計、素材、搜尋、商務、部署與驗收文件 |
 | 只要問答式本機模板 | `seo-advisor website init --out ./my-site`，依建站流程的 CLI 範圍交付 |
 | 檢查網站 SEO | `seo-advisor audit consultant`；[模式規格](docs/modes.md) |
@@ -43,7 +44,7 @@ metadata:
 `/seo-build`、`/seo-website`、`/seo-aeo` 是自然語言呼叫範例，不保證每個宿主都有 slash command。
 不要將「建購物站」送到只做 listing 健檢的 `ecommerce audit`。
 
-## 引導方式
+## 建站時的引導方式
 
 先讀已提供資料，已知答案不再問。新手一次最多三題：
 

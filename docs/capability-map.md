@@ -16,6 +16,10 @@
 
 ## 分類（Taxonomy）
 
+### 商業 SEO 與跨市場選頁（v0.6.0）
+
+[商業 SEO](../skills/commercial-seo/SKILL.md)是由 Claude Code 或 Codex 執行的技能工作流。提供 GSC、目標市場搜尋量與 SERP 後，可取得選字表、既有頁或新頁的依據、草稿、發布前檢查與週一改善清單。[可貼用的完整流程](../skills/commercial-seo/references/workflow.md)也適用於沒有安裝技能的對話。
+
 ### 新增：Website Builder（v0.4.0）
 
 | 能力 | 狀態 | 使用方式與範圍 |

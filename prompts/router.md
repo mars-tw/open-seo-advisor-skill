@@ -16,6 +16,8 @@
 
 ## 判斷規則
 
+- 使用者要用 GSC 找商業關鍵字、確認排名頁、改善採購／交易頁或做每週機會盤點時，讀[商業 SEO 技能](../skills/commercial-seo/SKILL.md)後執行指定步驟。它可直接處理使用者提供的匯出檔；未指定網址時，依該技能的開場問題開始。寫一般文章仍進 `content_writer`。
+
 - 新建／改版、沉浸式滾動網站、銷售站、購物站與互動體驗，優先進 `website_builder`
   工作流，讀 `docs/website-builder.md`。沒有既有 URL 是正常新案，不要求先提供網址。
   這是 agent 工作流，CLI 為 `seo-advisor website`；不冒稱核心 `Mode` enum 的掃描模式。
