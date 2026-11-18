@@ -61,13 +61,13 @@ def cro(
 
 @growth_app.command("analytics")
 def analytics(
-    provider: str = typer.Option("mock", "--provider", help="資料來源：mock/ga4/search_console/google_ads"),
+    provider: str = typer.Option("mock", "--provider", help="可用資料來源：mock（Google 即時 API 仍在規劃中）"),
     property_id: str = typer.Option("demo", "--property", help="GA4 property / GSC site / Ads account 識別"),
     since: int = typer.Option(30, "--since-days", help="觀察天數"),
     out: str = typer.Option("./growth-analytics", "--out", help="輸出目錄"),
     debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
 ) -> None:
-    """跨渠道成效分析（read-only）。無金鑰時用 --provider mock 完整試玩。"""
+    """以 mock 資料示範跨渠道成效分析。"""
     try:
         report, md_path, json_path = run_analytics(provider, property_id, since, out)
     except Exception as exc:  # noqa: BLE001

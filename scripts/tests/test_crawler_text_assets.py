@@ -223,6 +223,7 @@ def test_non_html_content_is_not_crawled_as_html():
 
 @respx.mock
 def test_sitemap_index_budget_counts_unique_documents_across_children():
+    respx.get(f"{ORIGIN}/robots.txt").respond(404)
     respx.get(f"{ORIGIN}/sitemap.xml").respond(
         200,
         text=f'<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><sitemap><loc>{ORIGIN}/first.xml</loc></sitemap><sitemap><loc>{ORIGIN}/second.xml</loc></sitemap></sitemapindex>',

@@ -165,8 +165,7 @@ seo-advisor growth cro --url https://example.com/landing
 seo-advisor growth analytics --provider mock
 ```
 
-成效分析的 Google 資料來源（GA4/GSC/Google Ads）一律 read-only，無憑證時用
-mock。詳見 [`docs/growth_marketing.md`](docs/growth_marketing.md)。
+成效分析 CLI 目前支援 mock 資料。GA4、GSC 和 Google Ads 的即時 API 讀取仍在規劃中。詳見[成長行銷模組](docs/growth_marketing.md)。
 
 ## 電商 Listing 健檢 + 行銷方法論知識庫
 

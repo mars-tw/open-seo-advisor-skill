@@ -116,6 +116,7 @@ def demo(
 @audit_app.command("consultant")
 def audit_consultant(
     url: str = typer.Option(None, "--url", help="要檢查的網站 URL（與 --source 擇一，可省略 https://）"),
+    preview: bool = typer.Option(False, "--preview", help="預覽站預期不收錄，noindex 不扣分"),
     source: str = typer.Option(
         None, "--source",
         help="本地原始碼包或目錄路徑，或填 'ssh'/'cpanel' 搭配對應 --ssh-*/--cpanel-* 參數（與 --url 擇一）",
@@ -211,6 +212,7 @@ def audit_consultant(
         lambda progress: run_consultant_scan(
             url=url,
             source=source,
+            expect_indexing=not preview,
             out_dir=out,
             max_urls=max_urls,
             max_depth=max_depth,

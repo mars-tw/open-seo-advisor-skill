@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.models import PageSnapshot
+from seo_advisor.sitemaps import read_sitemaps
 from seo_advisor.url_utils import normalize_host
 
 
@@ -25,6 +26,9 @@ class CrawlResult:
     sitemap_xml: str | None = None
     link_graph: dict[str, set[str]] = field(default_factory=dict)
     skipped_urls: list[str] = field(default_factory=list)
+    sitemap_documents: dict[str, str] = field(default_factory=dict)
+    sitemap_sources: dict[str, str] = field(default_factory=dict)
+    unverified_canonicals: dict[str, str] = field(default_factory=dict)
 
 
 def _same_site(base_netloc: str, url: str) -> bool:
@@ -45,14 +49,31 @@ def _document_url(url: str, base_url: str = "") -> str:
     return document
 
 
+def document_base(base_url: str, soup: BeautifulSoup) -> str:
+    for base_tag in soup.find_all("base", href=True):
+        try:
+            candidate = urljoin(base_url, base_tag["href"].strip())
+        except ValueError:
+            continue
+        if urlparse(candidate).scheme in {"", "http", "https"}:
+            return candidate
+    return base_url
+
+
 def _extract_links(base_url: str, html: str) -> list[str]:
     soup = BeautifulSoup(html, "lxml")
+    effective_base = document_base(base_url, soup)
     links: list[str] = []
     for a_tag in soup.find_all("a", href=True):
         href = a_tag["href"].strip()
-        if not href or href.startswith(("mailto:", "tel:", "javascript:", "#")):
+        if not href or (href.startswith("#") and effective_base == base_url):
             continue
-        links.append(_document_url(href, base_url))
+        try:
+            target = _document_url(href, effective_base)
+            if urlparse(target).scheme in {"", "http", "https"}:
+                links.append(target)
+        except ValueError:
+            continue
     return links
 
 
@@ -82,18 +103,32 @@ def crawl_site(
     except Exception:
         pass
 
-    try:
-        sitemap_snapshot = connector.fetch_url(
-            urljoin(seed_url, "/sitemap.xml"), fetched_at=fetched_at
-        )
-        if sitemap_snapshot.status_code == 200:
-            result.sitemap_xml = (
-                sitemap_snapshot.text if sitemap_snapshot.text is not None else sitemap_snapshot.html
-            )
-    except Exception:
-        pass
+    def fetch_sitemap(url):
+        try:
+            snapshot = connector.fetch_url(url, fetched_at=fetched_at)
+            if snapshot.status_code == 200:
+                body = snapshot.text if snapshot.text is not None else snapshot.html
+                return body if isinstance(body, str) else None
+        except (OSError, ValueError):
+            pass
+        return None
 
-    seed_records = connector.list_urls(seed_url, limit=max_urls)
+    http_reader = (
+        connector.read_sitemap if callable(getattr(type(connector), "read_sitemap", None)) else None
+    )
+    sitemap_data = read_sitemaps(
+        seed_url,
+        result.robots_txt,
+        is_in_scope or (lambda url: _same_site(base_netloc, url)),
+        http_reader or fetch_sitemap,
+        max_urls,
+    )
+    result.sitemap_sources = sitemap_data.sources
+    result.sitemap_documents = sitemap_data.documents
+    result.sitemap_xml = next(iter(sitemap_data.documents.values()), None)
+    seed_records = (
+        sitemap_data.records if http_reader else connector.list_urls(seed_url, limit=max_urls)
+    )
     queue: deque[tuple[str, int]] = deque()
     queued_depths: dict[str, int] = {}
     visited: set[str] = set()
@@ -105,6 +140,8 @@ def crawl_site(
         queued_depths[url] = depth
         queue.append((url, depth))
 
+    if http_reader:
+        enqueue(seed_url, 0)
     for record in seed_records:
         enqueue(record.url, record.discovered_depth)
     if not queue:
@@ -152,8 +189,10 @@ def find_orphan_pages(result: CrawlResult, seed_url: str) -> list[str]:
         return []
 
     linked_targets: set[str] = set()
-    for targets in result.link_graph.values():
-        linked_targets.update(targets)
+    for source, targets in result.link_graph.items():
+        linked_targets.update(
+            target for target in targets if _document_url(target) != _document_url(source)
+        )
 
     seed_url = _document_url(seed_url)
     entry_points = {seed_url} if seed_url in result.pages else set()
@@ -161,7 +200,8 @@ def find_orphan_pages(result: CrawlResult, seed_url: str) -> list[str]:
         entry_points = {
             url
             for url in result.pages
-            if url not in linked_targets and result.link_graph.get(url)
+            if url not in linked_targets
+            and any(target != url for target in result.link_graph.get(url, ()))
         }
 
     orphans = [

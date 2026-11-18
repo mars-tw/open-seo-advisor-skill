@@ -2,6 +2,14 @@
 
 本專案採用 [Semantic Versioning](https://semver.org/)。
 
+## [0.6.1] - 2026-11-18
+
+- 修復預覽會核對來源檔、選項及內容。舊報告遇到已存在的 robots.txt 或 sitemap 會停止；Big5 多語頁能保留中文；相異的 canonical 目標交由站長選擇。
+- 顧問與建站檢查可辨識 Googlebot 的收錄指令。顧問會追蹤 robots.txt 宣告的 sitemap、檢查已爬取的 canonical 目標，並區分 HTML 頁、其他網址及爬取規則排除。預覽站可用 `audit consultant --preview` 表明收錄意圖。
+- 多語檢查支援 `zh-Hant`、`zh-Hans` 及以查詢參數區分的語系頁。修正 sitemap 合併上限、相對連結、轉址後重複標題、孤兒頁、自動建站結束碼、裝飾圖與內頁 JSON-LD 的判斷。
+- 文章撰稿、審稿與修訂保留原始產品資料與內鏈安排。採購頁週報以 GSC 的期間平均位置描述機會，並把團隊編輯目標與 Google 索引檢查分開。電商及成效報告會區分資料未知與已觀察的零值。
+- 更正產業稽核、Google 資料來源與 WordPress 外掛的 CLI 說明，補齊顧問報告所引用的來源。
+
 ## [0.6.0] - 2026-11-18
 
 - 新增可獨立安裝的 `commercial-seo` 技能與可直接貼到 Codex、Claude Code 的五步提示詞，涵蓋選字、既有頁歸屬、交易頁草稿、發布前審稿及 GSC 週檢。

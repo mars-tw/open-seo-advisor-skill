@@ -20,6 +20,7 @@ from seo_advisor.writers.models import (
     LLMRequest,
 )
 from seo_advisor.writers.prompts import (
+    assignment_context,
     brief_system_prompt,
     brief_user_prompt,
     draft_system_prompt,
@@ -136,10 +137,10 @@ def _generate_draft(
     return response.text, response.model
 
 
-def _generate_qa(provider: LLMProvider, request: ContentRequest, draft_markdown: str) -> EditorialQA:
+def _generate_qa(provider: LLMProvider, request: ContentRequest, draft_markdown: str, outline: ContentOutline) -> EditorialQA:
     llm_request = LLMRequest(
         system=qa_system_prompt(),
-        messages=[LLMMessage(role="user", content=qa_user_prompt(request, draft_markdown))],
+        messages=[LLMMessage(role="user", content=qa_user_prompt(request, draft_markdown, outline))],
     )
     response = provider.complete_json(llm_request, _QA_SCHEMA)
     llm_qa = EditorialQA.model_validate(response.json_data)
@@ -159,7 +160,8 @@ def _generate_qa(provider: LLMProvider, request: ContentRequest, draft_markdown:
 
 
 def _revise_draft(
-    provider: LLMProvider, request: ContentRequest, draft_markdown: str, issues: list[EditorialIssue]
+    provider: LLMProvider, request: ContentRequest, draft_markdown: str, issues: list[EditorialIssue],
+    outline: ContentOutline,
 ) -> str:
     issue_summary = "\n".join(f"- [{i.severity}] {i.description}：{i.recommendation}" for i in issues)
     llm_request = LLMRequest(
@@ -168,6 +170,7 @@ def _revise_draft(
             LLMMessage(
                 role="user",
                 content=(
+                    f"{assignment_context(request, outline)}\n\n"
                     f"以下是關於「{request.topic}」的草稿，請根據審稿意見修正後"
                     f"輸出完整修訂版（Markdown）：\n\n草稿：\n{draft_markdown}\n\n"
                     f"審稿意見：\n{issue_summary}"
@@ -196,12 +199,12 @@ def run_content_writer_pipeline(
     draft_markdown, model_used = _generate_draft(provider, request, brief, outline)
 
     on_progress("第 4/4 步：品質審核（QA）")
-    qa = _generate_qa(provider, request, draft_markdown)
+    qa = _generate_qa(provider, request, draft_markdown, outline)
 
     revised_markdown: str | None = None
     if request.auto_revise and not qa.passed and qa.issues:
         on_progress("發現需要修正的問題，正在自動修訂草稿")
-        revised_markdown = _revise_draft(provider, request, draft_markdown, qa.issues)
+        revised_markdown = _revise_draft(provider, request, draft_markdown, qa.issues, outline)
 
     return ContentWriterResult(
         request=request,

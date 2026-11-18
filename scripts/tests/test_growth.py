@@ -136,3 +136,13 @@ def test_compute_summary_mentions_channel_count():
     rows = provider.fetch_metrics("demo", 30)
     summary = compute_summary(rows, analyze_metrics(rows))
     assert "渠道" in summary
+
+
+def test_unknown_revenue_is_distinct_from_observed_zero():
+    unknown = AnalyticsMetricRow(channel="B2B", sessions=80, conversions=8, cost_minor_units=100000)
+    zero = unknown.model_copy(update={"channel": "shop", "revenue_minor_units": 0})
+    assert not any(f.category == "spend" for f in analyze_metrics([unknown]))
+    assert "營收：尚無資料" in compute_summary([unknown], [])
+    findings = analyze_metrics([zero])
+    assert next(f for f in findings if f.category == "spend").evidence["roas"] == 0
+    assert "1/2" in compute_summary([unknown, zero], findings)

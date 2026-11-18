@@ -39,15 +39,9 @@ seo-advisor growth cro --url https://example.com/landing
 
 ```bash
 seo-advisor growth analytics --provider mock --since-days 30       # 免金鑰試玩
-seo-advisor growth analytics --provider ga4 --property <GA4_ID>    # 真實資料（需憑證）
 ```
 
-- **一律 read-only**：GA4 / Search Console / Google Ads adapter 只讀取成效
-  指標，即使是 Google Ads 也**絕不修改**任何廣告設定或預算——廣告變更一律
-  走 Meta 廣告模式的 dry-run 計畫流程。
-- 真實 Google API 整合（GA4/GSC/Google Ads）為 optional adapter，需要對應
-  的環境變數憑證；無憑證時用 `--provider mock` 完整試玩。真實 API 呼叫的
-  實作規劃於後續版本。
+此 CLI 目前以 `mock` 示範成效分析。`ga4`、`search_console`、`google_ads` 是保留的介面，實際 Google API 讀取尚待實作。若要分析網站的真實搜尋資料，可將 GSC 匯出檔交給[商業 SEO 技能](../skills/commercial-seo/SKILL.md)，或依技能說明連接已授權的 MCP。
 
 ## 與矩陣系統的關係
 

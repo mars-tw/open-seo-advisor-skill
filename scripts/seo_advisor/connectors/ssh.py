@@ -51,6 +51,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from seo_advisor.connectors.base import ConnectorCapabilityError, WebsiteConnector
+from seo_advisor.connectors.text_response import file_snapshot_fields
 from seo_advisor.models import (
     ConnectorProfile,
     FileRecord,
@@ -408,9 +409,12 @@ class SSHConnector(WebsiteConnector):
                 fetch_error_type="unsafe_remote_path", fetch_error_message=str(exc),
             )
 
-        html = content.decode("utf-8", errors="replace")
         return PageSnapshot(
-            url=url, status_code=200, final_url=url, headers={}, html=html, fetched_at=fetched_at
+            url=url,
+            status_code=200,
+            final_url=url,
+            fetched_at=fetched_at,
+            **file_snapshot_fields(rel_path, content),
         )
 
     # --- read_files capability ---

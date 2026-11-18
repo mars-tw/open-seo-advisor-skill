@@ -2,55 +2,67 @@
 
 from __future__ import annotations
 
-import json
+import re
 from pathlib import Path
-from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 
+from seo_advisor.indexability import google_noindex
 from seo_advisor.website.images import read_raster
 from seo_advisor.website.models import WebsiteBrief
+from seo_advisor.website.validation import (
+    images_have_alt,
+    jsonld_nodes,
+    node_types,
+    check_page_resources,
+)
 
 
-def _robots_blocks_root(content: str) -> bool:
-    """Only wildcard crawler groups affect the general crawlability baseline."""
-
+def _googlebot_blocked_paths(content: str, paths: list[str]) -> list[str]:
+    """Merge matching Googlebot groups, falling back to * only if none exist."""
+    groups: dict[str, list[tuple[str, str]]] = {}
     agents: set[str] = set()
     has_rules = False
-    group_blocks_root = False
-    blocked = False
-    for raw_line in content.splitlines():
-        if not raw_line.strip():
-            blocked = blocked or ("*" in agents and group_blocks_root)
-            agents.clear()
-            has_rules = False
-            group_blocks_root = False
+    for raw_line in content.lstrip("\ufeff").splitlines():
+        name, sep, value = raw_line.split("#", 1)[0].partition(":")
+        name, value = name.strip().casefold(), value.strip()
+        if not sep:
             continue
-        line = raw_line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        if ":" not in line:
-            continue
-        name, value = (part.strip().casefold() for part in line.split(":", 1))
         if name == "user-agent":
             if has_rules:
-                blocked = blocked or ("*" in agents and group_blocks_root)
                 agents.clear()
                 has_rules = False
-                group_blocks_root = False
-            agents.add(value)
-        elif agents:
+            agents.add(value.casefold())
+            groups.setdefault(value.casefold(), [])
+        elif name in {"allow", "disallow"}:
             has_rules = True
-            if name == "disallow" and value == "/":
-                group_blocks_root = True
-    return blocked or ("*" in agents and group_blocks_root)
+            if value.startswith("/"):
+                for agent in agents:
+                    groups[agent].append((name, value))
+
+    agent = "googlebot" if "googlebot" in groups else "*"
+    blocked = []
+    for path in paths:
+        matches = []
+        for name, pattern in groups.get(agent, []):
+            end = pattern.endswith("$")
+            literal = pattern[:-1] if end else pattern
+            regex = ".*".join(re.escape(part) for part in literal.split("*"))
+            if re.match(regex + (r"\Z" if end else ""), path):
+                matches.append((len(pattern.encode("utf-8")), name == "allow", pattern))
+        if matches:
+            _, allowed, rule = max(matches)
+            if not allowed:
+                blocked.append(f"{path} (User-agent: {agent}, Disallow: {rule})")
+    return blocked
 
 
 def check_site(site: Path) -> dict:
     errors: list[str] = []
     pending: list[str] = []
     checks: dict[str, bool] = {}
+    live_checks: set[str] = set()
     scope = "offline technical and content baseline only; LCP, accessibility, indexing, AI citations, payments and deployment require separate live verification"
 
     def require(name: str, condition: bool, message: str) -> None:
@@ -64,6 +76,13 @@ def check_site(site: Path) -> dict:
         brief = WebsiteBrief.model_validate_json((site / "brief.json").read_text(encoding="utf-8"))
         html = (public / "index.html").read_text(encoding="utf-8")
         soup = BeautifulSoup(html, "html.parser")
+        documents = {public / "index.html": soup}
+        origin = brief.canonical or "https://preview.invalid/"
+        remote_actions = {
+            v
+            for v in [brief.cta.url, *(p.checkout_url for p in brief.products)]
+            if v and v.startswith("https://")
+        }
         pending = brief.pending()
         if brief.publication == "draft":
             pending.insert(0, "publication=draft；預設 noindex，尚未作為正式網站發布")
@@ -145,7 +164,7 @@ def check_site(site: Path) -> dict:
         )
         require(
             "image_alt",
-            all(image.get("alt", "").strip() for image in soup.find_all("img")),
+            images_have_alt(soup),
             "圖片缺少替代文字",
         )
         canonical = soup.find("link", attrs={"rel": "canonical"})
@@ -154,12 +173,16 @@ def check_site(site: Path) -> dict:
             (canonical.get("href") if canonical else None) == brief.canonical,
             "canonical 與 brief 不一致",
         )
-        robots = soup.find("meta", attrs={"name": "robots"})
-        expected = "noindex,follow" if brief.publication == "draft" else "index,follow"
+        draft = brief.publication == "draft"
+        restrictions = google_noindex(soup)
         require(
             "indexing_intent",
-            bool(robots and robots.get("content") == expected),
-            "robots meta 與發布狀態不一致",
+            (
+                any(rule.startswith("meta robots:") for rule in restrictions)
+                if draft
+                else not restrictions
+            ),
+            "首頁收錄指令與發布狀態不一致：" + (", ".join(restrictions) or "缺少 noindex"),
         )
         sitemap = ElementTree.fromstring((public / "sitemap.xml").read_text(encoding="utf-8"))
         locs = [
@@ -175,11 +198,14 @@ def check_site(site: Path) -> dict:
         )
         require("sitemap", locs == expected_locs, "sitemap 與已發布頁面不一致")
         robots_text = (public / "robots.txt").read_text(encoding="utf-8")
-        # Crawlers must be allowed to retrieve a draft and see its noindex.
+        # Preview URLs must also be crawlable for Google to see their noindex.
+        blocked = _googlebot_blocked_paths(
+            robots_text, ["/", *(f"/{p.slug}/" for p in brief.pages)]
+        )
         require(
             "robots_crawlable",
-            not _robots_blocks_root(robots_text),
-            "robots.txt 不可阻止讀取 noindex",
+            not blocked,
+            "robots.txt 阻擋 Googlebot 抓取：" + "、".join(blocked),
         )
         if brief.publication == "production":
             require(
@@ -187,13 +213,18 @@ def check_site(site: Path) -> dict:
                 f"Sitemap: {brief.canonical}sitemap.xml" in robots_text,
                 "robots.txt 缺少 sitemap",
             )
-        nodes = []
-        for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
-            obj = json.loads(script.get_text())
-            nodes.extend(obj.get("@graph", [obj]))
+
+        def page_nodes(doc, label):
+            try:
+                return jsonld_nodes(doc)
+            except ValueError as exc:
+                errors.append(f"{label} JSON-LD 解析失敗：{exc}")
+                return []
+
+        nodes = page_nodes(soup, "/")
         require(
             "structured_data",
-            {"WebSite", "Organization"}.issubset({node.get("@type") for node in nodes}),
+            {"WebSite", "Organization"}.issubset(node_types(nodes)),
             "缺少 WebSite／Organization JSON-LD",
         )
         require(
@@ -205,47 +236,29 @@ def check_site(site: Path) -> dict:
             "此 starter 不支援未核對的評價、Offer",
         )
 
-        def check_resources(document: Path, document_soup: BeautifulSoup) -> None:
-            ids = {tag["id"] for tag in document_soup.find_all(id=True)}
-            for tag in document_soup.find_all(["a", "link", "script", "img"]):
-                value = tag.get("href") or tag.get("src")
-                if not value:
-                    continue
-                if value.startswith("#"):
-                    if value[1:] not in ids:
-                        errors.append(f"找不到頁內連結目標：{document.name} {value}")
-                    continue
-                parsed = urlsplit(value)
-                if parsed.scheme:
-                    if parsed.scheme != "https":
-                        errors.append("頁面含不安全的資源網址")
-                    continue
-                if parsed.netloc:
-                    errors.append("頁面含未驗證的跨網域資源")
-                    continue
-                resource = (
-                    public / parsed.path.lstrip("/")
-                    if parsed.path.startswith("/")
-                    else document.parent / parsed.path
-                ).resolve()
-                if resource.is_dir():
-                    resource /= "index.html"
-                if not resource.is_relative_to(public.resolve()) or not resource.is_file():
-                    errors.append(f"資源不存在或超出 public：{document.name} {value}")
+        def check_resources(document: Path, document_soup: BeautifulSoup) -> set[Path]:
+            issues, linked_files = check_page_resources(
+                document, document_soup, public, origin, remote_actions, live_checks, documents
+            )
+            errors.extend(issues)
+            return linked_files
 
-        check_resources(public / "index.html", soup)
+        home_links = check_resources(public / "index.html", soup)
         titles = [soup.title.get_text(strip=True)] if soup.title else []
         descriptions = [description.get("content", "")] if description else []
         for page in brief.pages:
             path = public / page.slug / "index.html"
-            page_soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+            page_soup = documents.get(path)
+            if page_soup is None:
+                page_soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+                documents[path] = page_soup
             page_title = page_soup.title.get_text(strip=True) if page_soup.title else ""
             page_description = page_soup.find("meta", attrs={"name": "description"})
             page_description_text = page_description.get("content", "") if page_description else ""
             page_og_title = page_soup.find("meta", attrs={"property": "og:title"})
             page_og_description = page_soup.find("meta", attrs={"property": "og:description"})
             page_canonical = page_soup.find("link", attrs={"rel": "canonical"})
-            page_robots = page_soup.find("meta", attrs={"name": "robots"})
+            page_restrictions = google_noindex(page_soup)
             page_h1 = page_soup.select("main h1")
             page_h2 = [tag.get_text(strip=True) for tag in page_soup.select("main h2")]
             require(
@@ -258,8 +271,13 @@ def check_site(site: Path) -> dict:
                 )
                 and (page_canonical.get("href") if page_canonical else None)
                 == (f"{brief.canonical}{page.slug}/" if brief.canonical else None)
-                and bool(page_robots and page_robots.get("content") == expected),
-                f"{page.slug} 的 title、description、canonical 或 robots 錯誤",
+                and (
+                    any(rule.startswith("meta robots:") for rule in page_restrictions)
+                    if draft
+                    else not page_restrictions
+                ),
+                f"{page.slug} 的 title、description、canonical 或收錄設定錯誤"
+                + (f"：{', '.join(page_restrictions)}" if page_restrictions else ""),
             )
             require(
                 f"page_{page.slug}_headings",
@@ -270,8 +288,19 @@ def check_site(site: Path) -> dict:
             )
             require(
                 f"page_{page.slug}_linked",
-                bool(soup.select_one(f'a[href="{page.slug}/"]')),
+                path in home_links,
                 f"首頁沒有連到 {page.slug} 內頁",
+            )
+            require(
+                f"page_{page.slug}_image_alt",
+                images_have_alt(page_soup),
+                f"/{page.slug}/ 圖片缺少替代文字",
+            )
+            detail_nodes = page_nodes(page_soup, f"/{page.slug}/")
+            require(
+                f"page_{page.slug}_structured_data",
+                "WebPage" in node_types(detail_nodes),
+                f"/{page.slug}/ 缺少 WebPage JSON-LD",
             )
             check_resources(path, page_soup)
             titles.append(page_title)
@@ -404,7 +433,8 @@ def check_site(site: Path) -> dict:
         "status": "invalid" if errors else "scaffold" if pending else "baseline_ready",
         "scope": scope,
         "network_requests": False,
-        "url_validation": "syntax only; DNS, reachability and remote checkout are not verified",
+        "url_validation": "static files and HTML fragments checked offline; deployed HTTP headers, dynamic routes and remote checkout require live verification",
+        "links_to_verify_live": sorted(live_checks),
         "checks": checks,
         "errors": errors,
         "pending": pending,

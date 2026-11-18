@@ -36,11 +36,21 @@ def analyze_metrics(rows: list[AnalyticsMetricRow]) -> list[AnalyticsFinding]:
     return findings[:10]
 
 
+def _amount_summary(amounts: list[int | None]) -> str:
+    observed = [value for value in amounts if value is not None]
+    if not observed:
+        return "尚無資料"
+    total = f"{sum(observed)} minor units"
+    if len(observed) < len(amounts):
+        return f"{total}（已有資料的 {len(observed)}/{len(amounts)} 個渠道）"
+    return total
+
+
 def compute_summary(rows: list[AnalyticsMetricRow], findings: list[AnalyticsFinding]) -> str:
     total_sessions = sum(row.sessions for row in rows)
     total_conversions = sum(row.conversions for row in rows)
-    total_cost = sum(row.cost_minor_units or 0 for row in rows)
-    total_revenue = sum(row.revenue_minor_units or 0 for row in rows)
+    total_cost = _amount_summary([row.cost_minor_units for row in rows])
+    total_revenue = _amount_summary([row.revenue_minor_units for row in rows])
     overall_cvr = total_conversions / total_sessions if total_sessions else 0.0
 
     p0_p1_count = sum(1 for finding in findings if finding.severity in {Severity.P0, Severity.P1})
@@ -48,8 +58,7 @@ def compute_summary(rows: list[AnalyticsMetricRow], findings: list[AnalyticsFind
         f"本次共分析 {len(rows)} 個渠道，總 sessions 為 {total_sessions}，"
         f"總轉換 {total_conversions}，整體轉換率約 {overall_cvr:.2%}。"
         f"已辨識 {len(findings)} 項成效問題，其中 {p0_p1_count} 項屬高優先處理。"
-        f"廣告成本合計約 {total_cost} minor units，營收合計約 {total_revenue} minor units；"
-        "建議先處理追蹤缺漏與高成本低回報渠道，再評估高轉換率低流量渠道的擴量。"
+        f"廣告成本：{total_cost}。營收：{total_revenue}。"
     )
 
 
@@ -116,11 +125,11 @@ def _find_high_cost_low_return(rows: list[AnalyticsMetricRow]) -> list[Analytics
     findings: list[AnalyticsFinding] = []
     for row in rows:
         cost = row.cost_minor_units or 0
-        revenue = row.revenue_minor_units or 0
-        if cost <= 0:
+        revenue = row.revenue_minor_units
+        if cost <= 0 or revenue is None:
             continue
 
-        roas = revenue / cost if cost else 0.0
+        roas = revenue / cost
         cost_per_conversion = cost / row.conversions if row.conversions else None
         if cost >= 50_000 and (row.conversions <= 3 or roas < 0.8):
             findings.append(

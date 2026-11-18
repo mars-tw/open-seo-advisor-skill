@@ -9,8 +9,9 @@ robots_no_sitemap）產出的 Finding。這個 fixer 只處理「加 Sitemap 宣
 from __future__ import annotations
 
 import difflib
+import re
 
-from seo_advisor.fixers.models import FixTarget, PatchPlan, ensure_write_target_allowed
+from seo_advisor.fixers.models import FixTarget, NotFixableError, PatchPlan, ensure_write_target_allowed
 from seo_advisor.models import Finding
 
 ROBOTS_PATH = "robots.txt"
@@ -50,10 +51,14 @@ def plan_fix(finding: Finding, *, current_content: str | None, seed_url: str) ->
 
     original = current_content or ""
     if "ROBOTS_MISSING" in finding.id:
+        if current_content is not None:
+            raise NotFixableError("robots.txt 已存在，請重新健檢。")
         fixed = f"User-agent: *\nAllow: /\n\n{sitemap_line}\n"
         summary = "建立 robots.txt，允許全站爬取並宣告 sitemap 位置。"
         warnings = ["原本沒有 robots.txt，若你的網站有需要阻擋的路徑，請在套用後手動補上 Disallow 規則。"]
     else:
+        if current_content is None or re.search(r"(?im)^\s*sitemap\s*:\s*[^#\s]", original):
+            raise NotFixableError("robots.txt 的狀態與報告不同，請重新健檢。")
         fixed = original.rstrip("\n") + f"\n\n{sitemap_line}\n"
         summary = "在既有 robots.txt 補上 Sitemap 宣告，不修改任何既有規則。"
         warnings = []

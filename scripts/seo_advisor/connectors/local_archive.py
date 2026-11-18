@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 
 from seo_advisor.connectors.base import WebsiteConnector
-from seo_advisor.encoding_utils import decode_html_bytes, detect_html_encoding
+from seo_advisor.connectors.text_response import file_snapshot_fields
 from seo_advisor.models import (
     BackupResult,
     ConnectorProfile,
@@ -177,15 +177,12 @@ class LocalArchiveConnector(WebsiteConnector):
             )
 
         raw_bytes = file_path.read_bytes()
-        html = decode_html_bytes(raw_bytes)
         return PageSnapshot(
             url=url,
             status_code=200,
             final_url=url,
-            headers={},
-            html=html,
             fetched_at=fetched_at,
-            encoding=detect_html_encoding(raw_bytes),
+            **file_snapshot_fields(file_path.name, raw_bytes),
         )
 
     def list_files(self, path: str) -> list[FileRecord]:

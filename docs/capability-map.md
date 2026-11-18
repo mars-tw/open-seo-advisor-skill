@@ -41,7 +41,7 @@
 | 文章寫手 Content Writer | ✅ | `seo-advisor write --topic <主題>` | LLM brief→outline→draft→QA；免金鑰用 `--llm-provider mock` |
 | 工程師 Engineer | ✅（robots/sitemap/canonical）/ 🚧（hreflang/結構化資料/redirect/CWV） | `seo-advisor fix engineer/rollback` | 自動修復三種問題，dry-run 預覽 + 二次確認才寫入，有備份/回滾；其餘修復類型仍是規劃中 |
 | 資安 Security | ✅ | `seo-advisor security audit` | 被動式資安掃描（暴露檔案/目錄列表/cloaking/HTTPS/HSTS/spam/CMS 版本）；暴露檔案/目錄列表/cloaking 需 `--confirm-authorized` 明確授權，不做任何攻擊性測試 |
-| 外掛開發 Plugin Dev | 🚧 | （規劃中） | WordPress SEO 外掛 scaffold |
+| 外掛開發 Plugin Dev | ✅ WordPress schema-generator | `seo-advisor plugin dev --cms wordpress --feature schema-generator --name "Site Schema" --slug site-schema --out ./plugin-dev` | 產生 WordPress 結構化資料外掛；其他功能仍在規劃中。[模式規格](modes.md) |
 
 ### B. 行銷模組（Marketing Modules）
 
@@ -49,7 +49,7 @@
 |---|---|---|---|
 | Meta 廣告 | 🧪 | `seo-advisor ads audit/plan/demo` | 廣告診斷 + dry-run 計畫；實際代操（動用預算）預設全鎖 |
 | 產圖素材 Image | ✅（產圖需金鑰） | `seo-advisor image generate/demo/from-content` | 合規前置檢查 + 多變體；免金鑰用 `--provider mock` |
-| 成長行銷 Growth | ✅ | `seo-advisor growth utm/cro/analytics/demo` | UTM 歸因、CRO 落地頁、跨渠道成效（Google 來源 read-only，無金鑰用 mock） |
+| 成長行銷 Growth | ✅ UTM／CRO；成效分析限示範資料 | `seo-advisor growth utm/cro/analytics/demo` | 成效分析可用 mock；Google 資料來源介面尚未實作即時讀取 |
 | 電商 Ecommerce | ✅ | `seo-advisor ecommerce audit/demo` | Amazon/電商 listing 健檢（純邏輯免金鑰） |
 
 ### C. 統籌器（Orchestrators）
