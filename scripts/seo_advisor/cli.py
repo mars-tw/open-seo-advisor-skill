@@ -117,6 +117,7 @@ def demo(
 def audit_consultant(
     url: str = typer.Option(None, "--url", help="要檢查的網站 URL（與 --source 擇一，可省略 https://）"),
     preview: bool = typer.Option(False, "--preview", help="預覽站預期不收錄，noindex 不扣分"),
+    site_url: str = typer.Option(None, "--site-url", help="本機或 ZIP 來源對應的正式 origin，例如 https://shop.example"),
     source: str = typer.Option(
         None, "--source",
         help="本地原始碼包或目錄路徑，或填 'ssh'/'cpanel' 搭配對應 --ssh-*/--cpanel-* 參數（與 --url 擇一）",
@@ -124,6 +125,7 @@ def audit_consultant(
     out: str = typer.Option("./report", "--out", help="報告輸出目錄"),
     max_urls: int = typer.Option(200, "--max-urls", help="最多爬取的 URL 數量"),
     max_depth: int = typer.Option(6, "--max-depth", help="最大爬取深度"),
+    max_sitemap_files: int = typer.Option(50, "--max-sitemap-files", min=1, help="最多讀取的子 sitemap 數，根索引另計"),
     ssh_host: str = typer.Option(None, "--ssh-host", help="[--source ssh] 遠端伺服器主機名稱"),
     ssh_port: int = typer.Option(22, "--ssh-port", help="[--source ssh] SSH 連接埠"),
     ssh_user: str = typer.Option(None, "--ssh-user", help="[--source ssh] SSH 使用者名稱"),
@@ -213,9 +215,11 @@ def audit_consultant(
             url=url,
             source=source,
             expect_indexing=not preview,
+            site_url=site_url,
             out_dir=out,
             max_urls=max_urls,
             max_depth=max_depth,
+            max_sitemap_files=max_sitemap_files,
             on_progress=progress,
             ssh_options=ssh_options,
             cpanel_options=cpanel_options,
@@ -331,14 +335,17 @@ def write_content(
     draft_path.write_text(render_final_draft_markdown(result), encoding="utf-8")
 
     status = "通過" if result.qa.passed else "需要人工修正"
+    color = "green" if result.qa.passed else "yellow"
     console.print(
-        f"[bold green]完成！品質審核：{status}（分數 {result.qa.quality_score:.0f}/100）[/bold green]"
+        f"[bold {color}]品質審核：{status}（模型評分 {result.qa.quality_score:.0f}/100）[/bold {color}]"
     )
-    console.print(f"可直接使用的草稿：{draft_path}")
+    console.print(f"交付審閱的草稿：{draft_path}")
     console.print(f"完整報告（含 brief/outline/QA）：{report_path}")
     console.print(f"機器可讀資料：{json_path}")
     if result.brief.is_ymyl:
         console.print("[yellow]提醒：這是 YMYL 主題，發布前建議由領域專家審核。[/yellow]")
+    if request.metadata_batch_urls and not result.qa.passed:
+        raise typer.Exit(code=2)
 
 
 @app.command("mode")
@@ -351,8 +358,8 @@ def show_mode_status(name: str) -> None:
         raise typer.Exit(code=1)
 
     try:
-        ensure_implemented(mode)
-        console.print(f"[green]模式 {mode.value} 已實作，可直接使用。[/green]")
+        from seo_advisor.router import mode_command
+        console.print(f"[green]模式 {mode.value} 已實作。[/green]{mode_command(mode)}")
     except ModeNotImplementedError as exc:
         console.print(f"[yellow]{exc}[/yellow]")
 
@@ -368,13 +375,15 @@ def _run_scan(scan_fn, *, debug: bool) -> None:
         raise typer.Exit(code=1)
 
     console.print(
-        f"[bold green]完成！健康分數：{outcome.report.site_health_score:.0f}/100，"
-        f"共 {len(outcome.report.findings)} 項發現。[/bold green]"
+        f"健康分數：{outcome.report.score_display}，"
+        f"共 {len(outcome.report.findings)} 項發現。"
     )
     console.print(f"給非技術人員看的懶人包：{outcome.beginner_path}")
     console.print(f"完整技術報告：{outcome.technical_path}")
     console.print(f"機器可讀資料：{outcome.json_path}")
     console.print(f"視覺化報告（含圖表，可用瀏覽器開啟或列印為 PDF）：{outcome.html_path}")
+    if outcome.report.site_health_score is None:
+        raise typer.Exit(code=2)
 
 
 if __name__ == "__main__":

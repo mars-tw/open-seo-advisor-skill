@@ -7,7 +7,16 @@ prompts/content_writer.md，這裡把它拆成 brief/outline/draft/qa 四個
 
 from __future__ import annotations
 
+import json
+
 from seo_advisor.writers.models import ContentBrief, ContentOutline, ContentRequest
+
+METADATA_URLS_LABEL = "本批網址 JSON："
+METADATA_DRAFT_SYSTEM = (
+    "你是 SEO 編輯。交付每個指定頁面的標題、摘要與主標，採用目標市場語言及已核實的事實。"
+    "只輸出一個 JSON 陣列，每個網址恰好一筆，以 url、title、meta_description、h1 四個字串欄位交付。"
+    "url 照抄清單，保留完整路徑及查詢參數。其餘欄位填寫可審閱的正文。"
+)
 
 _CORE_PRINCIPLES = """\
 核心原則：
@@ -52,6 +61,8 @@ def assignment_context(request: ContentRequest, outline: ContentOutline | None =
         lines.append(f"目標網址：{request.target_url}")
     if request.internal_links:
         lines.append("可用的內部連結：" + "、".join(request.internal_links))
+    if request.metadata_batch_urls:
+        lines.insert(0, METADATA_URLS_LABEL + json.dumps(request.metadata_batch_urls, ensure_ascii=False))
     if outline and outline.internal_link_plan:
         lines.append("大綱的內鏈安排：" + "、".join(outline.internal_link_plan))
     return "\n".join(lines)
@@ -96,6 +107,8 @@ def draft_system_prompt() -> str:
 
 
 def draft_user_prompt(request: ContentRequest, brief: ContentBrief, outline: ContentOutline) -> str:
+    if request.metadata_batch_urls:
+        return assignment_context(request, outline) + "\n依本批網址逐頁輸出 JSON 陣列。"
     section_lines = [f"- {s.heading}（{s.goal}）" if s.goal else f"- {s.heading}" for s in outline.sections]
     lines = [
         assignment_context(request, outline),
@@ -116,6 +129,9 @@ def qa_system_prompt() -> str:
 
 
 def qa_user_prompt(request: ContentRequest, draft_markdown: str, outline: ContentOutline | None = None) -> str:
+    if request.metadata_batch_urls:
+        return (f"{assignment_context(request, outline)}\n核對每個指定網址的 title、meta_description 和 h1，"
+                f"檢查與該頁的採購意圖、事實及語言是否一致。\n\n本次實際交付內容：\n{draft_markdown}")
     return (
         f"{assignment_context(request, outline)}\n請逐一核對草稿中的規格、適用範圍、交易條件及內鏈。\n\n"
         f"草稿內容：\n{draft_markdown}\n\n"

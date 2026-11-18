@@ -131,7 +131,7 @@ def _find_high_cost_low_return(rows: list[AnalyticsMetricRow]) -> list[Analytics
 
         roas = revenue / cost
         cost_per_conversion = cost / row.conversions if row.conversions else None
-        if cost >= 50_000 and (row.conversions <= 3 or roas < 0.8):
+        if cost >= 50_000 and roas < 0.8:
             findings.append(
                 AnalyticsFinding(
                     category="spend",
@@ -144,8 +144,7 @@ def _find_high_cost_low_return(rows: list[AnalyticsMetricRow]) -> list[Analytics
                         "conversions": row.conversions,
                         "roas": round(roas, 2),
                         "cost_per_conversion": cost_per_conversion,
-                        # 判斷門檻透明化：花費≥500 元且（轉換≤3 或 ROAS<0.8）才標記。
-                        "flagged_rule": "cost ≥ 500 且 (conversions ≤ 3 或 ROAS < 0.8)",
+                        "flagged_rule": "cost_minor_units ≥ 50000 且 ROAS < 0.8",
                         "roas_threshold": 0.8,
                         "threshold_profile": "default",
                     },
@@ -154,6 +153,17 @@ def _find_high_cost_low_return(rows: list[AnalyticsMetricRow]) -> list[Analytics
                         "必要時只產生 dry-run 預算調整計畫，需人工審核後才套用。"
                         "（ROAS 0.8 為通用預設門檻，實際可接受值依你的毛利率而定。）"
                     ),
+                )
+            )
+        elif cost >= 50_000 and row.conversions <= 3:
+            findings.append(
+                AnalyticsFinding(
+                    category="spend", severity=Severity.P3,
+                    title=f"{row.channel} 的轉換樣本較少",
+                    evidence={"channel": row.channel, "conversions": row.conversions,
+                              "cost_minor_units": cost, "revenue_minor_units": revenue,
+                              "roas": round(roas, 2)},
+                    recommendation="一併核對成交歸因與觀察期間，再決定是否調整預算。",
                 )
             )
     return findings

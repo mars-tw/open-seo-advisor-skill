@@ -59,9 +59,18 @@ def render_content_report_markdown(result: ContentWriterResult) -> str:
 
     lines.append("## 品質審核（Editorial QA）")
     lines.append("")
+    if result.request.metadata_batch_urls:
+        lines.append(f"本批指定 {len(result.request.metadata_batch_urls)} 個網址，逐一核對 url、title、meta_description、h1。")
+        lines.append("")
+    if result.initial_qa is not None:
+        lines.append("下列結果對應交付的修訂稿。初稿的審核記錄保存在 JSON 的 initial_qa。")
+        lines.append("")
+    elif result.revised_markdown:
+        lines.append("此報告只有初稿的審核記錄，修訂稿仍待確認。")
+        lines.append("")
     status = "✅ 通過" if result.qa.passed else "⚠ 需要修正"
     lines.append(f"- 審核結果：{status}")
-    lines.append(f"- 品質分數：{result.qa.quality_score:.0f} / 100")
+    lines.append(f"- 模型評分：{result.qa.quality_score:.0f} / 100")
     if result.qa.issues:
         lines.append("- 發現的問題：")
         for issue in result.qa.issues:
@@ -78,7 +87,7 @@ def render_content_report_markdown(result: ContentWriterResult) -> str:
     lines.append(result.draft_markdown)
     lines.append("")
 
-    if result.revised_markdown:
+    if result.revised_markdown is not None:
         lines.append("## 自動修訂版草稿")
         lines.append("")
         lines.append(
@@ -97,4 +106,4 @@ def render_content_report_json(result: ContentWriterResult) -> str:
 
 def render_final_draft_markdown(result: ContentWriterResult) -> str:
     """只回傳最終可用的草稿內容（優先用修訂版），方便直接複製貼上發布。"""
-    return result.revised_markdown or result.draft_markdown
+    return result.revised_markdown if result.revised_markdown is not None else result.draft_markdown

@@ -13,7 +13,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from collections import Counter
 
 from seo_advisor.writers.models import EditorialIssue
 
@@ -105,10 +107,59 @@ def count_verification_markers(markdown: str) -> int:
     return markdown.count(_NEEDS_VERIFICATION_MARKER)
 
 
-def run_structural_checks(markdown: str) -> list[EditorialIssue]:
+def _unique_fields(pairs):
+    item = {}
+    for key, value in pairs:
+        if key in item:
+            raise ValueError(f"重複的 JSON 欄位 {key}")
+        item[key] = value
+    return item
+
+
+def check_metadata_batch(markdown: str, urls: list[str]) -> list[EditorialIssue]:
+    """Match complete per-page records to the requested URLs, including query strings."""
+    text = markdown.strip()
+    fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", text, flags=re.I | re.S)
+    messages = []
+    try:
+        rows = json.loads(fenced[1] if fenced else text, object_pairs_hook=_unique_fields)
+        if not isinstance(rows, list):
+            raise ValueError("最外層需為 JSON 陣列")
+    except ValueError as exc:
+        messages.append(f"批次 metadata 無法讀取：{exc}")
+    else:
+        counts = Counter()
+        for i, row in enumerate(rows, 1):
+            if not isinstance(row, dict) or not isinstance(row.get("url"), str) or not row["url"].strip():
+                messages.append(f"第 {i} 筆缺少有效 url。")
+                continue
+            url = row["url"]
+            counts[url] += 1
+            missing = [field for field in ("title", "meta_description", "h1")
+                       if not isinstance(row.get(field), str) or not row[field].strip()]
+            if missing:
+                messages.append(f"{url} 缺少非空文字欄位：{'、'.join(missing)}。")
+        for url in dict.fromkeys(urls):
+            if counts[url] == 0:
+                messages.append(f"缺少指定頁面：{url}")
+            elif counts[url] > 1:
+                messages.append(f"指定頁面重複交付 {counts[url]} 筆：{url}")
+        expected = set(urls)
+        for extra in counts:
+            if extra not in expected:
+                messages.append(f"不在本批清單的網址：{extra}")
+    return [EditorialIssue(
+        category="metadata_batch", severity="P1", description=message,
+        recommendation="按本批網址逐一交付 url、title、meta_description、h1，核對後再審。",
+    ) for message in messages]
+
+
+def run_structural_checks(markdown: str, metadata_batch_urls: list[str] | None = None) -> list[EditorialIssue]:
     """執行所有可程式化檢查的規則，回傳發現的問題清單（可能是空清單）。"""
-    checks = [check_single_h1, check_low_quality_openers, check_ymyl_keywords]
-    issues = []
+    checks = [check_low_quality_openers, check_ymyl_keywords]
+    issues = check_metadata_batch(markdown, metadata_batch_urls) if metadata_batch_urls else []
+    if not metadata_batch_urls:
+        checks.insert(0, check_single_h1)
     for check in checks:
         result = check(markdown)
         if result is not None:

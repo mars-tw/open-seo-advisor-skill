@@ -63,11 +63,17 @@ class Report(BaseModel):
     target: ReportTarget
     mode: Mode
     executive_summary: str
-    site_health_score: float = Field(ge=0, le=100)
+    site_health_score: float | None = Field(ge=0, le=100)
     findings: list[Finding] = Field(default_factory=list)
     top_findings: list[str] = Field(default_factory=list)
     coverage_notes: list[str] = Field(default_factory=list)
     scan_stats: dict = Field(default_factory=dict)
+
+    @property
+    def score_display(self) -> str:
+        if self.site_health_score is None:
+            return "涵蓋不足，無法評分"
+        return f"{self.site_health_score:g}/100"
 
 
 class SafetyPolicy(BaseModel):

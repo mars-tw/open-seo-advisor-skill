@@ -55,10 +55,14 @@ system prompt，本文件是給實作者（人類或 AI coding agent）看的完
 
 ### 輸出格式
 
+顧問報告列出實際取得並可分析的 HTML 頁數。若只有 PHP 原始檔、空內容或抓取錯誤，報告仍會保留抓取證據；零個可分析頁面時，JSON 的 `site_health_score` 為 `null`，CLI 回傳 2。請改用可存取的正式網址或建置後的 HTML 重新檢查。
+
+本機匯出站可用 `seo-advisor audit consultant --source ./export --site-url https://shop.example`，將同源的絕對網址對應到本機檔案。若子 sitemap 多於預設配額，可用 `--max-sitemap-files` 調整。`scan_stats` 分別列出已讀檔案、回應狀態、未能取得的原因與待讀清單。
+
 Markdown + JSON 雙格式，結構：
 
 1. Executive Summary（3-5 句話總結網站現況）
-2. Site Health Score（0-100，依 finding 嚴重度加權計算）
+2. Site Health Score（有可分析內容時為 0–100，零頁時為 `null`）
 3. Top Findings（前 10 筆，依 priority_score 排序）
 4. 依 P0/P1/P2/P3 分組的完整 Finding 清單
 5. Evidence Appendix（每筆 finding 的原始證據）

@@ -149,7 +149,9 @@ def run_consultant_scan(
     out_dir: str,
     max_urls: int = 200,
     max_depth: int = 6,
+    max_sitemap_files: int = 50,
     expect_indexing: bool = True,
+    site_url: str | None = None,
     timeout_seconds: float = 15.0,
     on_progress: ProgressCallback = _noop,
     ssh_options: SSHSourceOptions | None = None,
@@ -163,6 +165,8 @@ def run_consultant_scan(
     """
     is_ssh = source == "ssh"
     is_cpanel = source == "cpanel"
+    if site_url and (url or not source or is_ssh or is_cpanel):
+        raise ValueError("--site-url 只用於將本機目錄或 ZIP 對應到正式網站。")
     if ssh_options is not None and not is_ssh:
         raise ValueError("提供 ssh_options 時 source 必須是 'ssh'。")
     if is_ssh and ssh_options is None:
@@ -185,7 +189,7 @@ def run_consultant_scan(
     if url:
         normalized_url = normalize_url(url)
         on_progress(f"準備掃描網站：{normalized_url}")
-        connector = HTTPConnector(normalized_url, timeout_seconds=timeout_seconds)
+        connector = HTTPConnector(normalized_url, timeout_seconds=timeout_seconds, max_sitemap_files=max_sitemap_files)
         target = ReportTarget(source_type="http", identifier=normalized_url)
         seed = normalized_url
     elif is_ssh:
@@ -237,7 +241,14 @@ def run_consultant_scan(
         seed = "/"
     else:
         on_progress(f"準備掃描本地來源：{source}")
-        connector = LocalArchiveConnector(source)
+        if site_url:
+            from urllib.parse import urlsplit
+            parts = urlsplit(site_url)
+            if parts.path not in {"", "/"} or parts.query or parts.fragment:
+                raise ValueError("--site-url 請填完整 origin（例如 https://shop.example），不要加入路徑或查詢。")
+        connector = LocalArchiveConnector(source, site_url=site_url)
+        if connector.site_origin:
+            coverage_notes.append(f"本機來源對應到 {connector.site_origin}，HTTP 狀態與線上路由仍待驗證。")
         target = ReportTarget(
             source_type="local_archive", identifier=str(Path(source).resolve())
         )
@@ -257,6 +268,7 @@ def run_consultant_scan(
             seed_url=seed,
             max_urls=max_urls,
             max_depth=max_depth,
+            max_sitemap_files=max_sitemap_files,
             fetched_at=generated_at,
         )
         total_urls = len(crawl_result.pages)
@@ -268,8 +280,22 @@ def run_consultant_scan(
         coverage = f"共掃描 {total_urls} 個網址，含 {html_pages} 個 HTML 頁面，其餘 {total_urls - html_pages} 個網址回應。"
         on_progress(coverage)
         coverage_notes.append(coverage)
+        if crawl_result.sitemap_errors:
+            coverage_notes.append(f"有 {len(crawl_result.sitemap_errors)} 個 sitemap 未能讀取，分析僅涵蓋已取得的網址。請查閱逐檔錯誤。")
+        unclassified = [
+            url for url, page in crawl_result.pages.items()
+            if page.status_code == 200 and page.headers.get("content-type", "").split(";")[0].strip().lower()
+            == "application/octet-stream"
+        ]
+        if unclassified:
+            coverage_notes.append(f"{len(unclassified)} 個網址缺少可辨識的內容類型，請核對 scan_stats.unclassified_content_urls。")
+        if crawl_result.sitemap_pending:
+            coverage_notes.append(
+                f"有 {len(crawl_result.sitemap_pending)} 個來源或清單的網址尚未完整檢查。"
+                "請依逐項原因調整掃描範圍、--max-urls 或 --max-sitemap-files。"
+            )
         if not expect_indexing:
-            coverage_notes.append("本次檢查預覽站，noindex 符合預期，未列入扣分。")
+            coverage_notes.append("本次預期預覽頁不被收錄。已取得的 HTML 會逐頁核對索引指令，缺少限制的頁面另列。")
 
         on_progress("第 3/4 步：檢查常見 SEO 問題")
         findings = analyze_technical_seo(crawl_result, seed_url=seed, expect_indexing=expect_indexing)
@@ -279,10 +305,18 @@ def run_consultant_scan(
         scan_stats = {
             "urls_crawled": total_urls,
             "html_pages": html_pages,
+            "analyzed_html_pages": len({
+                page.final_url or url for url, page in crawl_result.pages.items()
+                if page.status_code == 200 and page.html.strip()
+            }),
             "other_urls": total_urls - html_pages,
+            "unclassified_content_urls": unclassified,
             "expect_indexing": expect_indexing,
             "sitemap_sources": crawl_result.sitemap_sources,
             "sitemaps_read": list(crawl_result.sitemap_documents),
+            "sitemap_statuses": crawl_result.sitemap_statuses,
+            "sitemap_errors": crawl_result.sitemap_errors,
+            "sitemap_pending": crawl_result.sitemap_pending,
             "unverified_canonicals": crawl_result.unverified_canonicals,
             "robots_excluded_urls": [
                 url for url, page in crawl_result.pages.items()

@@ -32,6 +32,7 @@ from seo_advisor.fixers import canonical, cwv, hreflang, redirect, robots, sitem
 from seo_advisor.fixers.models import FixResult, NotFixableError, PatchPlan, PlanOnlyError
 from seo_advisor.indexability import google_noindex
 from seo_advisor.models import Finding
+from seo_advisor.url_utils import canonical_destination
 
 _FIXERS = (robots, sitemap, canonical, redirect, hreflang, cwv)
 
@@ -80,11 +81,14 @@ def build_plan(
             raise NotFixableError("網站已提供 sitemap，請重新健檢。")
         site_origin = seed_url if seed_url.startswith(("http://", "https://")) else None
         indexable_urls = {}
+        excluded = []
         for url, snapshot in crawl_result.pages.items():
             if snapshot.status_code != 200:
                 continue
             soup = BeautifulSoup(snapshot.html, "lxml") if snapshot.html else None
-            if google_noindex(soup, snapshot.indexing_headers):
+            restrictions = google_noindex(soup, snapshot.indexing_headers)
+            if restrictions:
+                excluded.append(f"{url}：{', '.join(restrictions)}")
                 continue
             resolved = snapshot.final_url or url
             if site_origin and not resolved.startswith(("http://", "https://")):
@@ -94,15 +98,18 @@ def build_plan(
             if soup:
                 base = soup.find("base", href=True)
                 base_url = urljoin(resolved, base["href"]) if base else resolved
-                canonicals = {urljoin(base_url, tag["href"]) for tag in soup.find_all("link", rel="canonical", href=True)}
-                if canonicals and canonicals != {resolved}:
+                canonicals = {canonical_destination(base_url, tag["href"]) for tag in soup.find_all("link", rel="canonical", href=True)}
+                document = canonical_destination("", resolved)
+                if canonicals and canonicals != {document}:
                     # A directory index can be served at its canonical directory URL.
-                    directory_url = resolved.removesuffix("index.html")
-                    if not resolved.endswith("/index.html") or canonicals != {directory_url}:
+                    directory_url = document.removesuffix("index.html")
+                    if not document.endswith("/index.html") or canonicals != {directory_url}:
+                        excluded.append(f"{url}：canonical 指向 {'、'.join(sorted(canonicals))}")
                         continue
                     resolved = directory_url
             indexable_urls[resolved] = None
         plan = sitemap.plan_fix(finding, indexable_urls=list(indexable_urls))
+        plan.warnings.extend(excluded)
         plan.original_hashes[sitemap.SITEMAP_PATH] = None
         return plan
 

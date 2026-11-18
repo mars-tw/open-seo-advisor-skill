@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import json
 import os
 import shutil
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.connectors.text_response import file_snapshot_fields
@@ -26,6 +28,8 @@ from seo_advisor.models import (
     UrlRecord,
 )
 from seo_advisor.security.safe_archive import resolve_inside_root, safe_extract_zip
+from seo_advisor.sitemaps import MAX_BYTES, SitemapFetch, decode_sitemap_bytes
+from seo_advisor.url_utils import http_origin
 
 # 備份與寫入能力預設不開放；只有明確把 write_files 加進 allowed_capabilities
 # 的呼叫端（見 fixers/runner.py）才可能真的走到寫入路徑，且仍受 dry_run 約束。
@@ -39,6 +43,28 @@ _TOOLING_DIR_PREFIXES = (".git/", ".seo-advisor/", "node_modules/")
 
 def _is_inside_tooling_dir(rel_path: str) -> bool:
     return any(rel_path.startswith(prefix) for prefix in _TOOLING_DIR_PREFIXES)
+
+
+def _is_generated_report(path: Path) -> bool:
+    """Identify this tool's specific report file, including older custom output directories."""
+    if path.name != "report.html" or not path.is_file():
+        return False
+    try:
+        with path.open("rb") as stream:
+            header = stream.read(131072)
+        if b"<meta name=\"generator\" content=\"Open SEO Advisor Consultant\">" in header:
+            return True
+        if "<title>SEO 健檢報告：".encode() not in header:
+            return False
+        with path.with_name("report.json").open(encoding="utf-8") as stream:
+            report = json.load(stream)
+        return (
+            isinstance(report, dict) and report.get("mode") == "consultant"
+            and isinstance(report.get("report_id"), str)
+            and ("<code>" + report["report_id"] + "</code>").encode() in header
+        )
+    except (ValueError, OSError):
+        return False
 
 # 單一本地檔案讀入記憶體的大小上限，避免超大檔案造成 OOM。
 _MAX_LOCAL_FILE_BYTES = 25 * 1024 * 1024  # 25 MB
@@ -77,8 +103,10 @@ class LocalArchiveConnector(WebsiteConnector):
         *,
         extract_to: str | None = None,
         policy: SafetyPolicy | None = None,
+        site_url: str | None = None,
     ) -> None:
         self.policy = policy or SafetyPolicy(allowed_capabilities={"read_urls", "read_files"})
+        self.site_origin = http_origin(site_url) if site_url else None
 
         path = Path(source_path)
         if not path.exists():
@@ -97,6 +125,35 @@ class LocalArchiveConnector(WebsiteConnector):
         # 子類別（例如 GitRepoConnector）可以覆寫成 repo 之外的位置，避免備份
         # 產生的檔案讓 `git status` 誤判 working tree 不乾淨。
         self._backup_root = self.root
+
+    def is_url_in_scope(self, url: str) -> bool:
+        """Map only a confirmed origin and local documents to this archive."""
+        parsed = urlsplit(url)
+        if parsed.netloc or parsed.scheme:
+            if not self.site_origin or parsed.scheme not in {"http", "https"}:
+                return False
+            if http_origin(url) != self.site_origin:
+                return False
+        local_path = unquote(parsed.path).lstrip("/")
+        if _is_inside_tooling_dir(local_path):
+            return False
+        return not _is_generated_report(resolve_inside_root(self.root, local_path))
+
+    def local_url(self, url: str) -> str:
+        if not self.is_url_in_scope(url):
+            raise ValueError("無法將此外部網址或工具產出檔對應到本機來源。")
+        parsed = urlsplit(url)
+        return urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+
+    def read_sitemap_file(self, url: str) -> SitemapFetch:
+        path = resolve_inside_root(self.root, unquote(urlsplit(self.local_url(url)).path))
+        if not path.is_file():
+            return SitemapFetch(404)
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_BYTES + 1)
+        if len(raw) > MAX_BYTES:
+            return SitemapFetch(200, error="本機 sitemap 檔案超過 50 MiB 讀取上限", limited=True)
+        return decode_sitemap_bytes(raw)
 
     def id(self) -> str:
         return f"local_archive:{self.root}"
@@ -139,24 +196,28 @@ class LocalArchiveConnector(WebsiteConnector):
 
     def list_urls(self, seed: str, limit: int) -> list[UrlRecord]:
         records: list[UrlRecord] = []
-        for html_file in self.root.rglob("*.html"):
-            rel_path = html_file.relative_to(self.root).as_posix()
-            if _is_inside_tooling_dir(rel_path):
-                # 版控/備份/依賴套件目錄不該被當成網站內容爬取/收進 sitemap，
-                # 否則這些目錄裡的 HTML（備份的舊版頁面、node_modules 裡
-                # 套件文件等）會被誤判為真實網站頁面。
-                continue
-            records.append(UrlRecord(url=f"/{rel_path}", source="crawl", discovered_depth=0))
-            if len(records) >= limit:
-                break
+        for parent, directories, files in os.walk(self.root):
+            directories[:] = sorted(name for name in directories if name + "/" not in _TOOLING_DIR_PREFIXES)
+            for name in sorted(files):
+                html_file = Path(parent, name)
+                if html_file.suffix.lower() not in {".html", ".htm", ".xhtml"} or _is_generated_report(html_file):
+                    continue
+                rel_path = html_file.relative_to(self.root).as_posix()
+                url = "/" + quote(rel_path, safe="/:@!$&'()*+,;=")
+                records.append(UrlRecord(url=url, source="crawl", discovered_depth=0))
+                if len(records) >= limit:
+                    return records
         return records
 
     def fetch_url(self, url: str, *, render: bool = False, fetched_at: str = "") -> PageSnapshot:
         if render:
             raise NotImplementedError("本地原始碼包掃描不支援 render=True。")
 
-        file_path = resolve_inside_root(self.root, url)
-        if not file_path.exists():
+        parts = urlsplit(self.local_url(url))
+        file_path = resolve_inside_root(self.root, unquote(parts.path))
+        if file_path.is_dir():
+            file_path = resolve_inside_root(self.root, (file_path / "index.html").relative_to(self.root.resolve()).as_posix())
+        if not file_path.is_file():
             return PageSnapshot(
                 url=url, status_code=404, final_url=url, headers={}, html="", fetched_at=fetched_at
             )

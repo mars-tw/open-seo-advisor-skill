@@ -1,9 +1,4 @@
-"""Content Writer Mode 核心流程：brief -> outline -> draft -> QA（-> 可選 revise）。
-
-四個階段各呼叫一次 LLM（revise 只在需要時額外呼叫一次），每個階段的輸入
-都來自前一階段的結構化輸出，確保 draft 有大綱依據、QA 有草稿依據，而不是
-互相獨立、缺乏上下文的四次呼叫。
-"""
+"""Writer stages: brief, outline, draft and QA, followed by revision and fresh QA when requested."""
 
 from __future__ import annotations
 
@@ -20,6 +15,7 @@ from seo_advisor.writers.models import (
     LLMRequest,
 )
 from seo_advisor.writers.prompts import (
+    METADATA_DRAFT_SYSTEM,
     assignment_context,
     brief_system_prompt,
     brief_user_prompt,
@@ -129,7 +125,7 @@ def _generate_draft(
 ) -> tuple[str, str]:
     """回傳 (草稿文字, 實際使用的模型名稱)。"""
     llm_request = LLMRequest(
-        system=draft_system_prompt(),
+        system=METADATA_DRAFT_SYSTEM if request.metadata_batch_urls else draft_system_prompt(),
         messages=[LLMMessage(role="user", content=draft_user_prompt(request, brief, outline))],
         max_tokens=6000,
     )
@@ -139,7 +135,8 @@ def _generate_draft(
 
 def _generate_qa(provider: LLMProvider, request: ContentRequest, draft_markdown: str, outline: ContentOutline) -> EditorialQA:
     llm_request = LLMRequest(
-        system=qa_system_prompt(),
+        system=("你是 SEO 批次資料審稿者，依照目標網址、逐頁欄位、原始內容與已知事實審核並回報問題。"
+                if request.metadata_batch_urls else qa_system_prompt()),
         messages=[LLMMessage(role="user", content=qa_user_prompt(request, draft_markdown, outline))],
     )
     response = provider.complete_json(llm_request, _QA_SCHEMA)
@@ -147,9 +144,9 @@ def _generate_qa(provider: LLMProvider, request: ContentRequest, draft_markdown:
 
     # 併入程式化結構檢查的結果，這些是 LLM 可能疏漏但規則明確的問題
     # （例如多個 H1、YMYL 關鍵字命中），不依賴 LLM 的語意判斷。
-    structural_issues = run_structural_checks(draft_markdown)
+    structural_issues = run_structural_checks(draft_markdown, request.metadata_batch_urls)
     combined_issues = list(llm_qa.issues) + structural_issues
-    passed = llm_qa.passed and not any(i.severity in {"P0", "P1"} for i in structural_issues)
+    passed = llm_qa.passed and not any(i.severity in {"P0", "P1"} for i in combined_issues)
 
     return EditorialQA(
         passed=passed,
@@ -164,15 +161,16 @@ def _revise_draft(
     outline: ContentOutline,
 ) -> str:
     issue_summary = "\n".join(f"- [{i.severity}] {i.description}：{i.recommendation}" for i in issues)
+    format_name = "整批 JSON 陣列" if request.metadata_batch_urls else "Markdown"
     llm_request = LLMRequest(
-        system=draft_system_prompt(),
+        system=METADATA_DRAFT_SYSTEM if request.metadata_batch_urls else draft_system_prompt(),
         messages=[
             LLMMessage(
                 role="user",
                 content=(
                     f"{assignment_context(request, outline)}\n\n"
                     f"以下是關於「{request.topic}」的草稿，請根據審稿意見修正後"
-                    f"輸出完整修訂版（Markdown）：\n\n草稿：\n{draft_markdown}\n\n"
+                    f"輸出完整修訂版（{format_name}）：\n\n草稿：\n{draft_markdown}\n\n"
                     f"審稿意見：\n{issue_summary}"
                 ),
             )
@@ -202,9 +200,15 @@ def run_content_writer_pipeline(
     qa = _generate_qa(provider, request, draft_markdown, outline)
 
     revised_markdown: str | None = None
+    initial_qa: EditorialQA | None = None
     if request.auto_revise and not qa.passed and qa.issues:
         on_progress("發現需要修正的問題，正在自動修訂草稿")
         revised_markdown = _revise_draft(provider, request, draft_markdown, qa.issues, outline)
+        if not request.metadata_batch_urls and not revised_markdown.strip():
+            raise ValueError("修訂結果為空，無法完成終稿審核。")
+        initial_qa = qa
+        on_progress("依原始資料再審核修訂稿")
+        qa = _generate_qa(provider, request, revised_markdown, outline)
 
     return ContentWriterResult(
         request=request,
@@ -212,6 +216,7 @@ def run_content_writer_pipeline(
         outline=outline,
         draft_markdown=draft_markdown,
         qa=qa,
+        initial_qa=initial_qa,
         revised_markdown=revised_markdown,
         provider=provider.id(),
         model=model_used,

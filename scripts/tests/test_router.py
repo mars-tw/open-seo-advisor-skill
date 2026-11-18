@@ -1,7 +1,7 @@
 import pytest
 
 from seo_advisor.models import Mode
-from seo_advisor.router import ModeNotImplementedError, UnknownModeError, ensure_implemented, resolve_mode
+from seo_advisor.router import UnknownModeError, ensure_implemented, resolve_mode
 
 
 def test_resolve_mode_handles_aliases():
@@ -35,6 +35,12 @@ def test_resolve_ecommerce_aliases():
     assert resolve_mode("ecommerce") == Mode.ECOMMERCE
 
 
-def test_ensure_implemented_engineer_raises():
-    with pytest.raises(ModeNotImplementedError):
-        ensure_implemented(Mode.ENGINEER)
+def test_implemented_modes_match_registered_commands():
+    from typer.testing import CliRunner
+    from seo_advisor.cli import app
+
+    runner = CliRunner()
+    for mode in Mode:
+        result = runner.invoke(app, ["mode", mode.value])
+        assert result.exit_code == 0 and "已實作" in result.output
+    assert "WordPress schema-generator" in runner.invoke(app, ["mode", "plugin_dev"]).output

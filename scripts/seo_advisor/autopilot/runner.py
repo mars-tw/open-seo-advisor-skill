@@ -219,12 +219,12 @@ def _run_consultant(task: AutoTask, out_dir: str) -> ModuleResult:
         return ModuleResult(
             module="consultant",
             summary=(
-                f"已完成 SEO 健檢：健康分數 {report.site_health_score:.0f}/100，"
+                f"SEO 健檢：健康分數 {report.score_display}，"
                 f"發現 {len(report.findings)} 個問題（快速健檢）。"
             ),
             execution_mode=mode,
             highlights=[
-                f"健康分數：{report.site_health_score:.0f}/100",
+                f"健康分數：{report.score_display}",
                 f"問題數：{len(report.findings)}",
             ],
             advanced_hint="想更深入掃描：seo-advisor audit consultant --max-urls 200",

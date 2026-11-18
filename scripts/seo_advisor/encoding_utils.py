@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 
-_META_CHARSET_PATTERN = re.compile(rb'<meta[^>]+charset=["\']?([\w-]+)', re.IGNORECASE)
+_META_CHARSET_PATTERN = re.compile(rb'<meta\b[^>]*?\bcharset\s*=\s*["\']?([\w-]+)', re.IGNORECASE)
 
 _BOM_SIGNATURES: list[tuple[bytes, str]] = [
     (b"\xef\xbb\xbf", "utf-8-sig"),

@@ -97,7 +97,7 @@ def test_writing_review_and_revision_keep_original_product_evidence():
     qa = json.loads(_QA_JSON)
     qa.update(passed=False, issues=[dict(category="trust", severity="P1",
               description="確認尺寸", recommendation="查閱型錄")])
-    responses = iter([_BRIEF_JSON, _OUTLINE_JSON, _DRAFT_TEXT, json.dumps(qa), "修訂完成"])
+    responses = iter([_BRIEF_JSON, _OUTLINE_JSON, _DRAFT_TEXT, json.dumps(qa), "# 修訂完成", _QA_JSON])
     prompts = []
 
     def respond(request):
@@ -108,7 +108,9 @@ def test_writing_review_and_revision_keep_original_product_evidence():
                              brand_context="North Demo", target_url="/parts/63",
                              internal_links=["/selector"], auto_revise=True)
     result = run_content_writer_pipeline(MockProvider(respond), request)
-    assert result.revised_markdown == "修訂完成"
+    assert result.revised_markdown == "# 修訂完成"
+    assert result.qa.passed and not result.initial_qa.passed
+    assert result.revised_markdown in prompts[-1]
     for prompt in prompts:
         for value in (request.source_notes, request.brand_context, request.target_url, "/selector"):
             assert value in prompt

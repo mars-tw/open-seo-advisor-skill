@@ -98,14 +98,17 @@ def render_beginner_markdown(report: Report) -> str:
     )
     lines.append("")
 
-    headline, detail = _score_band(report.site_health_score)
     lines.append("## 一句話結論")
     lines.append("")
-    lines.append(
-        f"把「{_display_name(report)}」想像成一間房子，搜尋引擎和使用者就是上門的訪客。"
-        f"這次健檢的總分是 **{report.site_health_score:.0f} / 100**，"
-        f"結論是：**{headline}**。{detail}"
-    )
+    if report.site_health_score is None:
+        lines.append(report.executive_summary)
+    else:
+        headline, detail = _score_band(report.site_health_score)
+        lines.append(
+            f"把「{_display_name(report)}」想像成一間房子，搜尋引擎和使用者就是上門的訪客。"
+            f"這次健檢的總分是 **{report.score_display}**，"
+            f"結論是：**{headline}**。{detail}"
+        )
     lines.append("")
 
     if report.coverage_notes:
@@ -118,20 +121,21 @@ def render_beginner_markdown(report: Report) -> str:
 
     lines.append("## 網站健康分數：這個數字代表什麼？")
     lines.append("")
-    lines.append(f"### {report.site_health_score:.0f} / 100")
+    lines.append(f"### {report.score_display}")
     lines.append("")
-    lines.append("| 分數區間 | 代表意義 |")
-    lines.append("|---|---|")
-    for low, high, band_headline, band_detail in _SCORE_BANDS:
-        range_label = f"{low}-{high - 1 if high <= 100 else 100}"
-        lines.append(f"| {range_label} | {band_headline}：{band_detail} |")
+    if report.site_health_score is not None:
+        lines.append("| 分數區間 | 代表意義 |")
+        lines.append("|---|---|")
+        for low, high, band_headline, band_detail in _SCORE_BANDS:
+            range_label = f"{low}-{high - 1 if high <= 100 else 100}"
+            lines.append(f"| {range_label} | {band_headline}：{band_detail} |")
     lines.append("")
 
     lines.append("## 最該先處理的事")
     lines.append("")
     top_actions = _pick_top_actions(report.findings)
     if not top_actions:
-        lines.append("在本次已檢查項目範圍內，沒有發現需要處理的問題。")
+        lines.append(report.executive_summary if report.site_health_score is None else "在本次已檢查項目範圍內，沒有發現需要處理的問題。")
     else:
         for i, finding in enumerate(top_actions, start=1):
             _, severity_detail = _SEVERITY_EXPLANATION[finding.severity]

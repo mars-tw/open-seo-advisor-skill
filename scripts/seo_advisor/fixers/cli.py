@@ -50,9 +50,9 @@ fix_app = typer.Typer(help="Engineer Mode：把顧問報告的問題轉成可審
 console = Console()
 
 
-def _load_findings(source: str, from_report: str | None, finding_id: str | None) -> tuple[list[Finding], object]:
+def _load_findings(source: str, from_report: str | None, finding_id: str | None, site_url: str | None = None) -> tuple[list[Finding], object]:
     """回傳 (findings, crawl_result)。若沒有 --from-report，就地對 source 跑一次快速掃描。"""
-    connector = LocalArchiveConnector(source)
+    connector = LocalArchiveConnector(source, site_url=site_url)
     if from_report:
         report_data = json.loads(Path(from_report).read_text(encoding="utf-8"))
         findings = [Finding(**f) for f in report_data["findings"]]
@@ -186,7 +186,7 @@ def engineer(
             raise typer.Exit(code=1)
 
         source_dir = _source_directory(source, apply)
-        findings, crawl_result = _load_findings(source_dir, from_report, finding_id)
+        findings, crawl_result = _load_findings(source_dir, from_report, finding_id, site_url)
         fixable = runner.list_fixable_findings(findings)
 
         if not finding_id:

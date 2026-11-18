@@ -49,6 +49,7 @@ def render_html(report: Report) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Open SEO Advisor Consultant">
 <title>SEO 健檢報告：{_esc(report.target.identifier)}</title>
 <style>{_CSS}</style>
 </head>
@@ -97,7 +98,7 @@ def _render_kpi_cards(report: Report, severity_counts: dict[str, int]) -> str:
     )
     return f"""
 <section class="kpi-grid">
-  <div class="kpi-card"><span class="kpi-value">{report.site_health_score:.0f}</span><span class="kpi-label">健康分數 / 100</span></div>
+  <div class="kpi-card"><span class="kpi-value">{report.score_display}</span><span class="kpi-label">健康分數</span></div>
   <div class="kpi-card"><span class="kpi-value">{len(report.findings)}</span><span class="kpi-label">總發現數</span></div>
   {severity_cards}
 </section>

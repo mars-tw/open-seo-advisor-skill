@@ -32,8 +32,8 @@
           "type": "string",
           "description": "網站 URL 或本地路徑或主機識別字串。"
         },
-        "industry_profile": { "type": "string" },
-        "locale": { "type": "string" }
+        "industry_profile": { "type": ["string", "null"] },
+        "locale": { "type": ["string", "null"] }
       },
       "additionalProperties": false
     },
@@ -46,10 +46,10 @@
       "description": "3-5 句話總結網站現況與最重要的發現。"
     },
     "site_health_score": {
-      "type": "number",
+      "type": ["number", "null"],
       "minimum": 0,
       "maximum": 100,
-      "description": "依 finding 嚴重度加權計算的整體健康分數。"
+      "description": "依 finding 嚴重度加權計算的整體健康分數。未取得可分析的 HTML 時為 null。"
     },
     "findings": {
       "type": "array",

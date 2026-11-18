@@ -58,6 +58,7 @@ class ContentRequest(BaseModel):
     source_notes: str | None = None
     internal_links: list[str] = Field(default_factory=list)
     target_url: str | None = None
+    metadata_batch_urls: list[str] = Field(default_factory=list)
     auto_revise: bool = False
 
 
@@ -106,6 +107,7 @@ class ContentWriterResult(BaseModel):
     outline: ContentOutline
     draft_markdown: str
     qa: EditorialQA
+    initial_qa: EditorialQA | None = None
     revised_markdown: str | None = None
     provider: str
     model: str

@@ -26,6 +26,10 @@ exit 0＝基線完整、2＝scaffold 待補、1＝invalid，讀 JSON 缺口，�
   讓人與輔助技術容易導覽，不以 H2 數量或固定跳級規則判定 Google 排名成敗。
 - title／description／canonical 與內容相符；正式 robots／meta／sitemap 一致，
   沒誤留 noindex；預覽不搶 canonical；404 真回 404。
+- 逐頁確認所有 canonical 指向同一個核定網址。若 SEO 外掛和佈景主題各輸出一個，先查明兩者的目標。
+- 用 Googlebot 的有效規則測首頁及預計收錄的內頁。檢查 robots.txt 有生效的 Sitemap 宣告，並比對 sitemap 的網址集合與重複項。
+- 內頁的語言、導言、各節正文與核定的 brief 對照。檢查每頁 JSON-LD 的評價和報價，包含商品節點內的欄位；提供可見且可查證的資料後再發布。
+- 圖片連結要有讀得出的名稱。若名稱來自 `aria-labelledby`，確認指向的元素存在且有內容。`website check` 的 `responsive_images` 逐一列出圖片候選、媒體條件、描述符及本機檔案狀態，實際選圖仍需用對應尺寸的瀏覽器確認。
 - structured data 可解析且符合可見事實，Product／Offer 不放未核實售價與庫存。
 - 沒過期資料、假來源、假評分，不把 GPT 示意圖當實景證據，主要問題有直接答案。
 - 圖片及相對路徑有效，不指向工具臨時連結；內部文件與憑證不在公開輸出。

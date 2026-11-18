@@ -107,6 +107,18 @@ def test_metadata_batch_instructs_no_long_article():
     ])
     req = build_content_request_from_report(r)
     assert "不要寫一篇文章" in req.source_notes
+    assert req.metadata_batch_urls == ["/a", "/b", "/c"]
+    custom = build_content_request_from_report(r, topic_override="改寫一篇品牌介紹")
+    assert not custom.metadata_batch_urls and "不要寫一篇文章" not in custom.source_notes
+    assert "/b" in custom.source_notes
+
+
+def test_batch_preserves_distinct_queries_across_selected_findings():
+    r = _report([
+        _finding("F1", "content_quality", "標題重複", "請改寫標題", urls=["/parts", "/parts?lang=de"]),
+        _finding("F2", "content_quality", "描述重複", "請改寫描述", urls=["/parts?lang=de", "/parts?lang=en"]),
+    ])
+    assert build_content_request_from_report(r).metadata_batch_urls == ["/parts", "/parts?lang=de", "/parts?lang=en"]
 
 
 def test_p3_only_marked_low_priority():
