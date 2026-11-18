@@ -391,7 +391,7 @@ def test_robots_check_distinguishes_private_path_from_full_site_block(tmp_path):
     original = robots.read_text(encoding="utf-8")
     robots.write_text(original + "Disallow: /private\nDisallow: /cart\n", encoding="utf-8")
     assert check_site(out)["checks"]["robots_crawlable"] is True
-    robots.write_text(original + "Disallow: /\n", encoding="utf-8")
+    robots.write_text(original.replace("Allow: /", "Disallow: /"), encoding="utf-8")
     report = check_site(out)
     assert report["status"] == "invalid"
     assert report["checks"]["robots_crawlable"] is False
@@ -402,6 +402,113 @@ def test_robots_check_distinguishes_private_path_from_full_site_block(tmp_path):
         encoding="utf-8",
     )
     assert check_site(out)["checks"]["robots_crawlable"] is True
+
+
+def test_effective_google_indexing_rules_across_production_pages(tmp_path):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    for relative in ("index.html", "tea-service/index.html"):
+        page = out / "public" / relative
+        original = page.read_text(encoding="utf-8")
+        for target, directive in (("GoogleBot", "noindex"), ("robots", "none")):
+            meta = f'<meta name="{target}" content="{directive}">'
+            page.write_text(original.replace("</head>", meta + "</head>"), encoding="utf-8")
+            result = check_site(out)
+            assert result["status"] == "invalid"
+            assert any(directive in error for error in result["errors"])
+        page.write_text(original, encoding="utf-8")
+
+
+def test_indexable_urls_respect_googlebot_specific_and_wildcard_paths(tmp_path):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    robots = out / "public/robots.txt"
+    sitemap_line = "Sitemap: https://tea.example.com/sitemap.xml\n"
+    for text, expected, target in (
+        ("User-agent: *\nAllow: /\nUser-agent: Googlebot\nDisallow: /", False, "/"),
+        ("User-agent: *\nDisallow: /tea*/$", False, "/tea-service/"),
+        ("User-agent: *\nDisallow: /\nUser-agent: Googlebot\nAllow: /", True, ""),
+        ("User-agent: *\nDisallow: /tea\nAllow: /tea-service/$", True, ""),
+        ("User-agent: *\nDisallow: /\nAllow: /", True, ""),
+    ):
+        robots.write_text(text + "\n" + sitemap_line, encoding="utf-8")
+        result = check_site(out)
+        assert result["checks"]["robots_crawlable"] is expected
+        if target:
+            assert any(target in msg and "Disallow:" in msg for msg in result["errors"])
+
+
+def test_build_and_check_return_the_same_validation_status(tmp_path):
+    valid = production_brief(tmp_path, "experience")
+    invalid = valid.model_copy(deep=True)
+    invalid.cta.url = "#no-such-section"
+    for brief, status, code in (
+        (valid, "baseline_ready", 0),
+        (invalid, "invalid", 1),
+        (demo_brief(), "scaffold", 2),
+    ):
+        file = tmp_path / f"{status}.json"
+        file.write_text(brief.model_dump_json(), encoding="utf-8")
+        out = tmp_path / status
+        for cmd in (
+            ["build", "--brief", str(file), "--out", str(out)],
+            ["check", "--site", str(out)],
+        ):
+            result = runner.invoke(website_app, cmd)
+            assert result.exit_code == code, result.output
+            assert json.loads(result.output)["status"] == status
+
+
+def test_links_and_image_alternatives_across_documents(tmp_path):
+    out = tmp_path / "site"
+    report = build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    assert "https://tea.example.com/book" in report["links_to_verify_live"]
+    home = out / "public/index.html"
+    home.write_text(
+        home.read_text(encoding="utf-8").replace(
+            'href="tea-service/"',
+            'href="https://tea.example.com/tea-service/index.html?src=nav#main"',
+        ),
+        encoding="utf-8",
+    )
+    assert check_site(out)["status"] == "baseline_ready"
+    path = out / "public/tea-service/index.html"
+    original = path.read_text(encoding="utf-8")
+    edits = [
+        ('<a href="../#main">首頁</a>', True),
+        ('<a href="https://tea.example.com/#main">首頁</a>', True),
+        ('<a href="../#unknown">首頁</a>', False),
+        ('<a href="https://tea.example.com/gone/">商品</a>', False),
+        ('<a href="mailto:sales@example.com">Email</a>', True),
+        ('<a href="tel:+886-2-2345-6789;ext=21">電話</a>', True),
+        ('<img src="../assets/hero.png" role="presentation" alt="">', True),
+        ('<img src="../assets/hero.png">', False),
+        ('<img src="../assets/hero.png" role="img" alt="">', False),
+        ('<a href="../"><img src="../assets/hero.png" alt=""></a>', False),
+    ]
+    for addition, valid in edits:
+        path.write_text(original.replace("</main>", addition + "</main>"), encoding="utf-8")
+        assert (check_site(out)["status"] == "baseline_ready") is valid, addition
+
+
+def test_detail_jsonld_block_reports_its_url_and_accepts_graph_and_array(tmp_path):
+    out = tmp_path / "site"
+    build_site(production_brief(tmp_path), out, base_dir=tmp_path)
+    path = out / "public/tea-service/index.html"
+    soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+    block = soup.find("script", attrs={"type": "application/ld+json"})
+    node = json.loads(block.get_text())
+    for representation in ([node], {"@graph": [node]}):
+        block.string = json.dumps(representation)
+        path.write_text(str(soup), encoding="utf-8")
+        assert check_site(out)["status"] == "baseline_ready"
+    broken = soup.new_tag("script", type="application/ld+json")
+    broken.string = "{"
+    soup.head.append(broken)
+    path.write_text(str(soup), encoding="utf-8")
+    result = check_site(out)
+    assert result["status"] == "invalid"
+    assert any("/tea-service/ JSON-LD" in msg for msg in result["errors"])
 
 
 def test_resources_and_example_are_available():

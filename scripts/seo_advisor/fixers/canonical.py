@@ -1,23 +1,14 @@
-"""canonical 修復：移除單一頁面裡多餘的重複 canonical 標籤。
-
-對應 analyzers/technical.py 的 `_check_page_metadata`（category: canonical_conflict）
-產出的 Finding——頁面有多個 `<link rel="canonical">`，保留第一個、移除其餘。
-
-這是這輪唯一需要修改頁面 HTML 本身結構（而非整檔案取代）的 fixer，因此用
-BeautifulSoup 定位並移除多餘標籤，而不是整份內容重寫，讓 diff 盡可能小、
-只動需要動的部分。只處理「多重宣告衝突」這種結構清楚的情況，不嘗試判斷
-「canonical 該指向哪個 URL 才對」這種需要業務邏輯判斷的問題（那類問題目前
-分析器本身也還沒有對應的 Finding 觸發，超出這輪範圍）。
-"""
+"""只自動移除目標等價的重複 canonical。不同目標需由站長依掃描證據選定。"""
 
 from __future__ import annotations
 
 import difflib
 import re
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 
+from seo_advisor.crawler import CrawlResult
 from seo_advisor.fixers.models import FixTarget, NotFixableError, PatchPlan, ensure_write_target_allowed
 from seo_advisor.models import Finding
 
@@ -63,13 +54,29 @@ def can_fix(finding: Finding) -> bool:
     return "CANONICAL_CONFLICT" in finding.id
 
 
-def plan_fix(finding: Finding, *, pages: dict[str, str]) -> PatchPlan:
+def _destination(base: str, href: str) -> str:
+    if not href.strip():
+        return ""
+    parsed = urlsplit(urljoin(base, href.strip()))
+    authority = parsed.netloc.lower()
+    if parsed.scheme == "https":
+        authority = authority.removesuffix(":443")
+    elif parsed.scheme == "http":
+        authority = authority.removesuffix(":80")
+    return urlunsplit((parsed.scheme, authority, parsed.path or "/", parsed.query, ""))
+
+
+def plan_fix(
+    finding: Finding, *, pages: dict[str, str], crawl: CrawlResult | None = None,
+    seed_url: str = "",
+) -> PatchPlan:
     """產出移除多餘 canonical 標籤的修復計畫。
 
     pages: {相對路徑: 目前 HTML 內容} 只需包含 finding.affected_urls 涵蓋的頁面。
     """
     targets: list[FixTarget] = []
     warnings: list[str] = []
+    decisions: list[str] = []
 
     for url in finding.affected_urls:
         rel_path = _to_relative_path(url)
@@ -92,6 +99,26 @@ def plan_fix(finding: Finding, *, pages: dict[str, str]) -> PatchPlan:
         if len(canonical_tags) <= 1:
             continue
 
+        document = urljoin(seed_url, url)
+        base = soup.find("base", href=True)
+        base_url = urljoin(document, base["href"]) if base else document
+        candidates = {_destination(base_url, tag.get("href") or "") for tag in canonical_tags}
+        if len(candidates) != 1 or not all(candidates) or any(urlsplit(c).scheme not in ("", "http", "https") for c in candidates):
+            evidence = []
+            for candidate in sorted(candidates):
+                snapshot = None
+                inbound = []
+                if crawl is not None:
+                    snapshot = next((page for key, page in crawl.pages.items()
+                                     if _destination(seed_url, key) == candidate), None)
+                    inbound = [source for source, links in crawl.link_graph.items()
+                               if any(_destination(seed_url, link) == candidate for link in links)]
+                status = f"HTTP {snapshot.status_code}，最終網址 {snapshot.final_url}" if snapshot else "HTTP 與最終網址待查"
+                links = "、".join(inbound[:3]) or "本次未觀察到"
+                evidence.append(f"{candidate or '空白目標'}（{status}，站內連入：{links}）")
+            decisions.append(f"{rel_path}：請確認正規網址，再移除其他標籤。候選：" + "、".join(evidence))
+            continue
+
         for extra_tag in canonical_tags[1:]:
             extra_tag.decompose()
         fixed = str(soup)
@@ -105,7 +132,7 @@ def plan_fix(finding: Finding, *, pages: dict[str, str]) -> PatchPlan:
             )
         )
 
-    if not targets:
+    if not targets and not decisions:
         raise NotFixableError(
             f"{finding.id} 沒有找到可修復的頁面內容（可能已經沒有多重 canonical 衝突）。"
         )
@@ -116,7 +143,9 @@ def plan_fix(finding: Finding, *, pages: dict[str, str]) -> PatchPlan:
         fix_type="canonical",
         risk_level="medium",
         targets=targets,
-        summary=f"移除 {len(targets)} 個頁面裡多餘的重複 canonical 標籤，只保留第一個。",
+        summary=f"{len(targets)} 頁可移除等價的重複 canonical，{len(decisions)} 頁需確認正規目標。",
         validation_steps=["重新爬取受影響頁面，確認每頁僅剩一個 canonical 標籤"],
-        warnings=warnings,
+        warnings=warnings + decisions,
+        suggested_actions=decisions,
+        plan_only=not targets,
     )

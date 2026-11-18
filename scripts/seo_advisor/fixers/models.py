@@ -84,6 +84,9 @@ class PatchPlan(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     plan_only: bool = False
     suggested_actions: list[str] = Field(default_factory=list)
+    # Raw preimage hashes captured at preview. None means the file was absent.
+    original_hashes: dict[str, str | None] = Field(default_factory=dict)
+    review_options: dict[str, str] = Field(default_factory=dict)
 
     def model_post_init(self, __context) -> None:
         if self.plan_only and self.targets:

@@ -3,6 +3,18 @@
 # 每次更新檢核邏輯時，請同步更新 last_checked 日期，方便社群追蹤標準是否過時。
 
 sources:
+  - id: open-graph-protocol
+    title: "The Open Graph protocol"
+    url: "https://ogp.me/"
+    used_for: ["social_metadata"]
+    last_checked: "2026-11-18"
+
+  - id: web-vitals-cls
+    title: "Cumulative Layout Shift (CLS)"
+    url: "https://web.dev/articles/cls"
+    used_for: ["core_web_vitals"]
+    last_checked: "2026-11-18"
+
   - id: google-search-essentials
     title: "Google Search Essentials"
     url: "https://developers.google.com/search/docs/essentials"

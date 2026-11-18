@@ -91,6 +91,7 @@ def build_hreflang_html_plan(hreflang_map: HreflangMap, *, pages: dict[str, str]
     targets: list[FixTarget] = []
     warnings: list[str] = []
     skipped_no_target = 0
+    target_clusters: dict[str, str] = {}
 
     for cluster in hreflang_map.clusters:
         tag_htmls = render_hreflang_tags(cluster.alternates)
@@ -100,6 +101,13 @@ def build_hreflang_html_plan(hreflang_map: HreflangMap, *, pages: dict[str, str]
             continue
 
         for code, rel_path in cluster.targets.items():
+            previous = target_clusters.get(rel_path)
+            if previous == cluster.cluster_id:
+                # x-default and a language can refer to the same local document.
+                continue
+            if previous is not None:
+                raise ValueError(f"{rel_path} 同時屬於 {previous} 與 {cluster.cluster_id}，請確認語言對照表。")
+            target_clusters[rel_path] = cluster.cluster_id
             original = pages.get(rel_path)
             if original is None:
                 warnings.append(f"cluster {cluster.cluster_id!r}（{code}）：找不到 {rel_path!r} 的內容，已略過。")

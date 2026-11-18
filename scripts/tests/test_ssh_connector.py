@@ -561,19 +561,31 @@ def test_fetch_url_rejects_http_scheme(mock_paramiko, mock_getaddrinfo, mock_soc
 @patch("socket.socket")
 @patch("socket.getaddrinfo")
 @patch("seo_advisor.connectors.ssh.paramiko")
-def test_fetch_url_accepts_plain_path(mock_paramiko, mock_getaddrinfo, mock_socket_class):
+@pytest.mark.parametrize(
+    "name,content,is_html",
+    [
+        ("index.html", "<h1>Hi</h1>", True),
+        ("sitemap.xml", "<urlset/>", False),
+        ("robots.txt", "User-agent: *", False),
+        ("style.css", "body { color: black }", False),
+    ],
+)
+def test_fetch_url_accepts_plain_path(
+    mock_paramiko, mock_getaddrinfo, mock_socket_class, name, content, is_html
+):
     import stat
 
     mock_sftp = MagicMock()
-    mock_sftp.lstat.return_value = _FakeSFTPAttr(stat.S_IFREG | 0o644, size=13)
+    mock_sftp.lstat.return_value = _FakeSFTPAttr(stat.S_IFREG | 0o644, size=len(content))
     mock_file = MagicMock()
-    mock_file.__enter__.return_value.read.return_value = b"<h1>Hi</h1>"
+    mock_file.__enter__.return_value.read.return_value = content.encode()
     mock_sftp.open.return_value = mock_file
 
     connector, _ = _connect_ssh(mock_paramiko, mock_getaddrinfo, mock_socket_class, mock_sftp=mock_sftp)
-    snapshot = connector.fetch_url("/index.html")
+    snapshot = connector.fetch_url("/" + name)
     assert snapshot.status_code == 200
-    assert "Hi" in snapshot.html
+    assert snapshot.text == content
+    assert snapshot.html == (content if is_html else "")
     connector.close()
 
 
@@ -795,5 +807,3 @@ def test_get_logs_redacts_secrets_in_lines(mock_paramiko, mock_getaddrinfo, mock
     assert len(entries) == 1
     assert "hunter2" not in entries[0].message
     connector.close()
-
-

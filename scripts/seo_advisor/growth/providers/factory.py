@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from seo_advisor.growth.providers.base import AnalyticsProvider, AnalyticsProviderError
 
-_PROVIDER_NAMES = {"mock", "ga4", "search_console", "google_ads"}
-
-
 def create_analytics_provider(name: str) -> AnalyticsProvider:
     key = name.strip().lower()
 
@@ -31,5 +28,5 @@ def create_analytics_provider(name: str) -> AnalyticsProvider:
         return GoogleAdsAnalyticsProvider()
 
     raise AnalyticsProviderError(
-        f"不支援的成效分析 provider：{name!r}，可用選項：{sorted(_PROVIDER_NAMES)}"
+        f"不支援的成效分析 provider：{name!r}，目前可用 mock。"
     )

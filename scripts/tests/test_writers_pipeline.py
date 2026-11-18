@@ -91,3 +91,25 @@ def test_pipeline_result_records_actual_model_used():
 
     result = run_content_writer_pipeline(provider, request)
     assert result.model == "mock-model"
+
+
+def test_writing_review_and_revision_keep_original_product_evidence():
+    qa = json.loads(_QA_JSON)
+    qa.update(passed=False, issues=[dict(category="trust", severity="P1",
+              description="確認尺寸", recommendation="查閱型錄")])
+    responses = iter([_BRIEF_JSON, _OUTLINE_JSON, _DRAFT_TEXT, json.dumps(qa), "修訂完成"])
+    prompts = []
+
+    def respond(request):
+        prompts.append(request.messages[0].content)
+        return next(responses)
+
+    request = ContentRequest(topic="零件選型", source_notes="型錄 R32：只適用 A63",
+                             brand_context="North Demo", target_url="/parts/63",
+                             internal_links=["/selector"], auto_revise=True)
+    result = run_content_writer_pipeline(MockProvider(respond), request)
+    assert result.revised_markdown == "修訂完成"
+    for prompt in prompts:
+        for value in (request.source_notes, request.brand_context, request.target_url, "/selector"):
+            assert value in prompt
+    assert all("連到服務頁面" in prompt for prompt in prompts[2:])

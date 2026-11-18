@@ -16,6 +16,10 @@ class AnalyticsProviderError(RuntimeError):
     """成效分析 API 呼叫失敗時拋出。"""
 
 
+class UnavailableAnalyticsProvider(AnalyticsProviderError):
+    """The requested provider cannot fetch data in this release."""
+
+
 class AnalyticsProvider(ABC):
     @abstractmethod
     def id(self) -> str:

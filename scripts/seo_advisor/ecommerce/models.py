@@ -26,18 +26,18 @@ EcommerceCategory = Literal[
 
 class EcommerceListing(BaseModel):
     title: str
-    bullet_points: list[str] = Field(default_factory=list)
+    bullet_points: list[str] | None = None
     description: str | None = None
-    backend_keywords: list[str] = Field(default_factory=list)
-    main_image_present: bool = True
-    secondary_image_count: int = Field(default=0, ge=0)
-    has_a_plus_content: bool = False
-    review_count: int = Field(default=0, ge=0)
+    backend_keywords: list[str] | None = None
+    main_image_present: bool | None = None
+    secondary_image_count: int | None = Field(default=None, ge=0)
+    has_a_plus_content: bool | None = None
+    review_count: int | None = Field(default=None, ge=0)
     rating: float | None = Field(default=None, ge=0, le=5)
     price: str | None = None
-    has_buy_box: bool = True
-    in_stock: bool = True
-    variations_count: int = Field(default=0, ge=0)
+    has_buy_box: bool | None = None
+    in_stock: bool | None = None
+    variations_count: int | None = Field(default=None, ge=0)
 
 
 class EcommerceFinding(BaseModel):

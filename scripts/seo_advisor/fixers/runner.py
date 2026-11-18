@@ -22,11 +22,15 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import urljoin, urlsplit
+
+from bs4 import BeautifulSoup
 
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.crawler import CrawlResult
 from seo_advisor.fixers import canonical, cwv, hreflang, redirect, robots, sitemap
 from seo_advisor.fixers.models import FixResult, NotFixableError, PatchPlan, PlanOnlyError
+from seo_advisor.indexability import google_noindex
 from seo_advisor.models import Finding
 
 _FIXERS = (robots, sitemap, canonical, redirect, hreflang, cwv)
@@ -57,26 +61,50 @@ def build_plan(
         raise NotFixableError(f"{finding.id} 目前沒有對應的自動修復邏輯。")
 
     if module is robots:
-        current = None
         try:
-            current = connector.read_file("robots.txt").decode("utf-8", errors="replace")
+            raw = connector.read_file("robots.txt")
         except FileNotFoundError:
-            current = None
-        return robots.plan_fix(finding, current_content=current, seed_url=seed_url)
+            raw = None
+        plan = robots.plan_fix(finding, current_content=raw.decode("utf-8") if raw is not None else None, seed_url=seed_url)
+        plan.original_hashes["robots.txt"] = hashlib.sha256(raw).hexdigest() if raw is not None else None
+        return plan
 
     if module is sitemap:
+        try:
+            connector.read_file(sitemap.SITEMAP_PATH)
+        except FileNotFoundError:
+            pass
+        else:
+            raise NotFixableError("sitemap.xml 已存在，請重新健檢。")
+        if crawl_result.sitemap_xml is not None:
+            raise NotFixableError("網站已提供 sitemap，請重新健檢。")
         site_origin = seed_url if seed_url.startswith(("http://", "https://")) else None
-        indexable_urls = []
+        indexable_urls = {}
         for url, snapshot in crawl_result.pages.items():
             if snapshot.status_code != 200:
                 continue
-            if "noindex" in snapshot.headers.get("x-robots-tag", "").lower():
+            soup = BeautifulSoup(snapshot.html, "lxml") if snapshot.html else None
+            if google_noindex(soup, snapshot.indexing_headers):
                 continue
             resolved = snapshot.final_url or url
             if site_origin and not resolved.startswith(("http://", "https://")):
                 resolved = site_origin.rstrip("/") + "/" + resolved.lstrip("/")
-            indexable_urls.append(resolved)
-        return sitemap.plan_fix(finding, indexable_urls=indexable_urls)
+            if not urlsplit(resolved).hostname or urlsplit(resolved).scheme not in ("http", "https"):
+                raise ValueError("sitemap 的網址必須是完整的 HTTP(S) 網址，請提供 --site-url。")
+            if soup:
+                base = soup.find("base", href=True)
+                base_url = urljoin(resolved, base["href"]) if base else resolved
+                canonicals = {urljoin(base_url, tag["href"]) for tag in soup.find_all("link", rel="canonical", href=True)}
+                if canonicals and canonicals != {resolved}:
+                    # A directory index can be served at its canonical directory URL.
+                    directory_url = resolved.removesuffix("index.html")
+                    if not resolved.endswith("/index.html") or canonicals != {directory_url}:
+                        continue
+                    resolved = directory_url
+            indexable_urls[resolved] = None
+        plan = sitemap.plan_fix(finding, indexable_urls=list(indexable_urls))
+        plan.original_hashes[sitemap.SITEMAP_PATH] = None
+        return plan
 
     if module is canonical:
         pages = {
@@ -84,7 +112,7 @@ def build_plan(
             for url, snapshot in crawl_result.pages.items()
             if snapshot.status_code == 200 and snapshot.html
         }
-        return canonical.plan_fix(finding, pages=pages)
+        return canonical.plan_fix(finding, pages=pages, crawl=crawl_result, seed_url=seed_url)
 
     if module is redirect:
         return redirect.plan_fix(finding)
@@ -116,6 +144,18 @@ def apply_plan(plan: PatchPlan, *, connector: WebsiteConnector) -> FixResult:
             "請參考 plan.suggested_actions 手動處理。"
         )
 
+    def verify_original(path: str) -> None:
+        if path not in plan.original_hashes:
+            return
+        try:
+            current = hashlib.sha256(connector.read_file(path)).hexdigest()
+        except FileNotFoundError:
+            current = None
+        if current != plan.original_hashes[path]:
+            raise ValueError(f"{path} 自預覽後已變更，請重新預覽。")
+
+    for target in plan.targets:
+        verify_original(target.path)
     supports_git_session = hasattr(connector, "begin_patch_session")
     if supports_git_session:
         connector.begin_patch_session(plan)
@@ -126,6 +166,7 @@ def apply_plan(plan: PatchPlan, *, connector: WebsiteConnector) -> FixResult:
     validation_notes: list[str] = []
     try:
         for target in plan.targets:
+            verify_original(target.path)
             patch_result = connector.write_file(
                 target.path, target.fixed_content.encode("utf-8"), dry_run=False
             )

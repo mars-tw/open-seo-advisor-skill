@@ -1,7 +1,37 @@
-"""Decode bounded HTTP text without handing non-HTML assets to HTML analyzers."""
+"""Decode bounded text without handing non-HTML assets to HTML analyzers."""
+
+import mimetypes
+from pathlib import PurePosixPath
+
+from seo_advisor.encoding_utils import detect_html_encoding
 
 HTML_MEDIA_TYPES = frozenset({"text/html", "application/xhtml+xml"})
 TEXT_MEDIA_TYPES = frozenset({"application/xml", "application/json", "application/javascript"})
+
+
+def file_snapshot_fields(path: str, body: bytes) -> dict:
+    """Classify a static file when the connector has no HTTP response headers."""
+    suffix = PurePosixPath(path).suffix.lower()
+    media_type = {
+        ".html": "text/html",
+        ".htm": "text/html",
+        ".xhtml": "application/xhtml+xml",
+        ".xml": "application/xml",
+        ".txt": "text/plain",
+        ".json": "application/json",
+        ".css": "text/css",
+    }.get(suffix)
+    if not media_type:
+        media_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        if not suffix and body[:256].lstrip().lower().startswith((b"<!doctype html", b"<html")):
+            media_type = "text/html"
+    encoding = detect_html_encoding(body)
+    fields = snapshot_body_fields(body, media_type, encoding)
+    return {
+        **fields,
+        "headers": {"content-type": media_type},
+        "encoding": encoding if fields["text"] is not None else None,
+    }
 
 
 def snapshot_body_fields(body: bytes, content_type: str, encoding: str) -> dict:

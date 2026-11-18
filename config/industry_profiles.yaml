@@ -1,8 +1,6 @@
 # Open SEO Advisor - 產業設定檔
 #
-# 每個 profile 定義該產業在 Consultant Mode 中的加權檢查重點，
-# analyzers 會依 --industry 參數載入對應 profile 來調整 finding 的 impact 權重
-# 與額外檢查項目。歡迎社群依實務經驗補充更多產業。
+# 每個 profile 列出該產業的人工／agent 審核重點。顧問 CLI 採共通技術權重。
 
 profiles:
   ecommerce:

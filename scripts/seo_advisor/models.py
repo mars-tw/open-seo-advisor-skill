@@ -124,6 +124,7 @@ class PageSnapshot(BaseModel):
     final_url: str
     redirect_chain: list[str] = Field(default_factory=list)
     headers: dict[str, str] = Field(default_factory=dict)
+    x_robots_fields: list[str] = Field(default_factory=list)
     html: str = ""
     # Bounded decoded response body; None means not captured. Empty text is valid.
     # Legacy connectors can keep supplying only html.
@@ -133,6 +134,12 @@ class PageSnapshot(BaseModel):
     fetch_error_message: str | None = None
     elapsed_ms: int | None = None
     encoding: str | None = None
+
+    @property
+    def indexing_headers(self):
+        if self.x_robots_fields:
+            return {"x-robots-tag": self.x_robots_fields}
+        return self.headers
 
 
 class ProbeResult(BaseModel):

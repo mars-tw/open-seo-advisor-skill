@@ -73,6 +73,19 @@ def test_report_includes_applied_checklist():
     assert report.applied_checklist
 
 
+def test_unknown_listing_fields_are_not_scored_as_observed_zero():
+    partial = EcommerceListing(title="M8 不鏽鋼螺絲", has_a_plus_content=None)
+    result = analyze_listing(partial)
+    assert {f.category for f in result.findings} == {"title"}
+    assert len(result.applied_checklist) == 2
+    assert "2/10" in render_ecommerce_markdown(result)
+    assert not any(field in result.summary for field in ("庫存", "主圖", "A+"))
+    known = partial.model_copy(update={"secondary_image_count": 0, "review_count": 0, "in_stock": False})
+    scored = analyze_listing(known)
+    assert {f.category for f in scored.findings} == {"title", "images", "reviews", "availability"}
+    assert scored.listing_health_score < result.listing_health_score
+
+
 def test_render_markdown_and_json(tmp_path):
     report = analyze_listing(_good_listing())
     md = render_ecommerce_markdown(report)

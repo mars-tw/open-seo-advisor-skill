@@ -2,8 +2,8 @@
 
 ## 產業差異化檢查重點
 
-對應 `config/industry_profiles.yaml` 中定義的 profile，Consultant Mode
-在 `--industry` 參數指定後會套用額外檢查項目與 impact 權重調整。
+顧問 CLI 用 `seo-advisor audit consultant --url https://example.com` 執行共通技術檢查。若稽核預覽環境，可加 `--preview` 表示該站預期不收錄。
+依產業選字、選頁和審核交易條件時，使用[商業 SEO 技能](../skills/commercial-seo/SKILL.md)。下表與 `config/industry_profiles.yaml` 供人工或 agent 選用，CLI 的技術分數採共通權重。
 
 | 產業 | 業務型態 | 額外檢查重點 |
 |---|---|---|

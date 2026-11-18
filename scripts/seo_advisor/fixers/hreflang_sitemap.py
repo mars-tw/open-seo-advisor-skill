@@ -107,16 +107,6 @@ def build_hreflang_sitemap_plan(
     current_sitemap_xml：目前 sitemap.xml 的內容；None 代表檔案不存在
     （這種情況下會建立一份只包含語言對照表裡 URL 的全新 sitemap）。
     """
-    total_urls = sum(len(c.alternates) for c in hreflang_map.clusters)
-    if total_urls > _MAX_URLS_PER_SITEMAP:
-        return _plan_only(
-            sitemap_path,
-            warnings=[
-                f"語言對照表涉及的 URL 總數（{total_urls}）超過單一 sitemap 檔案上限"
-                f"（{_MAX_URLS_PER_SITEMAP}），請先拆分成多個 sitemap 檔案再分批處理。"
-            ],
-        )
-
     if current_sitemap_xml is not None:
         try:
             root = _parse_urlset_root(current_sitemap_xml)
@@ -142,12 +132,21 @@ def build_hreflang_sitemap_plan(
         return _plan_only(sitemap_path, warnings=[str(exc)])
 
     url_by_loc: dict[str, ElementTree.Element] = {}
+    current_count = 0
     for url_elem in root:
         if _local_name(url_elem.tag) != "url":
             continue
+        current_count += 1
         loc = _find_loc_text(url_elem)
         if loc:
             url_by_loc[loc] = url_elem
+
+    mapped_urls = {url for cluster in hreflang_map.clusters for url in cluster.alternates.values()}
+    merged_count = current_count + len(mapped_urls.difference(url_by_loc))
+    if merged_count > _MAX_URLS_PER_SITEMAP:
+        return _plan_only(
+            sitemap_path, warnings=[f"合併後有 {merged_count} 筆，超過 sitemap 的 {_MAX_URLS_PER_SITEMAP} 筆上限，請先拆檔。"],
+        )
 
     updated_count = 0
     for cluster in hreflang_map.clusters:

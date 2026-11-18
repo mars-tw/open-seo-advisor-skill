@@ -86,7 +86,7 @@ sitemap 產生器（`fix hreflang-html`/`fix hreflang-sitemap`，使用者提供
 
 直接修復技術 SEO 問題，產出 patch、diff、部署計畫與驗證結果。目前支援修
 `robots.txt`（缺失/缺 Sitemap 宣告）、`sitemap.xml`（缺失時建立）、
-canonical（移除頁面內多餘的重複標籤）、hreflang（`fix hreflang-html`/
+canonical（移除指向相同目標的重複標籤，不同目標交由站長選定）、hreflang（`fix hreflang-html`/
 `fix hreflang-sitemap`，需使用者提供語言對照表）；只支援本地原始碼包/
 目錄（`--source`），不支援直接修改線上網站。
 
@@ -101,27 +101,25 @@ canonical（移除頁面內多餘的重複標籤）、hreflang（`fix hreflang-h
 # 列出目前可自動修復的問題
 seo-advisor fix engineer --source ./site
 
-# 產出 dry-run 修復計畫（不寫入任何檔案）
-seo-advisor fix engineer --source ./site --finding-id SEO-SITEMAP_MISSING-001 --site-url https://example.com
-
-# 確認無誤後，真的套用（plan_id 從上一步的輸出取得）
+# 預覽指定問題的修改，把差異和計畫存到 ./review
 seo-advisor fix engineer --source ./site --finding-id SEO-SITEMAP_MISSING-001 \
-  --site-url https://example.com --apply --confirm "APPLY fix-SEO-SITEMAP_MISSING-001"
+  --site-url https://example.com --out ./review
 
-# git-branch 模式：產出可開 PR 的分支+commit（--source 須為已存在的 git repo）
+# 若要用 Git 分支套用，預覽時就指定該模式。把輸出放在 Git 工作樹之外。
 seo-advisor fix engineer --source ./site --write-mode git-branch \
-  --finding-id SEO-SITEMAP_MISSING-001 --site-url https://example.com \
-  --apply --confirm "APPLY fix-SEO-SITEMAP_MISSING-001"
+  --finding-id SEO-SITEMAP_MISSING-001 --site-url https://example.com --out ./git-review
 
 # 回滾（direct 模式；不會覆蓋你在套用之後又手動編輯過的檔案）
 seo-advisor fix rollback --source ./site --backup <備份路徑> --apply --confirm "ROLLBACK <backup_id>"
 
 # hreflang 產生器：需先準備語言對照表 JSON（見下方「hreflang 語言對照表格式」）
 seo-advisor fix hreflang-html --source ./site --map ./hreflang-map.json
-seo-advisor fix hreflang-html --source ./site --map ./hreflang-map.json \
-  --apply --confirm "APPLY <plan_id>"
 seo-advisor fix hreflang-sitemap --source ./site --map ./hreflang-map.json --sitemap sitemap.xml
 ```
+
+先閱讀輸出目錄的 `fix-plan.md`，保留同一目錄內的 `fix-plan.json`。確認後，複製該次預覽印出的完整套用指令，裡面有本次計畫的確認碼。CLI 在寫入前會比對來源、參數、原檔及修正內容。改用其他站台網址、來源、報告、語言對照表或寫入模式，或待修內容有變動時，請重新預覽。
+
+以 ZIP 作為來源時，修復目標是 ZIP 旁的 `<檔名>_extracted` 工作目錄。保留該目錄以供套用及回滾，後續預覽會沿用裡面的修改。
 
 自然語言：「直接幫我修 sitemap 和 canonical」（會被路由到上述指令）。
 
@@ -153,7 +151,7 @@ seo-advisor fix hreflang-sitemap --source ./site --map ./hreflang-map.json --sit
 （產生 hreflang 的 href），`targets` 是本地相對路徑（`fix hreflang-html`
 用來定位要修改的檔案；`fix hreflang-sitemap` 不需要 targets，只靠
 `alternates` 的網址比對既有 sitemap）。每個 cluster 至少要有 2 個語言
-版本；語言代碼需符合 ISO 639-1（可選 ISO 3166-1 地區碼）或 `x-default`。
+版本。語言採 ISO 639-1，可加 ISO 15924 文字代碼及 ISO 3166-1 地區碼（例如 `zh-Hant-TW`），也可使用 `x-default`。
 
 ### 工作步驟
 

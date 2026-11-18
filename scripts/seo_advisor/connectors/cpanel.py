@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 import httpx
 
 from seo_advisor.connectors.base import WebsiteConnector
+from seo_advisor.connectors.text_response import file_snapshot_fields
 from seo_advisor.env_hints import set_env_var_hint
 from seo_advisor.models import (
     BackupResult,
@@ -403,9 +404,12 @@ class CPanelConnector(WebsiteConnector):
                 fetch_error_type="unsafe_remote_path", fetch_error_message=str(exc),
             )
 
-        html = content.decode("utf-8", errors="replace")
         return PageSnapshot(
-            url=url, status_code=200, final_url=url, headers={}, html=html, fetched_at=fetched_at
+            url=url,
+            status_code=200,
+            final_url=url,
+            fetched_at=fetched_at,
+            **file_snapshot_fields(rel_path, content),
         )
 
     # ------------------------------------------------------------------

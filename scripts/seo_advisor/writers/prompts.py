@@ -32,7 +32,8 @@ def brief_system_prompt() -> str:
     )
 
 
-def brief_user_prompt(request: ContentRequest) -> str:
+def assignment_context(request: ContentRequest, outline: ContentOutline | None = None) -> str:
+    """Carry the original assignment and evidence into each independent model request."""
     lines = [
         f"主題：{request.topic}",
         f"語言／地區：{request.lang}" + (f"（{request.locale}）" if request.locale else ""),
@@ -47,12 +48,22 @@ def brief_user_prompt(request: ContentRequest) -> str:
         lines.append(f"品牌/產品背景：{request.brand_context}")
     if request.source_notes:
         lines.append(f"可參考的既有資料：{request.source_notes}")
-    lines.append(
-        "\n請產出：主要搜尋意圖、次要意圖、讀者想完成的具體任務清單、"
+    if request.target_url:
+        lines.append(f"目標網址：{request.target_url}")
+    if request.internal_links:
+        lines.append("可用的內部連結：" + "、".join(request.internal_links))
+    if outline and outline.internal_link_plan:
+        lines.append("大綱的內鏈安排：" + "、".join(outline.internal_link_plan))
+    return "\n".join(lines)
+
+
+def brief_user_prompt(request: ContentRequest) -> str:
+    return (
+        assignment_context(request) +
+        "\n\n請產出：主要搜尋意圖、次要意圖、讀者想完成的具體任務清單、"
         "必須回答的關鍵問題、內容缺口、E-E-A-T 需要補強的地方、"
         "是否屬於 YMYL 主題、有哪些事實需要查證。"
     )
-    return "\n".join(lines)
 
 
 def outline_system_prompt() -> str:
@@ -64,13 +75,11 @@ def outline_system_prompt() -> str:
 
 def outline_user_prompt(request: ContentRequest, brief: ContentBrief) -> str:
     lines = [
-        f"主題：{request.topic}",
+        assignment_context(request),
         f"主要搜尋意圖：{brief.primary_intent.value}",
         f"讀者任務：{'; '.join(brief.reader_tasks) or '（無）'}",
         f"必須回答的問題：{'; '.join(brief.must_cover_questions) or '（無）'}",
     ]
-    if request.internal_links:
-        lines.append(f"可用的內部連結：{'; '.join(request.internal_links)}")
     lines.append(
         "\n請產出：H1/H2/H3 大綱結構（每個標題附上這段要達成的目的）、"
         "3-5 個 title 選項、2-3 個 meta description 選項、"
@@ -89,8 +98,7 @@ def draft_system_prompt() -> str:
 def draft_user_prompt(request: ContentRequest, brief: ContentBrief, outline: ContentOutline) -> str:
     section_lines = [f"- {s.heading}（{s.goal}）" if s.goal else f"- {s.heading}" for s in outline.sections]
     lines = [
-        f"主題：{request.topic}",
-        f"語言：{request.lang}",
+        assignment_context(request, outline),
         "大綱：",
         *section_lines,
     ]
@@ -107,9 +115,9 @@ def qa_system_prompt() -> str:
     )
 
 
-def qa_user_prompt(request: ContentRequest, draft_markdown: str) -> str:
+def qa_user_prompt(request: ContentRequest, draft_markdown: str, outline: ContentOutline | None = None) -> str:
     return (
-        f"主題：{request.topic}\n\n"
+        f"{assignment_context(request, outline)}\n請逐一核對草稿中的規格、適用範圍、交易條件及內鏈。\n\n"
         f"草稿內容：\n{draft_markdown}\n\n"
         "請評估這份草稿是否符合 10 條核心原則，特別留意：搜尋意圖對齊、"
         "是否有空泛灌水、E-E-A-T 訊號是否充分、是否有疑似捏造的內容、"

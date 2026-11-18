@@ -143,7 +143,7 @@ def test_sitemap_missing_resolves_relative_paths_to_absolute_when_site_url_given
 def test_canonical_conflict_removes_extra_tags(tmp_path):
     html = (
         '<html><head><link rel="canonical" href="https://example.com/a">'
-        '<link rel="canonical" href="https://example.com/b"></head><body></body></html>'
+        '<link rel="canonical" href="https://example.com/a"></head><body></body></html>'
     )
     finding = _finding("SEO-CANONICAL_CONFLICT-001", affected_urls=["https://example.com/a"])
     connector = _write_connector(str(tmp_path))
@@ -283,7 +283,7 @@ def test_partial_apply_failure_still_allows_rollback_of_succeeded_files(tmp_path
     留白，導致已寫入的部分也無法回滾）。"""
     html = (
         '<html><head><link rel="canonical" href="https://example.com/a">'
-        '<link rel="canonical" href="https://example.com/b"></head><body></body></html>'
+        '<link rel="canonical" href="https://example.com/a"></head><body></body></html>'
     )
     (tmp_path / "a.html").write_text(html, encoding="utf-8")
     (tmp_path / "b.html").write_text(html, encoding="utf-8")

@@ -7,7 +7,7 @@ description: >
   既有專案沿用使用者技術棧與指定平台。
 license: Apache-2.0
 metadata:
-  version: "0.6.0"
+  version: "0.6.1"
   upstream: "https://github.com/mars-tw/open-seo-advisor-skill"
 ---
 
@@ -34,7 +34,7 @@ metadata:
 | 找商業關鍵字、決定優化哪頁、寫交易頁或做 GSC 週檢 | 讀[商業 SEO 技能](skills/commercial-seo/SKILL.md)，依使用者的國家、產業與成交方式進入對應步驟 |
 | 新建／改版、沉浸式銷售站、購物站、體驗站 | [建站流程](docs/website-builder.md)，按階段讀設計、素材、搜尋、商務、部署與驗收文件 |
 | 只要問答式本機模板 | `seo-advisor website init --out ./my-site`，依建站流程的 CLI 範圍交付 |
-| 檢查網站 SEO | `seo-advisor audit consultant`；[模式規格](docs/modes.md) |
+| 檢查網站 SEO | 正式站用 `seo-advisor audit consultant --url <網址>`；明確作預覽用途的網站加 `--preview`，報告會依其收錄目的判讀 noindex。[模式規格](docs/modes.md) |
 | 修 sitemap／robots／canonical／hreflang | `seo-advisor fix`；[模式規格](docs/modes.md)，保留原 plan／apply／backup 契約 |
 | SEO 相關資安疑慮 | `seo-advisor security audit`；[模式規格](docs/modes.md) |
 | 文章與內容 | `seo-advisor write`；[內容指南](docs/content_writer_guide.md) |

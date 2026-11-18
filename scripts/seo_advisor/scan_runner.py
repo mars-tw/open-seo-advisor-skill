@@ -149,6 +149,7 @@ def run_consultant_scan(
     out_dir: str,
     max_urls: int = 200,
     max_depth: int = 6,
+    expect_indexing: bool = True,
     timeout_seconds: float = 15.0,
     on_progress: ProgressCallback = _noop,
     ssh_options: SSHSourceOptions | None = None,
@@ -258,15 +259,35 @@ def run_consultant_scan(
             max_depth=max_depth,
             fetched_at=generated_at,
         )
-        on_progress(f"已掃描 {len(crawl_result.pages)} 個頁面")
+        total_urls = len(crawl_result.pages)
+        html_pages = sum(
+            bool(snapshot.html) or snapshot.headers.get("content-type", "").partition(";")[0].lower()
+            in {"text/html", "application/xhtml+xml"}
+            for snapshot in crawl_result.pages.values()
+        )
+        coverage = f"共掃描 {total_urls} 個網址，含 {html_pages} 個 HTML 頁面，其餘 {total_urls - html_pages} 個網址回應。"
+        on_progress(coverage)
+        coverage_notes.append(coverage)
+        if not expect_indexing:
+            coverage_notes.append("本次檢查預覽站，noindex 符合預期，未列入扣分。")
 
         on_progress("第 3/4 步：檢查常見 SEO 問題")
-        findings = analyze_technical_seo(crawl_result, seed_url=seed)
+        findings = analyze_technical_seo(crawl_result, seed_url=seed, expect_indexing=expect_indexing)
         on_progress(f"發現 {len(findings)} 項需要留意的問題")
 
         hreflang_matrix = extract_hreflang_matrix(crawl_result)
         scan_stats = {
-            "urls_crawled": len(crawl_result.pages),
+            "urls_crawled": total_urls,
+            "html_pages": html_pages,
+            "other_urls": total_urls - html_pages,
+            "expect_indexing": expect_indexing,
+            "sitemap_sources": crawl_result.sitemap_sources,
+            "sitemaps_read": list(crawl_result.sitemap_documents),
+            "unverified_canonicals": crawl_result.unverified_canonicals,
+            "robots_excluded_urls": [
+                url for url, page in crawl_result.pages.items()
+                if page.fetch_error_type == "blocked_by_robots_txt"
+            ],
             "urls_skipped": len(crawl_result.skipped_urls),
             "detected_stack": profile.detected_stack,
             "status_code_distribution": _status_code_distribution(crawl_result),

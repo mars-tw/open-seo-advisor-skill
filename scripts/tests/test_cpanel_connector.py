@@ -206,17 +206,29 @@ class TestListUrlsAndFetchUrl:
         assert snapshot.fetch_error_type == "unsafe_remote_path"
         connector.close()
 
+    @pytest.mark.parametrize(
+        "name,content,is_html",
+        [
+            ("index.html", "<h1>Hi</h1>", True),
+            ("sitemap.xml", "<urlset/>", False),
+            ("robots.txt", "User-agent: *", False),
+            ("style.css", "body { color: black }", False),
+        ],
+    )
     @respx.mock
-    def test_fetch_url_returns_content(self):
-        connector = _make_connector(tree={
-            "public_html": [{"file": "index.html", "type": "file", "size": 10}],
-        })
-        respx.get(f"{_BASE}/execute/Fileman/get_file_content").mock(
-            return_value=httpx.Response(200, json={"status": 1, "data": {"content": "<h1>Hi</h1>"}})
+    def test_fetch_url_returns_content(self, name, content, is_html):
+        connector = _make_connector(
+            tree={
+                "public_html": [{"file": name, "type": "file", "size": len(content)}],
+            }
         )
-        snapshot = connector.fetch_url("/index.html")
+        respx.get(f"{_BASE}/execute/Fileman/get_file_content").mock(
+            return_value=httpx.Response(200, json={"status": 1, "data": {"content": content}})
+        )
+        snapshot = connector.fetch_url("/" + name)
         assert snapshot.status_code == 200
-        assert "Hi" in snapshot.html
+        assert snapshot.text == content
+        assert snapshot.html == (content if is_html else "")
         connector.close()
 
 

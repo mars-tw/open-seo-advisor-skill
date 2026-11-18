@@ -68,6 +68,46 @@ def test_reachable_site_scans_normally(tmp_path):
     assert set(distribution.keys()) == {"2xx", "3xx", "4xx", "5xx", "0"}  # 固定五桶，即使數量為 0 也要出現
 
 
+@respx.mock
+def test_preview_keeps_original_findings_and_separates_resources(tmp_path):
+    from typer.testing import CliRunner
+    from seo_advisor.cli import app
+    import json
+
+    host = "https://example.com"
+    respx.get(host + "/robots.txt").mock(return_value=httpx.Response(404))
+    respx.get(host + "/sitemap.xml").mock(return_value=httpx.Response(404))
+    respx.get(host + "/").mock(return_value=httpx.Response(
+        200, headers={"Content-Type": "text/html"}, text=(
+            '<html><head><meta name="robots" content="noindex"></head>'
+            '<body><a href="image.webp">Picture</a></body></html>'
+        )))
+    respx.get(host + "/image.webp").mock(return_value=httpx.Response(
+        200, headers={"Content-Type": "image/webp"}, content=b"sample"))
+    reports = []
+    for mode, flags in (("production", []), ("preview", ["--preview"])):
+        out = tmp_path / mode
+        runner = CliRunner()
+        result = runner.invoke(app, ["audit", "consultant", "--url", host, "--out", str(out), *flags])
+        assert result.exit_code == 0, result.output
+        reports.append(json.loads((out / "report.json").read_text(encoding="utf-8")))
+    live, preview = reports
+    stats = preview["scan_stats"]
+    assert (stats["urls_crawled"], stats["html_pages"], stats["other_urls"]) == (2, 1, 1)
+    def categories(report):
+        return {f["id"].rsplit("-", 1)[0] for f in report["findings"]}
+    assert categories(live) - categories(preview) == {"SEO-NOINDEX_PRESENT", "SEO-SITEMAP_MISSING"}
+    assert "SEO-TITLE_MISSING" in categories(preview)
+    assert preview["site_health_score"] > live["site_health_score"]
+    for body, invalid in [
+        ('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"/>', False),
+        ("<html><body>Not found</body></html>", True),
+    ]:
+        respx.get(host + "/sitemap.xml").mock(return_value=httpx.Response(200, text=body))
+        audit = run_consultant_scan(url=host, source=None, out_dir=str(tmp_path / "check"), expect_indexing=False)
+        assert any("SITEMAP_INVALID" in f.id for f in audit.report.findings) is invalid
+
+
 # --- 三選一互斥邏輯 ---
 
 

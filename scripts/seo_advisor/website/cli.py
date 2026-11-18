@@ -13,15 +13,18 @@ from seo_advisor.website.models import WebsiteBrief
 website_app = typer.Typer(help="建立沉浸式網站草稿並檢查離線基線；不保證搜尋排名或 AI 引用")
 DEFAULT_INIT_OUT = Path("./my-website")
 DEFAULT_DEMO_OUT = Path("./website-demo")
+_EXIT_STATUS = {"baseline_ready": 0, "scaffold": 2, "invalid": 1}
 
 
-def _build(brief: WebsiteBrief, out: Path, base: Path) -> None:
+def _build(brief: WebsiteBrief, out: Path, base: Path, *, scaffold_expected: bool = False) -> None:
     try:
         result = build_site(brief, out, base_dir=base)
     except (ValueError, OSError) as exc:
         typer.echo(f"無法建立：{exc}", err=True)
         raise typer.Exit(1) from exc
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    if result["status"] != "scaffold" or not scaffold_expected:
+        raise typer.Exit(_EXIT_STATUS[result["status"]])
 
 
 @website_app.command("init")
@@ -41,7 +44,7 @@ def init_site(out: Annotated[Path, typer.Option("--out")] = DEFAULT_INIT_OUT) ->
     except ValueError as exc:
         typer.echo(f"輸入有誤：{exc}", err=True)
         raise typer.Exit(1) from exc
-    _build(brief, out, Path.cwd())
+    _build(brief, out, Path.cwd(), scaffold_expected=True)
 
 
 @website_app.command("build")
@@ -67,7 +70,7 @@ def demo(
     ] = "cloudflare",
 ) -> None:
     """山嵐茶屋的虛構示範，無 API、無付費生圖、無自動部署。"""
-    _build(demo_brief(site_type, hosting), out, Path.cwd())
+    _build(demo_brief(site_type, hosting), out, Path.cwd(), scaffold_expected=True)
 
 
 @website_app.command("check")
@@ -75,4 +78,4 @@ def check(site: Annotated[Path, typer.Option("--site")]) -> None:
     """JSON 報告：exit 0=離線基線通過、2=草稿待補、1=驗證失敗。"""
     result = check_site(site)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
-    raise typer.Exit({"baseline_ready": 0, "scaffold": 2, "invalid": 1}[result["status"]])
+    raise typer.Exit(_EXIT_STATUS[result["status"]])

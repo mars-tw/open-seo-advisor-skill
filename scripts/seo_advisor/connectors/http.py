@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urldefrag, urljoin, urlparse
-from xml.etree import ElementTree
 
 import httpx
 
@@ -15,6 +14,7 @@ from seo_advisor.models import ConnectorProfile, PageSnapshot, ProbeResult, Safe
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
 from seo_advisor.security.rate_limiter import RateLimiter
 from seo_advisor.security.robots_policy import RobotsPolicy
+from seo_advisor.sitemaps import read_sitemaps, sitemap_candidates
 from seo_advisor.url_utils import normalize_host
 
 # probe_path() 讀取內容的上限：只需要極少量內容判斷特徵（例如 ".env" 檔案開頭
@@ -22,12 +22,10 @@ from seo_advisor.url_utils import normalize_host
 _MAX_PROBE_BYTES = 4096
 _PROBE_PREVIEW_CHARS = 200
 
-_SITEMAP_NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 
 # 回應大小上限：避免惡意或異常的巨大回應吃爆記憶體。HTML 頁面正常遠小於此。
 _MAX_HTML_BYTES = 10 * 1024 * 1024  # 10 MB
 _MAX_SITEMAP_BYTES = 20 * 1024 * 1024  # 20 MB（sitemap 可能較大但仍需上限）
-_MAX_SITEMAP_FILES = 50  # sitemap index 最多追蹤的子 sitemap 數，避免請求放大
 
 # extra_headers 建構子參數只允許這些不涉及認證/身分的 header，避免這個
 # 參數被誤用成通用的任意 header 注入口（例如塞入 Authorization/Cookie
@@ -52,6 +50,7 @@ class _SafeResponse:
     encoding: str
     history: list[str]
     truncated: bool = False
+    x_robots_fields: list[str] = field(default_factory=list)
 
 
 def _decode_body(resp: _SafeResponse) -> str:
@@ -234,6 +233,7 @@ class HTTPConnector(WebsiteConnector):
                     status_code=resp.status_code,
                     final_url=str(resp.url),
                     headers=dict(resp.headers),
+                    x_robots_fields=resp.headers.get_list("x-robots-tag"),
                     body=body,
                     encoding=resp.encoding or "utf-8",
                     history=history,
@@ -249,13 +249,16 @@ class HTTPConnector(WebsiteConnector):
         has_robots = False
         has_sitemap = False
         detected_stack: str | None = None
+        robots_text = None
 
         try:
             robots_resp = self._safe_get(urljoin(self.base_url, "/robots.txt"), use_cache=True)
             has_robots = robots_resp.status_code == 200
+            if has_robots:
+                robots_text = _decode_body(robots_resp)
             if self.policy.respect_robots_txt:
                 self._robots_policy = RobotsPolicy(
-                    _decode_body(robots_resp) if has_robots else None,
+                    robots_text,
                     user_agent=self._user_agent,
                 )
                 if not has_robots:
@@ -263,13 +266,8 @@ class HTTPConnector(WebsiteConnector):
         except (httpx.HTTPError, PrivateNetworkBlockedError) as exc:
             notes.append(f"robots.txt 檢查失敗：{exc}")
 
-        try:
-            sitemap_resp = self._safe_get(
-                urljoin(self.base_url, "/sitemap.xml"), max_bytes=_MAX_SITEMAP_BYTES, use_cache=True
-            )
-            has_sitemap = sitemap_resp.status_code == 200
-        except (httpx.HTTPError, PrivateNetworkBlockedError) as exc:
-            notes.append(f"sitemap.xml 檢查失敗：{exc}")
+        roots = sitemap_candidates(self.base_url, robots_text, self.is_url_in_scope)
+        has_sitemap = any(self.read_sitemap(url) is not None for url in roots)
 
         try:
             home_resp = self._safe_get(self.base_url, use_cache=True)
@@ -295,97 +293,31 @@ class HTTPConnector(WebsiteConnector):
             notes=notes,
         )
 
-    def list_urls(self, seed: str, limit: int) -> list[UrlRecord]:
-        records: list[UrlRecord] = []
-        skipped_external: list[str] = []
-        sitemap_url = urljoin(self.base_url, "/sitemap.xml")
+    def read_sitemap(self, url: str) -> str | None:
+        if not self.is_url_in_scope(url):
+            return None
         try:
-            resp = self._safe_get(sitemap_url, max_bytes=_MAX_SITEMAP_BYTES, use_cache=True)
-            if resp.status_code == 200:
-                records.extend(
-                    self._parse_sitemap(
-                        _decode_body(resp),
-                        depth=0,
-                        limit=limit,
-                        skipped_external=skipped_external,
-                    )
-                )
+            if _document_key(url) not in self._response_cache:
+                self._rate_limiter.wait()
+            response = self._safe_get(
+                url, max_bytes=_MAX_SITEMAP_BYTES, use_cache=True, same_origin_only=True
+            )
         except (httpx.HTTPError, PrivateNetworkBlockedError):
-            pass
+            return None
+        if response.status_code == 200 and self.is_url_in_scope(response.final_url):
+            return _decode_body(response)
+        return None
 
-        if not records:
-            records.append(UrlRecord(url=seed or self.base_url, source="seed", discovered_depth=0))
-
-        return records[:limit]
-
-    def _parse_sitemap(
-        self, xml_text: str, depth: int, *, limit: int, skipped_external: list[str],
-        seen_urls: set[str] | None = None,
-    ) -> list[UrlRecord]:
-        records: list[UrlRecord] = []
-        if seen_urls is None:
-            seen_urls = set()
-        # XML 安全：正常 sitemap 不需要 DTD 或自訂 entity；直接拒絕含 DOCTYPE/
-        # ENTITY 的內容，徹底避免 entity expansion（billion laughs）與 XXE。
-        # 另外 body 已在下載時經 _MAX_SITEMAP_BYTES 上限保護。
-        head = xml_text[:2048].lower()
-        if "<!doctype" in head or "<!entity" in head:
-            return records
+    def list_urls(self, seed: str, limit: int) -> list[UrlRecord]:
         try:
-            root = ElementTree.fromstring(xml_text)
-        except ElementTree.ParseError:
-            return records
-
-        tag = root.tag.lower()
-        if tag.endswith("sitemapindex"):
-            child_count = 0
-            for sitemap_el in root.findall("sm:sitemap", _SITEMAP_NS):
-                # 已蒐集到足夠 URL，或子 sitemap 數超過上限就停，避免 sitemap
-                # index 觸發大量請求（DoS 放大 / 資源耗盡）。
-                if len(records) >= limit or child_count >= _MAX_SITEMAP_FILES:
-                    break
-                loc_el = sitemap_el.find("sm:loc", _SITEMAP_NS)
-                if loc_el is None or not loc_el.text or depth >= 2:
-                    continue
-                child_url = loc_el.text.strip()
-                if not self.is_url_in_scope(child_url):
-                    skipped_external.append(child_url)
-                    continue
-                child_count += 1
-                try:
-                    # 每次抓子 sitemap 前套 rate limit，避免對目標站發太多請求
-                    self._rate_limiter.wait()
-                    child_resp = self._safe_get(child_url, max_bytes=_MAX_SITEMAP_BYTES)
-                    if child_resp.status_code == 200:
-                        records.extend(
-                            self._parse_sitemap(
-                                _decode_body(child_resp),
-                                depth + 1,
-                                limit=limit - len(records),
-                                skipped_external=skipped_external,
-                                seen_urls=seen_urls,
-                            )
-                        )
-                except (httpx.HTTPError, PrivateNetworkBlockedError):
-                    continue
-        elif tag.endswith("urlset"):
-            for url_el in root.findall("sm:url", _SITEMAP_NS):
-                if len(records) >= limit:
-                    break
-                loc_el = url_el.find("sm:loc", _SITEMAP_NS)
-                if loc_el is None or not loc_el.text:
-                    continue
-                page_url = _document_key(urljoin(self.base_url, loc_el.text.strip()))
-                if not self.is_url_in_scope(page_url):
-                    skipped_external.append(page_url)
-                    continue
-                if page_url in seen_urls:
-                    continue
-                seen_urls.add(page_url)
-                records.append(
-                    UrlRecord(url=page_url, source="sitemap", discovered_depth=depth)
-                )
-        return records
+            response = self._safe_get(urljoin(self.base_url, "/robots.txt"), use_cache=True)
+            robots = _decode_body(response) if response.status_code == 200 else None
+        except (httpx.HTTPError, PrivateNetworkBlockedError):
+            robots = None
+        discovery = read_sitemaps(
+            self.base_url, robots, self.is_url_in_scope, self.read_sitemap, limit
+        )
+        return discovery.records or [UrlRecord(url=seed or self.base_url, source="seed")]
 
     def fetch_url(self, url: str, *, render: bool = False, fetched_at: str = "") -> PageSnapshot:
         if render:
@@ -431,6 +363,7 @@ class HTTPConnector(WebsiteConnector):
                 final_url=cached.final_url,
                 redirect_chain=cached.history,
                 headers=cached.headers,
+                x_robots_fields=cached.x_robots_fields,
                 **snapshot_body_fields(
                     cached.body, cached.headers.get("content-type", ""), cached.encoding
                 ),
@@ -452,6 +385,7 @@ class HTTPConnector(WebsiteConnector):
                 final_url=resp.final_url,
                 redirect_chain=resp.history,
                 headers=resp.headers,
+                x_robots_fields=resp.x_robots_fields,
                 **snapshot_body_fields(
                     resp.body, resp.headers.get("content-type", ""), resp.encoding
                 ),

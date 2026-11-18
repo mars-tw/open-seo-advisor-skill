@@ -15,11 +15,11 @@ hreflang 問題 → crawler 無法安全推斷語言/網址對應關係 → 只�
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 from urllib.parse import unquote, urlparse
 
-_LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2}(-[A-Z]{2})?$")
+from seo_advisor.indexability import valid_hreflang
+
 _X_DEFAULT = "x-default"
 
 
@@ -48,12 +48,10 @@ class HreflangMap:
 
 
 def _validate_language_code(code: str, *, context: str) -> None:
-    if code == _X_DEFAULT:
-        return
-    if not _LANGUAGE_CODE_PATTERN.match(code):
+    if not valid_hreflang(code):
         raise InvalidLanguageMapError(
             f"{context}：語言代碼 {code!r} 格式不正確，必須是 ISO 639-1（如 'en'）、"
-            f"ISO 639-1-ISO 3166-1（如 'zh-TW'），或 {_X_DEFAULT!r}。"
+            f"語言搭配文字或地區（如 'zh-Hant-TW'、'en-GB'），或 {_X_DEFAULT!r}。"
         )
 
 

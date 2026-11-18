@@ -19,21 +19,30 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import re
+import shlex
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from urllib.parse import urlsplit
 
 import typer
 from rich.console import Console
 
+from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.connectors.git_repo import GitRepoConnector
 from seo_advisor.connectors.local_archive import LocalArchiveConnector
 from seo_advisor.crawler import crawl_site
+from seo_advisor.encoding_utils import detect_html_encoding
 from seo_advisor.errors import translate_exception
 from seo_advisor.fixers import rollback as rollback_module
 from seo_advisor.fixers import runner
 from seo_advisor.fixers.hreflang_generator import build_hreflang_html_plan
 from seo_advisor.fixers.hreflang_map import InvalidLanguageMapError, load_language_map
 from seo_advisor.fixers.hreflang_sitemap import build_hreflang_sitemap_plan
+from seo_advisor.fixers.models import PatchPlan
 from seo_advisor.fixers.safety import build_apply_confirmation, build_rollback_confirmation, verify_confirmation
 from seo_advisor.models import Finding, SafetyPolicy
 
@@ -63,10 +72,92 @@ def _load_findings(source: str, from_report: str | None, finding_id: str | None)
     return findings, crawl_result
 
 
-# 這幾種修復類型的內容必須是絕對 URL 才有實質意義（robots.txt 的 Sitemap
-# 宣告、sitemap.xml 的 <loc>），本地掃描沒有真實網域可用，因此沒提供
-# --site-url 時只能猜出相對路徑，必須明確警告使用者這不是最終正確內容。
-_NEEDS_SITE_URL_FIX_TYPES = {"robots_txt", "sitemap"}
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _source_directory(source: str, apply: bool) -> str:
+    """Keep user edits to a ZIP's extracted working copy between preview and apply."""
+    path = Path(source)
+    if not path.is_file() or path.suffix.lower() != ".zip":
+        return source
+    dest = path.with_name(path.stem + "_extracted")
+    marker = Path(".seo-advisor", "source-archive.sha256")
+    digest = _file_sha256(path)
+    if dest.exists():
+        if not (dest / marker).is_file() or (dest / marker).read_text(encoding="ascii") != digest:
+            raise ValueError(f"現有解壓目錄與 ZIP 來源無法核對。請檢查 {dest}，或直接指定該目錄重新預覽。")
+    else:
+        if apply:
+            raise ValueError("找不到預覽時的解壓目錄，請重新預覽。")
+        with TemporaryDirectory(dir=path.parent) as staging:
+            root = Path(staging, "site")
+            LocalArchiveConnector(source, extract_to=str(root))
+            (root / marker).parent.mkdir(exist_ok=True)
+            (root / marker).write_text(digest, encoding="ascii")
+            root.rename(dest)
+    return str(dest)
+
+
+def _review_plan(
+    plan: PatchPlan, connector: WebsiteConnector, options: dict[str, str],
+    out_path: Path, apply: bool, confirm: str | None,
+) -> None:
+    """Bind the confirmation to this source, invocation and exact reviewed patch."""
+    for target in plan.targets:
+        try:
+            raw = connector.read_file(target.path)
+        except FileNotFoundError:
+            raw = None
+        if raw is not None:
+            encoding = detect_html_encoding(raw) if target.path.lower().endswith((".htm", ".html")) else "utf-8"
+            if raw.decode(encoding) != target.original_content:
+                raise ValueError(f"{target.path} 已與掃描內容不同，請重新預覽。")
+        elif target.original_content:
+            raise ValueError(f"{target.path} 自掃描後已移除，請重新預覽。")
+        if raw is not None and "_MISSING" in plan.finding_id:
+            raise ValueError(f"{target.path} 已存在，請重新預覽。")
+        plan.original_hashes[target.path] = hashlib.sha256(raw).hexdigest() if raw is not None else None
+    plan.review_options = options.copy()
+    for key in ("source", "from-report", "map"):
+        if key in options:
+            path = Path(options[key]).resolve()
+            plan.review_options[key] = str(path)
+            if key != "source" or path.is_file():
+                plan.review_options[f"{key}-sha256"] = _file_sha256(path)
+    payload = json.dumps(plan.model_dump(), ensure_ascii=False, sort_keys=True).encode("utf-8")
+    plan.plan_id += "-" + hashlib.sha256(payload).hexdigest()[:24]
+    preview_file = out_path / "fix-plan.json"
+    if apply:
+        if plan.plan_only:
+            raise ValueError("這份計畫需人工處理，請依預覽中的建議逐項確認。")
+        if not confirm or not verify_confirmation(confirm, build_apply_confirmation(plan.plan_id)):
+            raise ValueError("確認字串與目前計畫不符，請重新預覽並使用顯示的確認字串。")
+        if not preview_file.is_file() or PatchPlan.model_validate_json(preview_file.read_bytes()) != plan:
+            raise ValueError("找不到符合目前來源、參數與內容的預覽，請先產生並確認差異。")
+        return
+    out_path.mkdir(parents=True, exist_ok=True)
+    preview_file.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+    _render_plan_markdown(plan, out_path / "fix-plan.md")
+
+
+def _show_apply(command: str, options: dict[str, str], out: str, plan: PatchPlan) -> None:
+    args = ["seo-advisor", "fix", command]
+    for key, value in {**options, "out": out}.items():
+        args.extend(["--" + key, value])
+    args.extend(["--apply", "--confirm", build_apply_confirmation(plan.plan_id)])
+    if os.name == "nt":
+        # The Windows installation guide uses PowerShell.
+        line = " ".join(a if re.fullmatch(r"[a-zA-Z0-9_./:-]+", a) else
+                        "'" + a.replace("'", "''") + "'" for a in args)
+    else:
+        line = shlex.join(args)
+    console.print("\n這是 dry-run 預覽。確認差異後，可執行下列指令：")
+    console.print(line, soft_wrap=True, markup=False, highlight=False)
 
 
 @fix_app.command("engineer")
@@ -94,7 +185,8 @@ def engineer(
             console.print(f'[red]--write-mode 只接受 "direct" 或 "git-branch"，收到 {write_mode!r}。[/red]')
             raise typer.Exit(code=1)
 
-        findings, crawl_result = _load_findings(source, from_report, finding_id)
+        source_dir = _source_directory(source, apply)
+        findings, crawl_result = _load_findings(source_dir, from_report, finding_id)
         fixable = runner.list_fixable_findings(findings)
 
         if not finding_id:
@@ -116,24 +208,26 @@ def engineer(
             dry_run=not apply, allowed_capabilities={"read_urls", "read_files", "write_files"}
         )
         if write_mode == "git-branch":
-            connector = GitRepoConnector(source, policy=write_policy)
+            connector = GitRepoConnector(source_dir, policy=write_policy)
         else:
-            connector = LocalArchiveConnector(source, policy=write_policy)
+            connector = LocalArchiveConnector(source_dir, policy=write_policy)
 
         fixer_module = runner.find_fixer(target_finding)
-        if fixer_module.__name__.rsplit(".", 1)[-1] in ("robots", "sitemap") and not site_url:
-            console.print(
-                "[yellow]警告：未提供 --site-url，robots.txt/sitemap.xml 裡的網址將只是相對路徑，"
-                "不是正式可用的絕對網址。強烈建議加上 --site-url https://你的正式網域 重新產生。[/yellow]"
-            )
+        if fixer_module.__name__.rsplit(".", 1)[-1] in ("robots", "sitemap"):
+            parsed = urlsplit(site_url or "")
+            if parsed.scheme not in ("https", "http") or not parsed.hostname or parsed.query or parsed.fragment:
+                raise ValueError("建立 sitemap 或 robots.txt 需要 --site-url 以及完整的正式站台網址。")
 
         seed_for_plan = site_url or "/"
         plan = runner.build_plan(target_finding, connector=connector, crawl_result=crawl_result, seed_url=seed_for_plan)
 
         out_path = Path(out)
-        out_path.mkdir(parents=True, exist_ok=True)
-        (out_path / "fix-plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-        _render_plan_markdown(plan, out_path / "fix-plan.md")
+        options = {"source": source, "finding-id": finding_id, "write-mode": write_mode}
+        if from_report:
+            options["from-report"] = from_report
+        if site_url:
+            options["site-url"] = site_url
+        _review_plan(plan, connector, options, out_path, apply, confirm)
 
         if plan.plan_only:
             console.print(f"[bold]建議（需人工處理，無法自動套用）：{plan.plan_id}[/bold]")
@@ -155,24 +249,11 @@ def engineer(
             console.print(f"[yellow]警告：{warning}[/yellow]")
         for target in plan.targets:
             console.print(f"\n[dim]--- {target.path} ---[/dim]")
-            console.print(target.diff_preview or "（無文字 diff）")
+            console.print(target.diff_preview or "（無文字 diff）", markup=False, highlight=False)
 
         if not apply:
-            write_mode_flag = f" --write-mode {write_mode}" if write_mode != "direct" else ""
-            console.print(
-                f"\n[cyan]這是 dry-run 預覽，尚未寫入任何檔案。[/cyan]\n"
-                f"確認無誤後執行：\n"
-                f'  seo-advisor fix engineer --source {source} --finding-id {target_finding.id}'
-                f'{write_mode_flag} --apply --confirm "{build_apply_confirmation(plan.plan_id)}"'
-            )
+            _show_apply("engineer", options, out, plan)
             raise typer.Exit(code=0)
-
-        expected = build_apply_confirmation(plan.plan_id)
-        if not confirm or not verify_confirmation(confirm, expected):
-            console.print(
-                f'[red]確認字串不符或未提供。請加上 --confirm "{expected}" 才會真的寫入。[/red]'
-            )
-            raise typer.Exit(code=1)
 
         result = runner.apply_plan(plan, connector=connector)
         (out_path / "fix-result.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
@@ -186,7 +267,7 @@ def engineer(
                 console.print(f"[bold green]已套用！寫入 {len(result.written_paths)} 個檔案。[/bold green]")
                 console.print(f"備份位置：{result.backup_id}")
                 console.print(
-                    f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}"
+                    f"若需回滾，請對 {source_dir} 執行 fix rollback，並以 {result.backup_id} 為 --backup。"
                 )
         else:
             console.print("[red]套用中斷，未完全成功。[/red]")
@@ -215,9 +296,17 @@ def _load_hreflang_pages(connector, hreflang_map) -> dict[str, str]:
             if rel_path in pages:
                 continue
             try:
-                pages[rel_path] = connector.read_file(rel_path).decode("utf-8", errors="replace")
-            except (FileNotFoundError, ValueError, OSError):
+                raw = connector.read_file(rel_path)
+            except FileNotFoundError:
                 continue
+            encoding = detect_html_encoding(raw)
+            try:
+                decoded = raw.decode(encoding)
+                if decoded.encode(encoding) != raw:
+                    raise ValueError("無法無損轉換")
+            except (LookupError, ValueError) as exc:
+                raise ValueError(f"{rel_path} 無法依 {encoding} 無損解碼，請確認檔案編碼。") from exc
+            pages[rel_path] = decoded
     return pages
 
 
@@ -252,18 +341,18 @@ def hreflang_html(
         write_policy = SafetyPolicy(
             dry_run=not apply, allowed_capabilities={"read_urls", "read_files", "write_files"}
         )
+        source_dir = _source_directory(source, apply)
         if write_mode == "git-branch":
-            connector = GitRepoConnector(source, policy=write_policy)
+            connector = GitRepoConnector(source_dir, policy=write_policy)
         else:
-            connector = LocalArchiveConnector(source, policy=write_policy)
+            connector = LocalArchiveConnector(source_dir, policy=write_policy)
 
         pages = _load_hreflang_pages(connector, hreflang_map)
         plan = build_hreflang_html_plan(hreflang_map, pages=pages)
 
         out_path = Path(out)
-        out_path.mkdir(parents=True, exist_ok=True)
-        (out_path / "fix-plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-        _render_plan_markdown(plan, out_path / "fix-plan.md")
+        options = {"source": source, "map": map_file, "write-mode": write_mode}
+        _review_plan(plan, connector, options, out_path, apply, confirm)
 
         if plan.plan_only:
             console.print(f"[bold]建議（需人工處理，無法自動套用）：{plan.plan_id}[/bold]")
@@ -281,22 +370,11 @@ def hreflang_html(
             console.print(f"[yellow]警告：{warning}[/yellow]")
         for target in plan.targets:
             console.print(f"\n[dim]--- {target.path} ---[/dim]")
-            console.print(target.diff_preview or "（無文字 diff）")
+            console.print(target.diff_preview or "（無文字 diff）", markup=False, highlight=False)
 
         if not apply:
-            write_mode_flag = f" --write-mode {write_mode}" if write_mode != "direct" else ""
-            console.print(
-                f"\n[cyan]這是 dry-run 預覽，尚未寫入任何檔案。[/cyan]\n"
-                f"確認無誤後執行：\n"
-                f"  seo-advisor fix hreflang-html --source {source} --map {map_file}"
-                f'{write_mode_flag} --apply --confirm "{build_apply_confirmation(plan.plan_id)}"'
-            )
+            _show_apply("hreflang-html", options, out, plan)
             raise typer.Exit(code=0)
-
-        expected = build_apply_confirmation(plan.plan_id)
-        if not confirm or not verify_confirmation(confirm, expected):
-            console.print(f'[red]確認字串不符或未提供。請加上 --confirm "{expected}" 才會真的寫入。[/red]')
-            raise typer.Exit(code=1)
 
         result = runner.apply_plan(plan, connector=connector)
         (out_path / "fix-result.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
@@ -309,7 +387,7 @@ def hreflang_html(
             else:
                 console.print(f"[bold green]已套用！寫入 {len(result.written_paths)} 個檔案。[/bold green]")
                 console.print(f"備份位置：{result.backup_id}")
-                console.print(f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}")
+                console.print(f"若需回滾，請對 {source_dir} 執行 fix rollback，並以 {result.backup_id} 為 --backup。")
         else:
             console.print("[red]套用中斷，未完全成功。[/red]")
             for note in result.validation_notes:
@@ -353,22 +431,22 @@ def hreflang_sitemap(
         write_policy = SafetyPolicy(
             dry_run=not apply, allowed_capabilities={"read_urls", "read_files", "write_files"}
         )
+        source_dir = _source_directory(source, apply)
         if write_mode == "git-branch":
-            connector = GitRepoConnector(source, policy=write_policy)
+            connector = GitRepoConnector(source_dir, policy=write_policy)
         else:
-            connector = LocalArchiveConnector(source, policy=write_policy)
+            connector = LocalArchiveConnector(source_dir, policy=write_policy)
 
         try:
-            current_xml = connector.read_file(sitemap_path).decode("utf-8", errors="replace")
-        except (FileNotFoundError, ValueError, OSError):
+            current_xml = connector.read_file(sitemap_path).decode("utf-8")
+        except FileNotFoundError:
             current_xml = None
 
         plan = build_hreflang_sitemap_plan(hreflang_map, sitemap_path=sitemap_path, current_sitemap_xml=current_xml)
 
         out_path = Path(out)
-        out_path.mkdir(parents=True, exist_ok=True)
-        (out_path / "fix-plan.json").write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-        _render_plan_markdown(plan, out_path / "fix-plan.md")
+        options = {"source": source, "map": map_file, "sitemap": sitemap_path, "write-mode": write_mode}
+        _review_plan(plan, connector, options, out_path, apply, confirm)
 
         if plan.plan_only:
             console.print(f"[bold]建議（需人工處理，無法自動套用）：{plan.plan_id}[/bold]")
@@ -384,22 +462,11 @@ def hreflang_sitemap(
         console.print(plan.summary)
         for target in plan.targets:
             console.print(f"\n[dim]--- {target.path} ---[/dim]")
-            console.print(target.diff_preview or "（無文字 diff）")
+            console.print(target.diff_preview or "（無文字 diff）", markup=False, highlight=False)
 
         if not apply:
-            write_mode_flag = f" --write-mode {write_mode}" if write_mode != "direct" else ""
-            console.print(
-                f"\n[cyan]這是 dry-run 預覽，尚未寫入任何檔案。[/cyan]\n"
-                f"確認無誤後執行：\n"
-                f"  seo-advisor fix hreflang-sitemap --source {source} --map {map_file} --sitemap {sitemap_path}"
-                f'{write_mode_flag} --apply --confirm "{build_apply_confirmation(plan.plan_id)}"'
-            )
+            _show_apply("hreflang-sitemap", options, out, plan)
             raise typer.Exit(code=0)
-
-        expected = build_apply_confirmation(plan.plan_id)
-        if not confirm or not verify_confirmation(confirm, expected):
-            console.print(f'[red]確認字串不符或未提供。請加上 --confirm "{expected}" 才會真的寫入。[/red]')
-            raise typer.Exit(code=1)
 
         result = runner.apply_plan(plan, connector=connector)
         (out_path / "fix-result.json").write_text(result.model_dump_json(indent=2), encoding="utf-8")
@@ -412,7 +479,7 @@ def hreflang_sitemap(
             else:
                 console.print(f"[bold green]已套用！寫入 {len(result.written_paths)} 個檔案。[/bold green]")
                 console.print(f"備份位置：{result.backup_id}")
-                console.print(f"若需回滾：seo-advisor fix rollback --source {source} --backup {result.backup_id}")
+                console.print(f"若需回滾，請對 {source_dir} 執行 fix rollback，並以 {result.backup_id} 為 --backup。")
         else:
             console.print("[red]套用中斷，未完全成功。[/red]")
             for note in result.validation_notes:

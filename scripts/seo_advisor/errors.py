@@ -14,7 +14,7 @@ from dataclasses import dataclass
 import httpx
 
 from seo_advisor.ads.providers.base import AdsProviderError
-from seo_advisor.growth.providers.base import AnalyticsProviderError
+from seo_advisor.growth.providers.base import AnalyticsProviderError, UnavailableAnalyticsProvider
 from seo_advisor.images.providers.base import ImageProviderError
 from seo_advisor.scan_runner import SiteUnreachableError
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError
@@ -195,6 +195,12 @@ def translate_exception(exc: Exception, *, url: str | None = None) -> FriendlyEr
                 "確認你有這個資料夾的讀寫權限",
                 "換一個你有權限的資料夾作為報告輸出位置（--out）",
             ],
+        )
+
+    if isinstance(exc, UnavailableAnalyticsProvider):
+        return FriendlyError(
+            title=str(exc), reasons=[],
+            next_steps=["用 seo-advisor growth analytics --provider mock 查看示範報告。"],
         )
 
     if isinstance(exc, (LLMProviderError, ImageProviderError, AdsProviderError, AnalyticsProviderError)):

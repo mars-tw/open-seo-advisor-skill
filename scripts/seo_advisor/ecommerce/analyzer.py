@@ -35,7 +35,19 @@ _SEVERITY_PENALTY = {
 
 def analyze_listing(listing: EcommerceListing) -> EcommerceReport:
     findings: list[EcommerceFinding] = []
-    applied = list(_CHECKLIST.values())
+    observed = {
+        "title_frontload": True,
+        "title_no_stuffing": bool(listing.title.strip()),
+        "bullets_value": listing.bullet_points is not None,
+        "main_image": listing.main_image_present is not None,
+        "secondary_images": listing.secondary_image_count is not None,
+        "a_plus": listing.has_a_plus_content is not None,
+        "backend_keywords": listing.backend_keywords is not None,
+        "reviews_qa": listing.review_count is not None or listing.rating is not None,
+        "availability": listing.in_stock is not None or listing.has_buy_box is not None,
+        "variations": listing.variations_count is not None,
+    }
+    applied = [_CHECKLIST[key] for key, known in observed.items() if known]
 
     findings.extend(_check_availability(listing))
     findings.extend(_check_title(listing))
@@ -51,14 +63,14 @@ def analyze_listing(listing: EcommerceListing) -> EcommerceReport:
         listing_ref=_derive_listing_ref(listing),
         findings=findings,
         listing_health_score=score,
-        summary=_summary(score, findings),
+        summary=f"有資料可評估 {len(applied)}/{len(_CHECKLIST)} 項。{_summary(score, findings)}",
         applied_checklist=applied,
     )
 
 
 def _check_availability(listing: EcommerceListing) -> list[EcommerceFinding]:
     findings: list[EcommerceFinding] = []
-    if not listing.in_stock:
+    if listing.in_stock is False:
         findings.append(
             EcommerceFinding(
                 category="availability",
@@ -68,7 +80,7 @@ def _check_availability(listing: EcommerceListing) -> list[EcommerceFinding]:
                 recommendation="優先處理補貨、預購或替代商品導流；缺貨期間不建議加大廣告流量。",
             )
         )
-    if not listing.has_buy_box:
+    if listing.has_buy_box is False:
         findings.append(
             EcommerceFinding(
                 category="availability",
@@ -83,9 +95,6 @@ def _check_availability(listing: EcommerceListing) -> list[EcommerceFinding]:
 
 def _check_title(listing: EcommerceListing) -> list[EcommerceFinding]:
     title = listing.title.strip()
-    if not title:
-        return []
-
     findings: list[EcommerceFinding] = []
     title_len = len(title)
     if title_len < 40:
@@ -124,11 +133,10 @@ def _check_title(listing: EcommerceListing) -> list[EcommerceFinding]:
 
 
 def _check_bullets(listing: EcommerceListing) -> list[EcommerceFinding]:
+    if listing.bullet_points is None:
+        return []
     bullets = [bullet.strip() for bullet in listing.bullet_points if bullet.strip()]
     findings: list[EcommerceFinding] = []
-
-    if not bullets:
-        return []
 
     if len(bullets) < 5:
         findings.append(
@@ -157,7 +165,7 @@ def _check_bullets(listing: EcommerceListing) -> list[EcommerceFinding]:
 
 def _check_images(listing: EcommerceListing) -> list[EcommerceFinding]:
     findings: list[EcommerceFinding] = []
-    if not listing.main_image_present:
+    if listing.main_image_present is False:
         findings.append(
             EcommerceFinding(
                 category="images",
@@ -167,7 +175,7 @@ def _check_images(listing: EcommerceListing) -> list[EcommerceFinding]:
                 recommendation="補上清楚呈現商品本體與主要配件的主圖，再評估其他圖像優化。",
             )
         )
-    if listing.secondary_image_count < 4:
+    if listing.secondary_image_count is not None and listing.secondary_image_count < 4:
         findings.append(
             EcommerceFinding(
                 category="images",
@@ -184,7 +192,7 @@ def _check_images(listing: EcommerceListing) -> list[EcommerceFinding]:
 
 
 def _check_a_plus(listing: EcommerceListing) -> list[EcommerceFinding]:
-    if listing.has_a_plus_content:
+    if listing.has_a_plus_content is not False:
         return []
     return [
         EcommerceFinding(
@@ -198,9 +206,9 @@ def _check_a_plus(listing: EcommerceListing) -> list[EcommerceFinding]:
 
 
 def _check_backend_keywords(listing: EcommerceListing) -> list[EcommerceFinding]:
-    keywords = [kw.strip() for kw in listing.backend_keywords if kw.strip()]
-    if not keywords:
+    if listing.backend_keywords is None:
         return []
+    keywords = [kw.strip() for kw in listing.backend_keywords if kw.strip()]
     if len(keywords) < 5:
         return [
             EcommerceFinding(
@@ -216,7 +224,7 @@ def _check_backend_keywords(listing: EcommerceListing) -> list[EcommerceFinding]
 
 def _check_reviews(listing: EcommerceListing) -> list[EcommerceFinding]:
     findings: list[EcommerceFinding] = []
-    if listing.review_count < 10:
+    if listing.review_count is not None and listing.review_count < 10:
         findings.append(
             EcommerceFinding(
                 category="reviews",
@@ -240,7 +248,7 @@ def _check_reviews(listing: EcommerceListing) -> list[EcommerceFinding]:
 
 
 def _check_variations(listing: EcommerceListing) -> list[EcommerceFinding]:
-    if listing.variations_count > 30:
+    if listing.variations_count is not None and listing.variations_count > 30:
         return [
             EcommerceFinding(
                 category="variations",
@@ -269,8 +277,7 @@ def _summary(score: float, findings: list[EcommerceFinding]) -> str:
         return "本次可判斷的 listing 基礎項目未發現明顯問題，可進一步檢查流量與 PPC 成效。"
     return (
         f"本次 listing 健康分數為 {score}/100，共發現 {len(findings)} 項可改善處，"
-        f"其中 {p0_p1} 項屬於高優先處理。建議先處理庫存、購買入口、主圖、評分等"
-        "會直接影響轉換的問題，再優化標題、圖片、A+ 與後端關鍵字。"
+        f"其中 {p0_p1} 項屬於高優先處理。請依下方實際列出的項目及證據安排修改。"
     )
 
 
