@@ -152,7 +152,7 @@ def _render_status_distribution_chart(scan_stats: dict) -> str:
         return _empty_section("URL 狀態分布", "此版本報告未提供狀態碼分布資料。")
 
     order = ["2xx", "3xx", "4xx", "5xx", "0"]
-    labels = {"2xx": "2xx 成功", "3xx": "3xx 重導", "4xx": "4xx 錯誤", "5xx": "5xx 錯誤", "0": "連線失敗"}
+    labels = {"2xx": "2xx 成功", "3xx": "3xx 重導", "4xx": "4xx 錯誤", "5xx": "5xx 錯誤", "0": "無 HTTP 回應"}
     colors = {"2xx": "#15803d", "3xx": "#a16207", "4xx": "#c2410c", "5xx": "#b91c1c", "0": "#374151"}
     counts = [(key, int(distribution.get(key, 0) or 0)) for key in order]
     total = sum(count for _, count in counts) or 1

@@ -44,6 +44,35 @@ def test_check_ymyl_keywords_passes_unrelated_content():
     assert issue is None
 
 
+def test_batch_qa_checks_visible_copy_not_the_industrial_url_or_json_fields():
+    import json
+
+    url = "/medical/heat-treatment.html"
+    row = dict(url=url, title="Heat treatment of steel", h1="Surface treatment",
+               meta_description="Dimensions for industrial buyers.")
+    assert run_structural_checks(json.dumps([row]), [url]) == []
+    row["meta_description"] = "Clinical treatment options for diabetes patients."
+    assert any(i.category == "trust" for i in run_structural_checks(json.dumps([row]), [url]))
+
+
+def test_shared_titles_are_not_a_required_rewrite_for_an_unrelated_batch():
+    import json
+
+    urls = ["/en-us/model", "/en-ca/model"]
+    rows = [dict(url=u, title="Same Model", h1="Same Model", meta_description="Shop") for u in urls]
+    assert run_structural_checks(json.dumps(rows), urls) == []
+
+
+def test_context_terms_from_different_products_do_not_create_a_medical_claim():
+    import json
+
+    rows = [dict(url="/gears", title="Gear heat treatment", h1="Hardening",
+                 meta_description="Compare alloy dimensions."),
+            dict(url="/brackets", title="Patient monitor pole-mount bracket", h1="Adapter",
+                 meta_description="Check hole spacing and bracket weight after surface treatment.")]
+    assert run_structural_checks(json.dumps(rows), [r["url"] for r in rows]) == []
+
+
 def test_count_verification_markers():
     text = "數據顯示 [需要查證: 來源不明] 成長了 50%，另一個 [需要查證: 待確認] 的說法。"
     assert count_verification_markers(text) == 2

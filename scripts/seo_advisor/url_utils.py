@@ -40,7 +40,14 @@ def sitemap_url(url: str) -> str:
     parts = urlsplit(url)
 
     def encoded(value, safe):
-        return quote(re.sub(r"%(?![0-9a-fA-F]{2})", "%25", value), safe=safe + "%")
+
+        def normalize_escape(match):
+            char = chr(int(match[1], 16))
+            return char if re.fullmatch(r"[A-Za-z0-9._~-]", char) else "%" + match[1].upper()
+
+        escaped = re.sub(r"%(?![0-9a-fA-F]{2})", "%25", value)
+        escaped = re.sub(r"%([0-9a-fA-F]{2})", normalize_escape, escaped)
+        return quote(escaped, safe=safe + "%")
 
     path = encoded(parts.path, "/:@!$&'()*+,;=")
     query = encoded(parts.query, "/?:@!$&'()*+,;=")

@@ -7,8 +7,7 @@
 from __future__ import annotations
 
 import re
-from collections import Counter, defaultdict
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, unquote_plus, urlencode, urlparse, urlunparse
 
 from seo_advisor.growth.models import UtmAuditItem, UtmParams, UtmPlan
 from seo_advisor.models import Severity
@@ -34,14 +33,14 @@ _INVALID_NAMING_PATTERN = re.compile(r"[\s一-鿿]")
 
 def build_utm_url(base_url: str, params: UtmParams) -> str:
     parsed = urlparse(base_url)
-    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    query.update(_params_to_query(params))
-    return urlunparse(parsed._replace(query=urlencode(query, doseq=False)))
+    replacements = _params_to_query(params)
+    original = parsed.query.split("&") if parsed.query else []
+    kept = [part for part in original if unquote_plus(part.partition("=")[0]) not in replacements]
+    return urlunparse(parsed._replace(query="&".join([*kept, urlencode(replacements)])))
 
 
 def audit_utm_urls(urls: list[str]) -> list[UtmAuditItem]:
     items: list[UtmAuditItem] = []
-    campaign_to_urls: dict[str, list[str]] = defaultdict(list)
 
     for url in urls:
         parsed = urlparse(url)
@@ -84,32 +83,6 @@ def audit_utm_urls(urls: list[str]) -> list[UtmAuditItem]:
                         field=field,
                         message=f"{field} 含空格或中文：{value}",
                         recommendation="UTM 建議使用小寫英文、數字、底線或連字號。",
-                    )
-                )
-
-        campaign = query.get("utm_campaign", "").strip()
-        if campaign:
-            campaign_to_urls[campaign.lower()].append(url)
-
-    duplicate_campaigns = {
-        campaign: campaign_urls
-        for campaign, campaign_urls in campaign_to_urls.items()
-        if len(campaign_urls) > 1
-    }
-    for campaign, campaign_urls in duplicate_campaigns.items():
-        if _has_conflicting_sources_or_mediums(campaign_urls):
-            for url in campaign_urls:
-                items.append(
-                    UtmAuditItem(
-                        url=url,
-                        severity=Severity.P2,
-                        issue_code="utm_campaign_reused_across_channels",
-                        field="utm_campaign",
-                        message=f"campaign 名稱重複且跨來源/媒介混用：{campaign}",
-                        recommendation=(
-                            "同一 campaign 可跨渠道使用，但 source/medium 必須一致可讀；"
-                            "若活動目的不同，請拆成不同 campaign 名稱。"
-                        ),
                     )
                 )
 
@@ -172,11 +145,3 @@ def _derive_campaign_name(base_url: str) -> str:
     path = parsed.path.strip("/").replace("/", "-")
     raw = f"{host}-{path}" if path else f"{host}-campaign"
     return _normalize_token(raw).replace("-", "_")
-
-
-def _has_conflicting_sources_or_mediums(urls: list[str]) -> bool:
-    pairs: Counter[tuple[str, str]] = Counter()
-    for url in urls:
-        query = dict(parse_qsl(urlparse(url).query, keep_blank_values=True))
-        pairs[(query.get("utm_source", ""), query.get("utm_medium", ""))] += 1
-    return len(pairs) > 1

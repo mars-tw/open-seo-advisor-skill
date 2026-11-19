@@ -33,6 +33,11 @@ class CrawlResult:
     sitemap_errors: dict[str, str] = field(default_factory=dict)
     sitemap_pending: dict[str, str] = field(default_factory=dict)
     unverified_canonicals: dict[str, str] = field(default_factory=dict)
+    sitemap_bases: dict[str, str] = field(default_factory=dict)
+    relative_atom_feeds: list[str] = field(default_factory=list)
+    local_aliases: dict[str, str] = field(default_factory=dict)
+    crawl_pending: dict[str, str] = field(default_factory=dict)
+    entry_url: str = ""
 
 
 def _same_site(base_netloc: str, url: str) -> bool:
@@ -119,6 +124,7 @@ def crawl_site(
         return SitemapFetch(snapshot.status_code, error=snapshot.fetch_error_type or "")
 
     reader = getattr(type(connector), "read_sitemap_file", None)
+    origin = getattr(connector, "site_origin", None)
     sitemap_data = read_sitemaps(
         seed_url,
         result.robots_txt,
@@ -126,6 +132,7 @@ def crawl_site(
         connector.read_sitemap_file if callable(reader) else fetch_sitemap,
         max_urls,
         max_files=max_sitemap_files,
+        document_origin=origin if isinstance(origin, str) else "",
     )
     result.sitemap_page_urls = {record.url for record in sitemap_data.records}
     result.sitemap_sources = sitemap_data.sources
@@ -133,6 +140,8 @@ def crawl_site(
     result.sitemap_statuses = sitemap_data.statuses
     result.sitemap_errors = sitemap_data.errors
     result.sitemap_pending = sitemap_data.pending
+    result.sitemap_bases = sitemap_data.document_bases
+    result.relative_atom_feeds = sitemap_data.relative_feeds
     result.sitemap_xml = next(iter(sitemap_data.documents.values()), None)
     http_reader = callable(getattr(type(connector), "read_sitemap", None))
     seed_records = (
@@ -140,18 +149,24 @@ def crawl_site(
     )
     local_url = getattr(type(connector), "local_url", None)
     if callable(local_url) and getattr(connector, "site_origin", None):
-        seed_records.extend(
-            record.model_copy(update={"url": connector.local_url(record.url)})
-            for record in sitemap_data.records
-        )
+        seed_records.extend(sitemap_data.records)
     queue: deque[tuple[str, int]] = deque()
     queued_depths: dict[str, int] = {}
     visited: set[str] = set()
 
-    def enqueue(url: str, depth: int) -> None:
-        url = _document_url(url, seed_url)
+    def document_key(url: str) -> str:
+        requested = _document_url(url, seed_url)
         if callable(local_url):
-            url = connector.local_url(url)
+            local = connector.local_url(requested)
+            if local != requested:
+                result.local_aliases[requested] = local
+            return local
+        return requested
+
+    result.entry_url = document_key(seed_url)
+
+    def enqueue(url: str, depth: int) -> None:
+        url = document_key(url)
         if url in visited or (url in queued_depths and queued_depths[url] <= depth):
             return
         queued_depths[url] = depth
@@ -185,13 +200,16 @@ def crawl_site(
             else:
                 same_site_links = [link for link in links if _same_site(base_netloc, link)]
             if callable(local_url):
-                same_site_links = [connector.local_url(link) for link in same_site_links]
+                same_site_links = [document_key(link) for link in same_site_links]
             result.link_graph[url] = set(same_site_links)
             for link in same_site_links:
                 enqueue(link, depth + 1)
         else:
             result.link_graph.setdefault(url, set())
 
+    for url, depth in queue:
+        if url not in visited and depth <= max_depth:
+            result.crawl_pending[url] = f"已發現，超過本次 --max-urls {max_urls} 的額度"
     return result
 
 
@@ -207,20 +225,24 @@ def find_orphan_pages(result: CrawlResult, seed_url: str) -> list[str]:
     if len(result.pages) <= 1:
         return []
 
+    def observed_url(url: str) -> str:
+        page = result.pages.get(url)
+        return _document_url(page.final_url if page and page.final_url else url)
+
     linked_targets: set[str] = set()
     for source, targets in result.link_graph.items():
         linked_targets.update(
-            target for target in targets if _document_url(target) != _document_url(source)
+            observed_url(target) for target in targets if observed_url(target) != observed_url(source)
         )
 
-    seed_url = _document_url(seed_url)
-    entry_points = {seed_url} if seed_url in result.pages else set()
+    seed_url = result.entry_url or _document_url(seed_url)
+    entry_points = {observed_url(seed_url)} if seed_url in result.pages else set()
     if not entry_points:
         entry_points = {
-            url
+            observed_url(url)
             for url in result.pages
-            if url not in linked_targets
-            and any(target != url for target in result.link_graph.get(url, ()))
+            if observed_url(url) not in linked_targets
+            and any(observed_url(target) != observed_url(url) for target in result.link_graph.get(url, ()))
         }
 
     orphans = [
@@ -229,7 +251,7 @@ def find_orphan_pages(result: CrawlResult, seed_url: str) -> list[str]:
         if snapshot.status_code == 200
         and snapshot.html
         and not snapshot.fetch_error_type
-        and url not in entry_points
-        and url not in linked_targets
+        and observed_url(url) not in entry_points
+        and observed_url(url) not in linked_targets
     ]
     return orphans

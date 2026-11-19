@@ -119,8 +119,7 @@ def _now_iso() -> str:
 
 def _status_code_distribution(crawl_result) -> dict[str, int]:
     """把爬取到的每個頁面狀態碼分類計數，key 用區間標籤（2xx/3xx/4xx/5xx）
-    而非逐一列出每個實際狀態碼，避免報告裡出現過多細碎分類；`0` 代表連線
-    失敗（`PageSnapshot.status_code == 0`，見 `models.py` 的既有慣例）。
+    而非逐一列出每個實際狀態碼。`0` 表示沒有 HTTP 回應，原因另列。
     """
     distribution = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0, "0": 0}
     for snapshot in crawl_result.pages.values():
@@ -294,6 +293,15 @@ def run_consultant_scan(
                 f"有 {len(crawl_result.sitemap_pending)} 個來源或清單的網址尚未完整檢查。"
                 "請依逐項原因調整掃描範圍、--max-urls 或 --max-sitemap-files。"
             )
+        if crawl_result.crawl_pending:
+            examples = "、".join(list(crawl_result.crawl_pending)[:3])
+            coverage_notes.append(f"本次 --max-urls {max_urls}，尚有 {len(crawl_result.crawl_pending)} 個已發現網址待爬，例如 {examples}。完整清單見 scan_stats.crawl_pending。")
+        if crawl_result.relative_atom_feeds:
+            coverage_notes.append("已依 Atom 文件位置及 xml:base 解析相對網址。提交 Google 的 sitemap 建議直接列完整網址。")
+        runtime_required = [url for url, page in crawl_result.pages.items()
+                            if page.fetch_error_type == "requires_runtime"]
+        if runtime_required:
+            coverage_notes.append("這些本機路徑需由網站程式提供回應，HTTP 與 HTML 待正式網址或靜態匯出確認：" + "、".join(runtime_required[:5]))
         if not expect_indexing:
             coverage_notes.append("本次預期預覽頁不被收錄。已取得的 HTML 會逐頁核對索引指令，缺少限制的頁面另列。")
 
@@ -317,6 +325,11 @@ def run_consultant_scan(
             "sitemap_statuses": crawl_result.sitemap_statuses,
             "sitemap_errors": crawl_result.sitemap_errors,
             "sitemap_pending": crawl_result.sitemap_pending,
+            "relative_atom_feeds": crawl_result.relative_atom_feeds,
+            "crawl_pending": crawl_result.crawl_pending,
+            "max_urls": max_urls,
+            "local_document_aliases": crawl_result.local_aliases,
+            "runtime_required_urls": runtime_required,
             "unverified_canonicals": crawl_result.unverified_canonicals,
             "robots_excluded_urls": [
                 url for url, page in crawl_result.pages.items()

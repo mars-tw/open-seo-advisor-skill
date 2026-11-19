@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
@@ -10,7 +11,7 @@ from bs4 import BeautifulSoup
 from seo_advisor.indexability import google_noindex
 from seo_advisor.robots_rules import googlebot_blocked_paths, robots_fields
 from seo_advisor.sitemaps import parse_sitemap
-from seo_advisor.url_utils import canonical_destination
+from seo_advisor.url_utils import canonical_destination, http_origin
 from seo_advisor.website.images import read_raster
 from seo_advisor.website.models import WebsiteBrief
 from seo_advisor.website.validation import (
@@ -24,12 +25,23 @@ from seo_advisor.website.validation import (
 )
 
 
+def _sitemap_location(url: str):
+    """Normalize just the origin; sitemap paths and queries are case-sensitive."""
+    try:
+        parsed = urlsplit(url)
+        return http_origin(url), parsed.path or "/", parsed.query, parsed.fragment
+    except ValueError:
+        # Non-absolute declarations cannot identify a canonical sitemap location.
+        return None
+
+
 def check_site(site: Path) -> dict:
     errors: list[str] = []
     pending: list[str] = []
     checks: dict[str, bool] = {}
     live_checks: set[str] = set()
     responsive_images = []
+    decoded_candidates: dict[Path, tuple[str, str]] = {}
     scope = "offline technical and content baseline only; LCP, accessibility, indexing, AI citations, payments and deployment require separate live verification"
 
     def require(name: str, condition: bool, message: str) -> None:
@@ -152,15 +164,15 @@ def check_site(site: Path) -> dict:
             "首頁收錄指令與發布狀態不一致：" + (", ".join(restrictions) or "缺少 noindex"),
         )
         sitemap = parse_sitemap((public / "sitemap.xml").read_text(encoding="utf-8"))
-        locs = sitemap.urls
+        locs = [_sitemap_location(url) for url in sitemap.urls]
         expected_locs = (
-            [brief.canonical, *(f"{brief.canonical}{page.slug}/" for page in brief.pages)]
-            if brief.publication == "production"
-            else []
+            {_sitemap_location(brief.canonical)} |
+            {_sitemap_location(f"{brief.canonical}{page.slug}/") for page in brief.pages}
+            if brief.publication == "production" and brief.canonical else set()
         )
         require("sitemap", sitemap.kind == "urlset"
                 and (not sitemap.problem or (draft and sitemap.count == 0))
-                and set(locs) == set(expected_locs), "sitemap 格式或網址與已發布頁面不一致")
+                and set(locs) == expected_locs, "sitemap 格式或網址與已發布頁面不一致")
         require("sitemap_unique", len(locs) == len(set(locs)), "sitemap 有重複網址")
         robots_text = (public / "robots.txt").read_text(encoding="utf-8")
         # Preview URLs must also be crawlable for Google to see their noindex.
@@ -175,7 +187,8 @@ def check_site(site: Path) -> dict:
         if brief.publication == "production":
             require(
                 "sitemap_discovery",
-                f"{brief.canonical}sitemap.xml" in {v for k, v in robots_fields(robots_text) if k == "sitemap"},
+                bool(brief.canonical) and _sitemap_location(f"{brief.canonical}sitemap.xml") in
+                {_sitemap_location(v) for k, v in robots_fields(robots_text) if k == "sitemap"},
                 "robots.txt 缺少 sitemap",
             )
 
@@ -200,7 +213,8 @@ def check_site(site: Path) -> dict:
         )
         def check_resources(document: Path, document_soup: BeautifulSoup) -> set[Path]:
             issues, linked_files = check_page_resources(
-                document, document_soup, public, origin, remote_actions, live_checks, documents, responsive_images
+                document, document_soup, public, origin, remote_actions, live_checks, documents,
+                responsive_images, decoded_candidates
             )
             errors.extend(issues)
             return linked_files

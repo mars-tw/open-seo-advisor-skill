@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter
+import unicodedata
+from collections import Counter, defaultdict
 
 from seo_advisor.writers.models import EditorialIssue
 
@@ -36,7 +37,6 @@ _YMYL_KEYWORDS = [
     "financial advice",
     "medical",
     "diagnosis",
-    "treatment",
     "investment",
     "legal advice",
 ]
@@ -89,6 +89,13 @@ def check_low_quality_openers(markdown: str) -> EditorialIssue | None:
 def check_ymyl_keywords(markdown: str) -> EditorialIssue | None:
     lowered = markdown.lower()
     hits = [kw for kw in _YMYL_KEYWORDS if kw.lower() in lowered]
+    clinical_context = r"(?:patients?|symptoms?|clinical|drug|medication|disease|cancer|diabetes)"
+    if re.search(
+        rf"\b{clinical_context}\s+treatments?\b|\btreatments?(?:\s+options?)?\s+for\s+"
+        rf"(?:[\w-]+\s+){{0,2}}{clinical_context}\b",
+        lowered,
+    ):
+        hits.append("treatment")
     if hits:
         return EditorialIssue(
             category="trust",
@@ -116,11 +123,16 @@ def _unique_fields(pairs):
     return item
 
 
-def check_metadata_batch(markdown: str, urls: list[str]) -> list[EditorialIssue]:
+def check_metadata_batch(
+    markdown: str, urls: list[str], duplicate_title_urls: list[str] | None = None
+) -> list[EditorialIssue]:
     """Match complete per-page records to the requested URLs, including query strings."""
     text = markdown.strip()
     fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", text, flags=re.I | re.S)
     messages = []
+    copy_issues = []
+    titles: dict[str, set[str]] = defaultdict(set)
+    review_titles = set(duplicate_title_urls or ())
     try:
         rows = json.loads(fenced[1] if fenced else text, object_pairs_hook=_unique_fields)
         if not isinstance(rows, list):
@@ -135,6 +147,15 @@ def check_metadata_batch(markdown: str, urls: list[str]) -> list[EditorialIssue]
                 continue
             url = row["url"]
             counts[url] += 1
+            visible = "\n".join(row[field] for field in ("title", "meta_description", "h1")
+                                if isinstance(row.get(field), str))
+            for check in (check_low_quality_openers, check_ymyl_keywords):
+                issue = check(visible)
+                if issue:
+                    copy_issues.append(issue.model_copy(update={"description": f"{url}：{issue.description}"}))
+            if review_titles and isinstance(row.get("title"), str) and row["title"].strip():
+                title = unicodedata.normalize("NFC", " ".join(row["title"].split())).casefold()
+                titles[title].add(url)
             missing = [field for field in ("title", "meta_description", "h1")
                        if not isinstance(row.get(field), str) or not row[field].strip()]
             if missing:
@@ -148,19 +169,24 @@ def check_metadata_batch(markdown: str, urls: list[str]) -> list[EditorialIssue]
         for extra in counts:
             if extra not in expected:
                 messages.append(f"不在本批清單的網址：{extra}")
-    return [EditorialIssue(
+        for title, pages in titles.items():
+            if len(pages) > 1 and not pages.isdisjoint(review_titles):
+                messages.append(f"修訂後的標題仍重複「{title}」：{'、'.join(sorted(pages))}")
+    issues = [EditorialIssue(
         category="metadata_batch", severity="P1", description=message,
         recommendation="按本批網址逐一交付 url、title、meta_description、h1，核對後再審。",
     ) for message in messages]
+    return issues + copy_issues
 
 
-def run_structural_checks(markdown: str, metadata_batch_urls: list[str] | None = None) -> list[EditorialIssue]:
+def run_structural_checks(
+    markdown: str, metadata_batch_urls: list[str] | None = None, duplicate_title_urls: list[str] | None = None
+) -> list[EditorialIssue]:
     """執行所有可程式化檢查的規則，回傳發現的問題清單（可能是空清單）。"""
-    checks = [check_low_quality_openers, check_ymyl_keywords]
-    issues = check_metadata_batch(markdown, metadata_batch_urls) if metadata_batch_urls else []
-    if not metadata_batch_urls:
-        checks.insert(0, check_single_h1)
-    for check in checks:
+    if metadata_batch_urls:
+        return check_metadata_batch(markdown, metadata_batch_urls, duplicate_title_urls)
+    issues = []
+    for check in (check_single_h1, check_low_quality_openers, check_ymyl_keywords):
         result = check(markdown)
         if result is not None:
             issues.append(result)

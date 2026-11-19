@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import time
 from dataclasses import dataclass, field
 from itertools import islice
@@ -9,8 +10,9 @@ from urllib.parse import urldefrag, urljoin, urlparse
 
 import httpx
 
+from seo_advisor.encoding_utils import declared_html_encoding
 from seo_advisor.connectors.base import WebsiteConnector
-from seo_advisor.connectors.text_response import snapshot_body_fields
+from seo_advisor.connectors.text_response import HTML_MEDIA_TYPES, snapshot_body_fields
 from seo_advisor.models import ConnectorProfile, PageSnapshot, ProbeResult, SafetyPolicy, UrlRecord
 from seo_advisor.security.network_policy import PrivateNetworkBlockedError, ensure_host_allowed
 from seo_advisor.security.rate_limiter import RateLimiter
@@ -238,13 +240,22 @@ class HTTPConnector(WebsiteConnector):
                             truncated = True
                             break
                     body = b"".join(chunks)[:max_bytes] if not truncated else b""
+                encoding = resp.encoding or "utf-8"
+                media = resp.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                if media in HTML_MEDIA_TYPES:
+                    transport_charset = resp.charset_encoding
+                    try:
+                        encoding = codecs.lookup(transport_charset).name if transport_charset else None
+                    except LookupError:
+                        encoding = None
+                    encoding = encoding or declared_html_encoding(body) or "utf-8"
                 result = _SafeResponse(
                     status_code=resp.status_code,
                     final_url=str(resp.url),
                     headers=dict(resp.headers),
                     x_robots_fields=resp.headers.get_list("x-robots-tag"),
                     body=body,
-                    encoding=resp.encoding or "utf-8",
+                    encoding=encoding,
                     history=history,
                     truncated=truncated,
                 )
@@ -320,7 +331,9 @@ class HTTPConnector(WebsiteConnector):
         if response.truncated:
             return SitemapFetch(response.status_code, error="超過本次讀取大小上限", limited=True)
         if response.status_code == 200 and self.is_url_in_scope(response.final_url):
-            return decode_sitemap_bytes(response.body, status=response.status_code)
+            document = decode_sitemap_bytes(response.body, status=response.status_code)
+            document.final_url = response.final_url
+            return document
         return SitemapFetch(response.status_code)
 
     def read_sitemap(self, url: str) -> str | None:

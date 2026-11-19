@@ -731,3 +731,99 @@ def test_website_cli_compares_equivalent_canonical_origins_preserving_query(tmp_
         checked = runner.invoke(website_app, ["check", "--site", str(out)])
         assert checked.exit_code == expected, checked.output
         assert json.loads(checked.output)["checks"]["page_tea-service_canonical"] == (expected == 0)
+
+
+def test_commercial_claims_require_values_and_include_standalone_nodes(tmp_path):
+    site = tmp_path / "site"
+    build_site(production_brief(tmp_path), site, base_dir=tmp_path)
+    page = site / "public/tea-service/index.html"
+    original = page.read_text(encoding="utf-8")
+    for node, allowed in [
+        ({"@type": "Product", "offers": [], "review": [None, {}], "aggregateRating": None}, True),
+        ({"@id": "#future", "@type": "Offer", "price": {"@value": None}}, True),
+        ({"@type": "https://schema.org/Offer", "price": 0, "priceCurrency": "TWD"}, False),
+        ({"@type": ["schema:Review"], "reviewRating": {"ratingValue": 5}}, False),
+        ({"@type": "AggregateRating", "ratingCount": 0}, False),
+        ({"@type": "Product", "offers": [{"price": "888"}]}, False),
+    ]:
+        script = '<script type="application/ld+json">' + json.dumps(node) + "</script>"
+        page.write_text(original.replace("</head>", script + "</head>"), encoding="utf-8")
+        result = check_site(site)
+        assert result["checks"]["no_unverified_ratings"] is allowed, (node, result["errors"])
+        assert (result["status"] == "baseline_ready") is allowed
+
+
+def test_approved_section_text_respects_visible_mark_up(tmp_path):
+    site = tmp_path / "site"
+    brief = production_brief(tmp_path)
+    build_site(brief, site, base_dir=tmp_path)
+    page = site / "public/tea-service/index.html"
+    original = page.read_text(encoding="utf-8")
+    body = brief.pages[0].sections[0].body
+    for markup, allowed in [
+        (f"<ul><li>{body}</li></ul>", True),
+        (f"<div><strong>{body[:3]}</strong>{body[3:]}</div>", True),
+        (f"<p><span hidden>{body}</span></p>", False),
+        (f"<p><span style='display: none !important'>{body}</span></p>", False),
+        (f"<p style='visibility:hidden'>{body}</p>", False),
+        (f"<p style='visibility:hidden'><span style='visibility:visible'>{body}</span></p>", True),
+        (f"<template><p>{body}</p></template>", False),
+    ]:
+        page.write_text(original.replace(f"<p>{body}</p>", markup), encoding="utf-8")
+        assert check_site(site)["checks"]["page_tea-service_copy"] is allowed
+
+
+def test_image_link_resolves_native_button_name(tmp_path):
+    site = tmp_path / "site"
+    build_site(production_brief(tmp_path), site, base_dir=tmp_path)
+    page = site / "public/tea-service/index.html"
+    original = page.read_text(encoding="utf-8")
+    for value, valid in [("選購茶具", True), ("  ", False)]:
+        html = (f'<input type="button" id="choice" value="{value}"><a href="../" '
+                'aria-labelledby="choice"><img src="../assets/hero.png" alt=""></a>')
+        page.write_text(original.replace("</main>", html + "</main>"), encoding="utf-8")
+        assert check_site(site)["checks"]["page_tea-service_image_alt"] is valid
+
+
+def test_responsive_local_candidates_decode_and_unsupported_go_to_live_checks(tmp_path):
+    site = tmp_path / "site"
+    build_site(production_brief(tmp_path), site, base_dir=tmp_path)
+    page = site / "public/tea-service/index.html"
+    original = page.read_text(encoding="utf-8")
+    assets = site / "public/assets"
+    (assets / "damaged.webp").write_bytes(b"image temporarily unavailable")
+    (assets / "icon.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8")
+    for name, status in [("hero.png", "present"), ("damaged.webp", "invalid"), ("icon.svg", "verify_live")]:
+        markup = (f'<picture><source media="(max-width: 600px)" srcset="../assets/{name} 1x">'
+                  '<img src="../assets/hero.png" alt="茶具"></picture>')
+        page.write_text(original.replace("</main>", markup + "</main>"), encoding="utf-8")
+        report = check_site(site)
+        row = next(row for row in report["responsive_images"] if row["page"] == "/tea-service/index.html"
+                   and row["media"] == "(max-width: 600px)")
+        assert row["status"] == status
+        assert (report["status"] == "invalid") == (status == "invalid")
+        if status == "invalid":
+            assert any(name in e and "600px" in e and "1x" in e for e in report["errors"])
+        elif status == "verify_live":
+            assert row["url"] in report["links_to_verify_live"]
+
+
+def test_sitemap_accepts_equivalent_origin_only(tmp_path):
+    site = tmp_path / "site"
+    build_site(production_brief(tmp_path), site, base_dir=tmp_path)
+    root = site / "public"
+    for filename, check in [("robots.txt", "sitemap_discovery"), ("sitemap.xml", "sitemap")]:
+        path = root / filename
+        original = path.read_text(encoding="utf-8")
+        for replacement, valid in [
+            ("https://TEA.EXAMPLE.COM:443/", True),
+            ("https://tea.example.com:8443/", False),
+            ("https://tea.example.com/other/", False),
+            ("https://tea.example.com/?language=de&path=", False),
+        ]:
+            # The query case remains valid XML.
+            if filename.endswith(".xml"):
+                replacement = replacement.replace("&", "&amp;")
+            path.write_text(original.replace("https://tea.example.com/", replacement), encoding="utf-8")
+            assert check_site(site)["checks"][check] is valid
+        path.write_text(original, encoding="utf-8")

@@ -29,7 +29,7 @@ from seo_advisor.models import (
 )
 from seo_advisor.security.safe_archive import resolve_inside_root, safe_extract_zip
 from seo_advisor.sitemaps import MAX_BYTES, SitemapFetch, decode_sitemap_bytes
-from seo_advisor.url_utils import http_origin
+from seo_advisor.url_utils import http_origin, sitemap_url
 
 # 備份與寫入能力預設不開放；只有明確把 write_files 加進 allowed_capabilities
 # 的呼叫端（見 fixers/runner.py）才可能真的走到寫入路徑，且仍受 dry_run 約束。
@@ -39,6 +39,29 @@ _BACKUP_DIR_NAME = ".seo-advisor/backups"
 # 備份目錄誤判為真實網站頁面（進而被 sitemap fixer 誤收進 sitemap.xml，
 # 或讓 probe() 的 has_robots/has_sitemap 偵測到誤導性的結果）。
 _TOOLING_DIR_PREFIXES = (".git/", ".seo-advisor/", "node_modules/")
+
+
+def _tracking_query_field(field: str) -> bool:
+    key, _, value = field.partition("=")
+    return (
+        key.startswith("utm_")
+        or key in {"gclid", "fbclid", "msclkid"}
+        or (key == "ref" and value == "nav")
+    )
+
+
+def _requires_runtime(parts, file_path: Path) -> bool:
+    return bool(
+        parts.query
+        or "%2F" in parts.path
+        or "%5C" in parts.path
+        or (file_path.suffix.lower() == ".php" and file_path.is_file())
+        or (
+            file_path.is_dir()
+            and not (file_path / "index.html").is_file()
+            and (file_path / "index.php").is_file()
+        )
+    )
 
 
 def _is_inside_tooling_dir(rel_path: str) -> bool:
@@ -94,6 +117,50 @@ _STACK_MARKERS = {
 }
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def writable_archive_directory(archive: Path, *, require_existing: bool = False) -> Path:
+    """Open an identified repair workspace without overwriting an existing directory."""
+    digest = file_sha256(archive)
+    marker = Path(".seo-advisor", "source-archive.sha256")
+    dest = archive.with_name(archive.stem + "_extracted")
+    alternative = archive.with_name(archive.stem + "_extracted_" + digest[:12])
+    if (dest.exists() and not (dest / marker).is_file()) or (
+        not dest.exists() and alternative.exists()
+    ):
+        dest = alternative
+    if dest.exists():
+        if not (dest / marker).is_file() or (dest / marker).read_text(encoding="ascii") != digest:
+            raise ValueError(
+                f"現有解壓目錄與 ZIP 來源無法核對。請檢查 {dest}，或直接指定該目錄重新預覽。"
+            )
+        return dest
+    if require_existing:
+        raise ValueError("找不到預覽時的解壓目錄，請重新預覽。")
+    with tempfile.TemporaryDirectory(dir=archive.parent) as staging:
+        root = Path(staging, "site")
+        safe_extract_zip(archive, root)
+        if file_sha256(archive) != digest:
+            raise ValueError("ZIP 在解壓期間已變更，請使用穩定的版本重新預覽。")
+        (root / marker).parent.mkdir(exist_ok=True)
+        (root / marker).write_text(digest, encoding="ascii")
+        try:
+            root.rename(dest)
+        except OSError:
+            if (
+                not (dest / marker).is_file()
+                or (dest / marker).read_text(encoding="ascii") != digest
+            ):
+                raise
+    return dest
+
+
 class LocalArchiveConnector(WebsiteConnector):
     """讀取本地目錄或 zip 檔案，唯讀，不執行任何程式。"""
 
@@ -107,14 +174,32 @@ class LocalArchiveConnector(WebsiteConnector):
     ) -> None:
         self.policy = policy or SafetyPolicy(allowed_capabilities={"read_urls", "read_files"})
         self.site_origin = http_origin(site_url) if site_url else None
+        self._temporary_archive = None
 
-        path = Path(source_path)
+        path = Path(source_path).resolve()
         if not path.exists():
             raise FileNotFoundError(f"找不到路徑：{source_path}")
 
-        if path.is_file() and path.suffix.lower() == ".zip":
-            extract_dir = Path(extract_to) if extract_to else path.parent / f"{path.stem}_extracted"
-            safe_extract_zip(path, extract_dir)
+        if (
+            path.is_file()
+            and path.suffix.lower() == ".zip"
+            and extract_to is None
+            and "write_files" in self.policy.allowed_capabilities
+        ):
+            self.root = writable_archive_directory(path)
+        elif path.is_file() and path.suffix.lower() == ".zip":
+            if extract_to is None:
+                self._temporary_archive = tempfile.TemporaryDirectory(prefix="seo-advisor-audit-")
+                extract_dir = Path(self._temporary_archive.name)
+            else:
+                extract_dir = Path(extract_to).resolve()
+                if extract_dir.exists() and any(extract_dir.iterdir()):
+                    raise ValueError("明確指定的解壓目錄已有檔案。請選空目錄以保留現有內容。")
+            try:
+                safe_extract_zip(path, extract_dir)
+            except BaseException:
+                self.close()
+                raise
             self.root = extract_dir
         elif path.is_dir():
             self.root = path
@@ -125,6 +210,11 @@ class LocalArchiveConnector(WebsiteConnector):
         # 子類別（例如 GitRepoConnector）可以覆寫成 repo 之外的位置，避免備份
         # 產生的檔案讓 `git status` 誤判 working tree 不乾淨。
         self._backup_root = self.root
+
+    def close(self) -> None:
+        if self._temporary_archive is not None:
+            self._temporary_archive.cleanup()
+            self._temporary_archive = None
 
     def is_url_in_scope(self, url: str) -> bool:
         """Map only a confirmed origin and local documents to this archive."""
@@ -142,11 +232,25 @@ class LocalArchiveConnector(WebsiteConnector):
     def local_url(self, url: str) -> str:
         if not self.is_url_in_scope(url):
             raise ValueError("無法將此外部網址或工具產出檔對應到本機來源。")
-        parsed = urlsplit(url)
-        return urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+        parsed = urlsplit(sitemap_url(url))
+        path, query = parsed.path or "/", parsed.query
+        # A percent-escaped slash has deployment-specific routing semantics. Keep its identity.
+        if "%2F" not in path and "%5C" not in path:
+            local = resolve_inside_root(self.root, unquote(path))
+            if local.is_dir() and (local / "index.html").is_file():
+                path = path.rstrip("/") + "/index.html"
+                local = local / "index.html"
+            if local.is_file():
+                query = "&".join(
+                    field for field in query.split("&") if not _tracking_query_field(field)
+                )
+        return urlunsplit(("", "", path, query, ""))
 
     def read_sitemap_file(self, url: str) -> SitemapFetch:
-        path = resolve_inside_root(self.root, unquote(urlsplit(self.local_url(url)).path))
+        parts = urlsplit(self.local_url(url))
+        path = resolve_inside_root(self.root, unquote(parts.path))
+        if _requires_runtime(parts, path):
+            return SitemapFetch(0, error="需要網站伺服器提供實際 sitemap 內容", limited=True)
         if not path.is_file():
             return SitemapFetch(404)
         with path.open("rb") as stream:
@@ -215,6 +319,15 @@ class LocalArchiveConnector(WebsiteConnector):
 
         parts = urlsplit(self.local_url(url))
         file_path = resolve_inside_root(self.root, unquote(parts.path))
+        if _requires_runtime(parts, file_path):
+            return PageSnapshot(
+                url=url,
+                final_url=url,
+                status_code=0,
+                fetched_at=fetched_at,
+                fetch_error_type="requires_runtime",
+                fetch_error_message="這個網址需要由網站伺服器對應或執行，請以部署後的網址驗證。",
+            )
         if file_path.is_dir():
             file_path = resolve_inside_root(self.root, (file_path / "index.html").relative_to(self.root.resolve()).as_posix())
         if not file_path.is_file():

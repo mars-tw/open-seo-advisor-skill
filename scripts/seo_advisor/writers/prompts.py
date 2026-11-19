@@ -63,6 +63,8 @@ def assignment_context(request: ContentRequest, outline: ContentOutline | None =
         lines.append("可用的內部連結：" + "、".join(request.internal_links))
     if request.metadata_batch_urls:
         lines.insert(0, METADATA_URLS_LABEL + json.dumps(request.metadata_batch_urls, ensure_ascii=False))
+    if request.duplicate_title_urls:
+        lines.append("本批包含重複標題修復。請依各頁已知的商品或用途撰寫可區辨的 title，缺少依據時標示待補資料。")
     if outline and outline.internal_link_plan:
         lines.append("大綱的內鏈安排：" + "、".join(outline.internal_link_plan))
     return "\n".join(lines)
