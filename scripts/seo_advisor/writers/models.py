@@ -59,6 +59,7 @@ class ContentRequest(BaseModel):
     internal_links: list[str] = Field(default_factory=list)
     target_url: str | None = None
     metadata_batch_urls: list[str] = Field(default_factory=list)
+    duplicate_title_urls: list[str] = Field(default_factory=list)
     auto_revise: bool = False
 
 

@@ -59,6 +59,10 @@ system prompt，本文件是給實作者（人類或 AI coding agent）看的完
 
 本機匯出站可用 `seo-advisor audit consultant --source ./export --site-url https://shop.example`，將同源的絕對網址對應到本機檔案。若子 sitemap 多於預設配額，可用 `--max-sitemap-files` 調整。`scan_stats` 分別列出已讀檔案、回應狀態、未能取得的原因與待讀清單。
 
+檢查預覽站時加上 `--preview`。即使 HTML 已有 `noindex`，也要讓 Googlebot 能抓取該頁、讀到指令。達到 `--max-urls` 上限時，`scan_stats.crawl_pending` 列出已發現但尚未抓取的網址。離線報告的 `local_document_aliases` 列出不同入口對應到哪個靜態檔，`runtime_required_urls` 則列出需由實際網站程式驗證的路徑。
+
+Atom feed 的相對連結依實際取得的 feed 位置及各層 `xml:base` 解析。不同語系的 alternate 可各自指向一個頁面；提交給 Google 的 sitemap 建議直接填入完整網址。[Atom 規格](https://www.rfc-editor.org/rfc/rfc4287#section-2)・[Google sitemap 指南](https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap)
+
 Markdown + JSON 雙格式，結構：
 
 1. Executive Summary（3-5 句話總結網站現況）
@@ -123,7 +127,9 @@ seo-advisor fix hreflang-sitemap --source ./site --map ./hreflang-map.json --sit
 
 先閱讀輸出目錄的 `fix-plan.md`，保留同一目錄內的 `fix-plan.json`。確認後，複製該次預覽印出的完整套用指令，裡面有本次計畫的確認碼。CLI 在寫入前會比對來源、參數、原檔及修正內容。改用其他站台網址、來源、報告、語言對照表或寫入模式，或待修內容有變動時，請重新預覽。
 
-以 ZIP 作為來源時，修復目標是 ZIP 旁的 `<檔名>_extracted` 工作目錄。保留該目錄以供套用及回滾，後續預覽會沿用裡面的修改。
+對 ZIP 執行顧問健檢會讀取封裝內的版本，使用獨立暫存目錄。修復命令會列印可寫的工作目錄，通常在 ZIP 旁的 `<檔名>_extracted`。如果已有無法確認來源的舊資料夾，工具會保留它，另選帶有來源識別的目錄。要驗收修復後或手動編輯的檔案，將 `audit consultant --source` 指向實際工作目錄。
+
+直接修復預設把計畫寫到 `./fix-plan`；Git 分支模式預設使用 Git 內部的 `seo-advisor-plans`。兩種模式都可以用 `--out` 指定位置。終端會顯示完整的套用命令，請保留該計畫以便核對。
 
 自然語言：「直接幫我修 sitemap 和 canonical」（會被路由到上述指令）。
 

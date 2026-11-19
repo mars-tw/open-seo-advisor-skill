@@ -13,6 +13,7 @@ from seo_advisor.robots_rules import robots_fields
 
 NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 ATOM = "{http://www.w3.org/2005/Atom}"
+XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
 MAX_FILES = 50  # Maximum child files, independent of root declarations.
 MAX_URLS_PER_FILE = 50_000
 MAX_BYTES = 50 * 1024 * 1024
@@ -24,6 +25,7 @@ class SitemapFetch:
     body: str | None = None
     error: str = ""
     limited: bool = False
+    final_url: str = ""
 
 
 def decode_sitemap_bytes(raw: bytes, status: int = 200) -> SitemapFetch:
@@ -46,6 +48,8 @@ class SitemapResult:
     errors: dict[str, str] = field(default_factory=dict)
     pending: dict[str, str] = field(default_factory=dict)
     records: list[UrlRecord] = field(default_factory=list)
+    document_bases: dict[str, str] = field(default_factory=dict)
+    relative_feeds: list[str] = field(default_factory=list)
 
 
 def sitemap_candidates(seed, robots):
@@ -74,6 +78,13 @@ def absolute_web_url(value):
         return False
 
 
+def _resolve_atom(base, reference):
+    try:
+        return urljoin(base, reference)
+    except ValueError:
+        return ""
+
+
 @dataclass
 class SitemapContent:
     kind: str = ""
@@ -81,6 +92,7 @@ class SitemapContent:
     count: int = 0
     problem: str = ""
     category: str = "sitemap_invalid_structure"
+    relative_links: bool = False
 
     def add(self, value):
         self.count += 1
@@ -91,7 +103,7 @@ class SitemapContent:
             self.problem = f"第 {self.count} 筆缺少完整的 HTTP(S) 網址"
 
 
-def parse_sitemap(body: str) -> SitemapContent:
+def parse_sitemap(body: str, document_url: str = "") -> SitemapContent:
     """Return the same interpretation to both page discovery and the audit."""
     body = body.removeprefix("\ufeff").strip()
     doc = SitemapContent()
@@ -119,18 +131,20 @@ def parse_sitemap(body: str) -> SitemapContent:
                 doc.add(locations[0].text if entry.tag == entry_tag and len(locations) == 1 else "")
         elif root.tag == ATOM + "feed":
             doc.kind = "atom"
+            feed_base = _resolve_atom(document_url, root.get(XML_BASE, ""))
             for entry in root.findall(ATOM + "entry"):
-                links = entry.findall(ATOM + "link")
-                doc.add(
-                    next(
-                        (
-                            link.get("href")
-                            for link in links
-                            if link.get("rel", "alternate") == "alternate"
-                        ),
-                        "",
-                    )
-                )
+                entry_base = _resolve_atom(feed_base, entry.get(XML_BASE, ""))
+                alternates = [link for link in entry.findall(ATOM + "link")
+                              if link.get("rel", "alternate") == "alternate"]
+                if not alternates:
+                    doc.add("")
+                for link in alternates:
+                    href = (link.get("href") or "").strip()
+                    link_base = _resolve_atom(entry_base, link.get(XML_BASE, ""))
+                    resolved = _resolve_atom(link_base, href) if href else ""
+                    if absolute_web_url(resolved) and not absolute_web_url(href):
+                        doc.relative_links = True
+                    doc.add(resolved)
         elif (
             root.tag == "rss" and root.get("version") == "2.0" and root.find("channel") is not None
         ):
@@ -156,7 +170,7 @@ def parse_sitemap(body: str) -> SitemapContent:
     return doc
 
 
-def read_sitemaps(seed, robots, in_scope, fetch, limit, *, max_files=MAX_FILES):
+def read_sitemaps(seed, robots, in_scope, fetch, limit, *, max_files=MAX_FILES, document_origin=""):
     result = SitemapResult()
     candidates = sitemap_candidates(seed, robots)
     queue = deque((url, source, 0) for url, source in candidates.items())
@@ -189,7 +203,11 @@ def read_sitemaps(seed, robots, in_scope, fetch, limit, *, max_files=MAX_FILES):
                 result.errors[url] = received.error or f"HTTP {received.status}"
             continue
         result.documents[url] = received.body
-        doc = parse_sitemap(received.body)
+        base = received.final_url or urljoin(document_origin, url)
+        result.document_bases[url] = base
+        doc = parse_sitemap(received.body, base)
+        if doc.relative_links:
+            result.relative_feeds.append(url)
         if not doc.kind:
             continue
         found_root |= bool(doc.urls) or not doc.problem

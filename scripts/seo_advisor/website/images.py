@@ -7,6 +7,36 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 
 
+def responsive_image_status(path: Path) -> tuple[str, str]:
+    """Check a local browser-image candidate without applying the hero's authoring limits."""
+    # SVG requires a browser renderer. Additional codecs (notably AVIF) vary by
+    # Pillow installation, so untestable candidates receive a separate outcome.
+    formats = {
+        ".png": "PNG", ".apng": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP",
+        ".gif": "GIF", ".avif": "AVIF", ".bmp": "BMP", ".ico": "ICO",
+    }
+    expected = formats.get(path.suffix.lower())
+    Image.init()
+    if expected not in Image.OPEN:
+        return "verify_live", "本機無對應解碼器，請用目標瀏覽器驗證"
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(path) as image:
+                if image.format != expected:
+                    return "invalid", "檔案內容與圖片格式不符"
+                if image.width * image.height > 25_000_000:
+                    return "verify_live", "圖片超過離線解碼預算，請另行驗證"
+                image.verify()
+            with Image.open(path) as image:
+                image.load()
+        return "present", "本機可解碼首幀"
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        return "verify_live", "圖片超過離線解碼預算，請另行驗證"
+    except (OSError, SyntaxError, ValueError, EOFError):
+        return "invalid", "本機無法解碼圖片內容"
+
+
 def read_raster(path: Path) -> tuple[bytes, tuple[int, int]]:
     formats = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP", ".avif": "AVIF"}
     expected = formats.get(path.suffix.lower())

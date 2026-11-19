@@ -16,7 +16,7 @@ from __future__ import annotations
 import difflib
 from xml.sax.saxutils import escape
 
-from seo_advisor.url_utils import sitemap_url
+from seo_advisor.url_utils import canonical_destination
 
 from seo_advisor.fixers.models import FixTarget, PatchPlan, ensure_write_target_allowed
 from seo_advisor.models import Finding
@@ -45,9 +45,8 @@ def plan_fix(finding: Finding, *, indexable_urls: list[str]) -> PatchPlan:
     indexable_urls：已爬取且狀態碼 200、非 noindex 的完整 URL 清單，
     由呼叫端（fixers/runner.py）從 CrawlResult 篩選後傳入。
     """
-    urls_xml = "\n".join(
-        f"  <url>\n    <loc>{escape(sitemap_url(url))}</loc>\n  </url>" for url in indexable_urls
-    )
+    urls = dict.fromkeys(canonical_destination("", url) for url in indexable_urls)
+    urls_xml = "\n".join(f"  <url>\n    <loc>{escape(url)}</loc>\n  </url>" for url in urls)
     fixed = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
@@ -73,7 +72,7 @@ def plan_fix(finding: Finding, *, indexable_urls: list[str]) -> PatchPlan:
         fix_type="sitemap",
         risk_level="low",
         targets=[target],
-        summary=f"建立 sitemap.xml，包含 {len(indexable_urls)} 個已爬取到的可索引 URL。",
+        summary=f"建立 sitemap.xml，包含 {len(urls)} 個已爬取到的可索引 URL。",
         validation_steps=["重新讀取 sitemap.xml 並確認為合法 XML 且可被解析"],
         warnings=warnings,
     )

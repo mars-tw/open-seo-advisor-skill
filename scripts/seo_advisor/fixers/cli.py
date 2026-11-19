@@ -25,7 +25,6 @@ import os
 import re
 import shlex
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 
 import typer
@@ -33,7 +32,11 @@ from rich.console import Console
 
 from seo_advisor.connectors.base import WebsiteConnector
 from seo_advisor.connectors.git_repo import GitRepoConnector
-from seo_advisor.connectors.local_archive import LocalArchiveConnector
+from seo_advisor.connectors.local_archive import (
+    LocalArchiveConnector,
+    file_sha256,
+    writable_archive_directory,
+)
 from seo_advisor.crawler import crawl_site
 from seo_advisor.encoding_utils import detect_html_encoding
 from seo_advisor.errors import translate_exception
@@ -52,14 +55,14 @@ console = Console()
 
 def _load_findings(source: str, from_report: str | None, finding_id: str | None, site_url: str | None = None) -> tuple[list[Finding], object]:
     """回傳 (findings, crawl_result)。若沒有 --from-report，就地對 source 跑一次快速掃描。"""
-    connector = LocalArchiveConnector(source, site_url=site_url)
     if from_report:
         report_data = json.loads(Path(from_report).read_text(encoding="utf-8"))
         findings = [Finding(**f) for f in report_data["findings"]]
     else:
         findings = []
 
-    crawl_result = crawl_site(connector, seed_url="/", max_urls=200, max_depth=6, fetched_at="")
+    with LocalArchiveConnector(source, site_url=site_url) as connector:
+        crawl_result = crawl_site(connector, seed_url="/", max_urls=200, max_depth=6, fetched_at="")
 
     if not from_report:
         from seo_advisor.analyzers.technical import analyze_technical_seo
@@ -72,35 +75,23 @@ def _load_findings(source: str, from_report: str | None, finding_id: str | None,
     return findings, crawl_result
 
 
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _source_directory(source: str, apply: bool) -> str:
-    """Keep user edits to a ZIP's extracted working copy between preview and apply."""
     path = Path(source)
-    if not path.is_file() or path.suffix.lower() != ".zip":
-        return source
-    dest = path.with_name(path.stem + "_extracted")
-    marker = Path(".seo-advisor", "source-archive.sha256")
-    digest = _file_sha256(path)
-    if dest.exists():
-        if not (dest / marker).is_file() or (dest / marker).read_text(encoding="ascii") != digest:
-            raise ValueError(f"現有解壓目錄與 ZIP 來源無法核對。請檢查 {dest}，或直接指定該目錄重新預覽。")
-    else:
-        if apply:
-            raise ValueError("找不到預覽時的解壓目錄，請重新預覽。")
-        with TemporaryDirectory(dir=path.parent) as staging:
-            root = Path(staging, "site")
-            LocalArchiveConnector(source, extract_to=str(root))
-            (root / marker).parent.mkdir(exist_ok=True)
-            (root / marker).write_text(digest, encoding="ascii")
-            root.rename(dest)
-    return str(dest)
+    if path.is_file() and path.suffix.lower() == ".zip":
+        directory = writable_archive_directory(path, require_existing=apply)
+        console.print(
+            f"ZIP 修復工作目錄：{directory}。驗收已修改的檔案時，請使用此目錄。", markup=False
+        )
+        return str(directory)
+    return source
+
+
+def _review_directory(connector: WebsiteConnector, out: str | None) -> Path:
+    if out is not None:
+        return Path(out)
+    if isinstance(connector, GitRepoConnector):
+        return connector.review_directory
+    return Path("./fix-plan")
 
 
 def _review_plan(
@@ -128,7 +119,7 @@ def _review_plan(
             path = Path(options[key]).resolve()
             plan.review_options[key] = str(path)
             if key != "source" or path.is_file():
-                plan.review_options[f"{key}-sha256"] = _file_sha256(path)
+                plan.review_options[f"{key}-sha256"] = file_sha256(path)
     payload = json.dumps(plan.model_dump(), ensure_ascii=False, sort_keys=True).encode("utf-8")
     plan.plan_id += "-" + hashlib.sha256(payload).hexdigest()[:24]
     preview_file = out_path / "fix-plan.json"
@@ -163,20 +154,33 @@ def _show_apply(command: str, options: dict[str, str], out: str, plan: PatchPlan
 @fix_app.command("engineer")
 def engineer(
     source: str = typer.Option(..., "--source", help="本地原始碼包目錄或 zip 檔路徑"),
-    finding_id: str = typer.Option(None, "--finding-id", help="只修復指定的 Finding ID（不指定則列出所有可修復項目）"),
-    from_report: str = typer.Option(None, "--from-report", help="顧問報告 JSON 路徑（不指定則就地跑一次快速掃描）"),
+    finding_id: str = typer.Option(
+        None, "--finding-id", help="只修復指定的 Finding ID（不指定則列出所有可修復項目）"
+    ),
+    from_report: str = typer.Option(
+        None, "--from-report", help="顧問報告 JSON 路徑（不指定則就地跑一次快速掃描）"
+    ),
     site_url: str = typer.Option(
-        None, "--site-url", help="正式站台網址（例如 https://example.com），用於產生 sitemap/robots.txt 裡的絕對 URL"
+        None,
+        "--site-url",
+        help="正式站台網址（例如 https://example.com），用於產生 sitemap/robots.txt 裡的絕對 URL",
     ),
     write_mode: str = typer.Option(
-        "direct", "--write-mode",
+        "direct",
+        "--write-mode",
         help='寫入方式："direct"（預設，直接改 --source 目錄）或 "git-branch"'
         "（在 --source 這個 git repo 建立新分支+commit，不動目前 working tree，"
         "要求 working tree 完全乾淨）",
     ),
     apply: bool = typer.Option(False, "--apply", help="真的寫入檔案（預設為 dry-run 預覽）"),
-    confirm: str = typer.Option(None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'),
-    out: str = typer.Option("./fix-plan", "--out", help="輸出目錄"),
+    confirm: str = typer.Option(
+        None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'
+    ),
+    out: str | None = typer.Option(
+        None,
+        "--out",
+        help="預覽及套用收據目錄；Git 分支模式預設使用 Git 內部的 seo-advisor-plans。",
+    ),
     debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
 ) -> None:
     """產出修復計畫（預設 dry-run）；加 --apply --confirm 才會真的寫入檔案。"""
@@ -221,7 +225,7 @@ def engineer(
         seed_for_plan = site_url or "/"
         plan = runner.build_plan(target_finding, connector=connector, crawl_result=crawl_result, seed_url=seed_for_plan)
 
-        out_path = Path(out)
+        out_path = _review_directory(connector, out)
         options = {"source": source, "finding-id": finding_id, "write-mode": write_mode}
         if from_report:
             options["from-report"] = from_report
@@ -252,7 +256,7 @@ def engineer(
             console.print(target.diff_preview or "（無文字 diff）", markup=False, highlight=False)
 
         if not apply:
-            _show_apply("engineer", options, out, plan)
+            _show_apply("engineer", options, str(out_path), plan)
             raise typer.Exit(code=0)
 
         result = runner.apply_plan(plan, connector=connector)
@@ -313,13 +317,23 @@ def _load_hreflang_pages(connector, hreflang_map) -> dict[str, str]:
 @fix_app.command("hreflang-html")
 def hreflang_html(
     source: str = typer.Option(..., "--source", help="本地原始碼包目錄或 zip 檔路徑"),
-    map_file: str = typer.Option(..., "--map", help="語言對照表 JSON 檔案路徑（見 docs/modes.md#engineer-mode）"),
+    map_file: str = typer.Option(
+        ..., "--map", help="語言對照表 JSON 檔案路徑（見 docs/modes.md#engineer-mode）"
+    ),
     write_mode: str = typer.Option(
-        "direct", "--write-mode", help='寫入方式："direct"（預設）或 "git-branch"（見 fix engineer 說明）'
+        "direct",
+        "--write-mode",
+        help='寫入方式："direct"（預設）或 "git-branch"（見 fix engineer 說明）',
     ),
     apply: bool = typer.Option(False, "--apply", help="真的寫入檔案（預設為 dry-run 預覽）"),
-    confirm: str = typer.Option(None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'),
-    out: str = typer.Option("./fix-plan", "--out", help="輸出目錄"),
+    confirm: str = typer.Option(
+        None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'
+    ),
+    out: str | None = typer.Option(
+        None,
+        "--out",
+        help="預覽及套用收據目錄；Git 分支模式預設使用 Git 內部的 seo-advisor-plans。",
+    ),
     debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
 ) -> None:
     """依語言對照表在指定頁面插入 hreflang 標籤（預設 dry-run）。
@@ -350,7 +364,7 @@ def hreflang_html(
         pages = _load_hreflang_pages(connector, hreflang_map)
         plan = build_hreflang_html_plan(hreflang_map, pages=pages)
 
-        out_path = Path(out)
+        out_path = _review_directory(connector, out)
         options = {"source": source, "map": map_file, "write-mode": write_mode}
         _review_plan(plan, connector, options, out_path, apply, confirm)
 
@@ -373,7 +387,7 @@ def hreflang_html(
             console.print(target.diff_preview or "（無文字 diff）", markup=False, highlight=False)
 
         if not apply:
-            _show_apply("hreflang-html", options, out, plan)
+            _show_apply("hreflang-html", options, str(out_path), plan)
             raise typer.Exit(code=0)
 
         result = runner.apply_plan(plan, connector=connector)
@@ -407,13 +421,23 @@ def hreflang_html(
 def hreflang_sitemap(
     source: str = typer.Option(..., "--source", help="本地原始碼包目錄或 zip 檔路徑"),
     map_file: str = typer.Option(..., "--map", help="語言對照表 JSON 檔案路徑"),
-    sitemap_path: str = typer.Option("sitemap.xml", "--sitemap", help="要修改（或建立）的 sitemap 檔案路徑"),
+    sitemap_path: str = typer.Option(
+        "sitemap.xml", "--sitemap", help="要修改（或建立）的 sitemap 檔案路徑"
+    ),
     write_mode: str = typer.Option(
-        "direct", "--write-mode", help='寫入方式："direct"（預設）或 "git-branch"（見 fix engineer 說明）'
+        "direct",
+        "--write-mode",
+        help='寫入方式："direct"（預設）或 "git-branch"（見 fix engineer 說明）',
     ),
     apply: bool = typer.Option(False, "--apply", help="真的寫入檔案（預設為 dry-run 預覽）"),
-    confirm: str = typer.Option(None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'),
-    out: str = typer.Option("./fix-plan", "--out", help="輸出目錄"),
+    confirm: str = typer.Option(
+        None, "--confirm", help='套用時需要輸入 "APPLY <plan_id>"（plan_id 見 dry-run 輸出）'
+    ),
+    out: str | None = typer.Option(
+        None,
+        "--out",
+        help="預覽及套用收據目錄；Git 分支模式預設使用 Git 內部的 seo-advisor-plans。",
+    ),
     debug: bool = typer.Option(False, "--debug", help="發生錯誤時顯示完整技術細節"),
 ) -> None:
     """依語言對照表在 sitemap.xml 加入 xhtml:link hreflang 條目（預設 dry-run）。"""
@@ -444,7 +468,7 @@ def hreflang_sitemap(
 
         plan = build_hreflang_sitemap_plan(hreflang_map, sitemap_path=sitemap_path, current_sitemap_xml=current_xml)
 
-        out_path = Path(out)
+        out_path = _review_directory(connector, out)
         options = {"source": source, "map": map_file, "sitemap": sitemap_path, "write-mode": write_mode}
         _review_plan(plan, connector, options, out_path, apply, confirm)
 
@@ -465,7 +489,7 @@ def hreflang_sitemap(
             console.print(target.diff_preview or "（無文字 diff）", markup=False, highlight=False)
 
         if not apply:
-            _show_apply("hreflang-sitemap", options, out, plan)
+            _show_apply("hreflang-sitemap", options, str(out_path), plan)
             raise typer.Exit(code=0)
 
         result = runner.apply_plan(plan, connector=connector)

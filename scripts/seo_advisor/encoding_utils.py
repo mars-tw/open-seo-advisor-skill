@@ -15,8 +15,35 @@
 from __future__ import annotations
 
 import re
+from html.parser import HTMLParser
 
-_META_CHARSET_PATTERN = re.compile(rb'<meta\b[^>]*?\bcharset\s*=\s*["\']?([\w-]+)', re.IGNORECASE)
+_CONTENT_CHARSET = re.compile(r'(?:^|;)\s*charset\s*=\s*["\']?([a-z0-9_.-]+)', re.I)
+
+
+class _EncodingDeclaration(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.encoding = None
+        self.inert = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"template", "noscript"}:
+            self.inert += 1
+        if self.inert or self.encoding or tag != "meta":
+            return
+        values = {key: (value or "").strip() for key, value in attrs}
+        label = values.get("charset")
+        if not label and values.get("http-equiv", "").casefold() == "content-type":
+            match = _CONTENT_CHARSET.search(values.get("content", ""))
+            if match:
+                label = match.group(1)
+        if label and re.fullmatch(r"[a-zA-Z0-9_.-]+", label):
+            self.encoding = label.casefold()
+
+    def handle_endtag(self, tag):
+        if tag in {"template", "noscript"} and self.inert:
+            self.inert -= 1
+
 
 _BOM_SIGNATURES: list[tuple[bytes, str]] = [
     (b"\xef\xbb\xbf", "utf-8-sig"),
@@ -27,19 +54,22 @@ _BOM_SIGNATURES: list[tuple[bytes, str]] = [
 ]
 
 
-def detect_html_encoding(raw_bytes: bytes) -> str:
-    """回傳最可能的編碼名稱（可直接傳給 bytes.decode()）。"""
+def declared_html_encoding(raw_bytes: bytes) -> str | None:
+    """Read a BOM or active HTML declaration without decoding the document body."""
     for signature, encoding in _BOM_SIGNATURES:
         if raw_bytes.startswith(signature):
             return encoding
 
-    match = _META_CHARSET_PATTERN.search(raw_bytes[:4096])
-    if match:
-        declared = match.group(1).decode("ascii", errors="ignore").strip().lower()
-        if declared:
-            return declared
+    parser = _EncodingDeclaration()
+    try:
+        parser.feed(raw_bytes[:4096].decode("latin-1"))
+    except (AssertionError, ValueError):
+        pass  # A malformed or incomplete declaration is not an encoding hint.
+    return parser.encoding
 
-    return "utf-8"
+
+def detect_html_encoding(raw_bytes: bytes) -> str:
+    return declared_html_encoding(raw_bytes) or "utf-8"
 
 
 def decode_html_bytes(raw_bytes: bytes) -> str:

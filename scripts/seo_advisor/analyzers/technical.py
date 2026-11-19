@@ -24,15 +24,11 @@ from seo_advisor.indexability import google_noindex, valid_hreflang
 from seo_advisor.models import Finding, Mode, Severity
 from seo_advisor.robots_rules import googlebot_blocks, robots_fields
 from seo_advisor.sitemaps import parse_sitemap
-from seo_advisor.url_utils import normalize_host as _normalize_host
+from seo_advisor.url_utils import canonical_destination, normalize_host as _normalize_host
 
 
 def _canonicalize_url_for_comparison(url: str) -> str:
-    """Preserve path and query identity; only the fragment is document-local."""
-    parsed = urlparse(url)
-    return parsed._replace(
-        netloc=parsed.netloc.lower(), path=parsed.path or "/", fragment=""
-    ).geturl()
+    return canonical_destination("", url)
 
 
 def _make_id(category: str, seq: int) -> str:
@@ -98,22 +94,24 @@ def analyze_technical_seo(
     findings.extend(_check_redirect_chains(result, next_id))
     findings.extend(_check_robots_txt(result, next_id, require_sitemap=not preview_excludes_all_pages))
     findings.extend(_check_sitemap(result, next_id, require_urls=not preview_excludes_all_pages))
-    findings.extend(_check_https(result, seed_url, next_id))
+    findings.extend(_check_https(result, next_id))
     findings.extend(_check_page_metadata(parsed, next_id))
     excluded_from_link_advice = set(noindex)
+    blocked_by_reader = {url for url, snap in result.pages.items()
+                         if snap.fetch_error_type == "blocked_by_robots_txt"}
     if expect_indexing:
         findings.extend(_check_noindex(noindex, next_id))
         candidates = set(parsed) - set(noindex)
-        candidates.update(
-            url
-            for url, snap in result.pages.items()
-            if snap.fetch_error_type == "blocked_by_robots_txt" and url in result.sitemap_page_urls
-        )
+        candidates.update(blocked_by_reader & result.sitemap_page_urls)
         googlebot_findings = _check_googlebot_crawl(candidates, result.robots_txt, next_id)
         findings.extend(googlebot_findings)
         for finding in googlebot_findings:
             excluded_from_link_advice.update(finding.affected_urls)
-    elif exposed := sorted(set(parsed) - set(noindex)):
+    else:
+        findings.extend(_check_googlebot_crawl(
+            set(noindex) | blocked_by_reader, result.robots_txt, next_id, preview=True
+        ))
+    if not expect_indexing and (exposed := sorted(set(parsed) - set(noindex))):
         findings.append(
             Finding(
                 id=next_id("preview_indexable"),
@@ -152,7 +150,7 @@ def _check_status_codes(result: CrawlResult, next_id) -> list[Finding]:
     error_urls = [url for url, snap in result.pages.items() if snap.status_code >= 400]
     errors_by_type: dict[str, list[str]] = {}
     for url, snap in result.pages.items():
-        if snap.status_code == 0 and snap.fetch_error_type != "blocked_by_robots_txt":
+        if snap.status_code == 0 and snap.fetch_error_type not in {"blocked_by_robots_txt", "requires_runtime"}:
             errors_by_type.setdefault(snap.fetch_error_type or "unknown", []).append(url)
 
     if error_urls:
@@ -276,7 +274,7 @@ def _check_robots_txt(result: CrawlResult, next_id, *, require_sitemap: bool = T
     return findings
 
 
-def _check_googlebot_crawl(urls, content, next_id):
+def _check_googlebot_crawl(urls, content, next_id, *, preview=False):
     paths = {}
     for url in sorted(urls):
         parts = urlparse(url)
@@ -289,8 +287,9 @@ def _check_googlebot_crawl(urls, content, next_id):
         return []
     return [
         Finding(
-            id=next_id("googlebot_blocked"),
-            title="robots.txt 阻擋 Googlebot 抓取預定收錄頁面",
+            id=next_id("preview_noindex_blocked" if preview else "googlebot_blocked"),
+            title=("robots.txt 阻擋 Googlebot 讀取預覽頁的收錄指令" if preview
+                   else "robots.txt 阻擋 Googlebot 抓取預定收錄頁面"),
             mode=Mode.CONSULTANT,
             category="indexability",
             severity=Severity.P1,
@@ -304,7 +303,8 @@ def _check_googlebot_crawl(urls, content, next_id):
                     for path, (agent, rule) in blocked.items()
                 }
             },
-            recommendation="確認頁面用途，對預定收錄的頁面調整 Googlebot 實際命中的群組與路徑規則。",
+            recommendation=("若依賴 noindex，讓 Googlebot 能抓取並讀到指令；需限制閱覽時使用登入或授權。"
+                            if preview else "確認頁面用途，對預定收錄的頁面調整 Googlebot 實際命中的群組與路徑規則。"),
             validation=["對網站正式網址重新檢查 Googlebot 規則及 Search Console URL 檢查結果。"],
             owner=Mode.ENGINEER,
             sources=["robots-txt-intro"],
@@ -366,7 +366,7 @@ def _check_sitemap(result: CrawlResult, next_id, *, require_urls: bool = True) -
         return findings
 
     for url, body in documents.items():
-        parsed = parse_sitemap(body)
+        parsed = parse_sitemap(body, result.sitemap_bases.get(url, url))
         if not require_urls and parsed.kind == "urlset" and not parsed.count:
             continue
         message = parsed.problem
@@ -394,18 +394,18 @@ def _check_sitemap(result: CrawlResult, next_id, *, require_urls: bool = True) -
     return findings
 
 
-def _check_https(result: CrawlResult, seed_url: str, next_id) -> list[Finding]:
+def _check_https(result: CrawlResult, next_id) -> list[Finding]:
     findings: list[Finding] = []
     http_pages = [
         url
-        for url in result.pages
-        if urlparse(url).scheme == "http"
+        for url, page in result.pages.items()
+        if 200 <= page.status_code < 300 and urlparse(page.final_url or url).scheme == "http"
     ]
-    if http_pages and urlparse(seed_url).scheme == "http":
+    if http_pages:
         findings.append(
             Finding(
                 id=next_id("https_missing"),
-                title="網站未強制使用 HTTPS",
+                title="這些網址最終仍以 HTTP 提供內容",
                 mode=Mode.CONSULTANT,
                 category="security",
                 severity=Severity.P1,

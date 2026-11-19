@@ -40,6 +40,23 @@ def test_build_utm_plan_generates_tagged_urls_per_channel():
     assert plan.naming_recommendations
 
 
+def test_utm_cli_preserves_filters_order_escapes_and_fragment(tmp_path):
+    from urllib.parse import urlsplit
+    from typer.testing import CliRunner
+    from seo_advisor.cli import app
+
+    base = "https://shop.example/catalog?size=S&size=M&flag&ref=a%20b&ref=a+b&utm_source=old&utm_source=older#products"
+    result = CliRunner().invoke(app, ["growth", "utm", "--url", base, "--channels", "google,email", "--out", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    data = json.loads((tmp_path / "utm-plan.json").read_bytes())
+    assert len(data["tagged_urls"]) == 2
+    for tag in data["tagged_urls"]:
+        parts = urlsplit(tag)
+        assert parts.query.startswith("size=S&size=M&flag&ref=a%20b&ref=a+b&")
+        assert parts.query.count("utm_source=") == 1 and parts.fragment == "products"
+    assert not any(x["issue_code"] == "utm_campaign_reused_across_channels" for x in data["audit_items"])
+
+
 # --- CRO ---
 
 def test_cro_with_html_detects_findings():

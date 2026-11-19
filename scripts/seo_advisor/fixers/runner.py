@@ -32,6 +32,7 @@ from seo_advisor.fixers import canonical, cwv, hreflang, redirect, robots, sitem
 from seo_advisor.fixers.models import FixResult, NotFixableError, PatchPlan, PlanOnlyError
 from seo_advisor.indexability import google_noindex
 from seo_advisor.models import Finding
+from seo_advisor.robots_rules import googlebot_blocks
 from seo_advisor.url_utils import canonical_destination
 
 _FIXERS = (robots, sitemap, canonical, redirect, hreflang, cwv)
@@ -108,6 +109,18 @@ def build_plan(
                         continue
                     resolved = directory_url
             indexable_urls[resolved] = None
+        request_paths = {}
+        for url in indexable_urls:
+            parts = urlsplit(url)
+            request_paths[url] = (parts.path or "/") + ("?" + parts.query if parts.query else "")
+        blocked = googlebot_blocks(crawl_result.robots_txt or "", list(request_paths.values()))
+        for url, path in request_paths.items():
+            if path in blocked:
+                agent, rule = blocked[path]
+                excluded.append(
+                    f"{url}：robots.txt 的 {agent} 群組禁止 Googlebot 抓取此網址（{rule}）"
+                )
+                del indexable_urls[url]
         plan = sitemap.plan_fix(finding, indexable_urls=list(indexable_urls))
         plan.warnings.extend(excluded)
         plan.original_hashes[sitemap.SITEMAP_PATH] = None

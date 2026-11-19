@@ -27,6 +27,7 @@ from xml.etree import ElementTree
 
 from seo_advisor.fixers.hreflang_map import HreflangMap
 from seo_advisor.fixers.models import FixTarget, PatchPlan, ensure_write_target_allowed
+from seo_advisor.url_utils import canonical_destination, sitemap_url
 
 _SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 _XHTML_NS = "http://www.w3.org/1999/xhtml"
@@ -90,7 +91,7 @@ def _replace_hreflang_links(url_elem: ElementTree.Element, alternates: dict[str,
         link = ElementTree.SubElement(url_elem, f"{{{_XHTML_NS}}}link")
         link.set("rel", "alternate")
         link.set("hreflang", code)
-        link.set("href", alternates[code])
+        link.set("href", sitemap_url(alternates[code]))
 
 
 def _serialize(root: ElementTree.Element) -> str:
@@ -139,9 +140,13 @@ def build_hreflang_sitemap_plan(
         current_count += 1
         loc = _find_loc_text(url_elem)
         if loc:
-            url_by_loc[loc] = url_elem
+            url_by_loc[canonical_destination("", loc)] = url_elem
 
-    mapped_urls = {url for cluster in hreflang_map.clusters for url in cluster.alternates.values()}
+    mapped_urls = {
+        canonical_destination("", url)
+        for cluster in hreflang_map.clusters
+        for url in cluster.alternates.values()
+    }
     merged_count = current_count + len(mapped_urls.difference(url_by_loc))
     if merged_count > _MAX_URLS_PER_SITEMAP:
         return _plan_only(
@@ -151,12 +156,16 @@ def build_hreflang_sitemap_plan(
     updated_count = 0
     for cluster in hreflang_map.clusters:
         for url in cluster.alternates.values():
-            url_elem = url_by_loc.get(url)
+            key = canonical_destination("", url)
+            url_elem = url_by_loc.get(key)
             if url_elem is None:
                 url_elem = ElementTree.SubElement(root, f"{{{_SITEMAP_NS}}}url")
                 loc_elem = ElementTree.SubElement(url_elem, f"{{{_SITEMAP_NS}}}loc")
-                loc_elem.text = url
-                url_by_loc[url] = url_elem
+                loc_elem.text = sitemap_url(url)
+                url_by_loc[key] = url_elem
+            else:
+                loc_elem = next(c for c in url_elem if _local_name(c.tag) == "loc")
+                loc_elem.text = sitemap_url(loc_elem.text.strip())
             _replace_hreflang_links(url_elem, cluster.alternates)
             updated_count += 1
 

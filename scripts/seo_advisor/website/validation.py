@@ -7,6 +7,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 from bs4 import BeautifulSoup, Comment, NavigableString
 from seo_advisor.url_utils import canonical_destination
+from seo_advisor.website.images import responsive_image_status
 from seo_advisor.website.models import ContentPage
 
 
@@ -41,15 +42,45 @@ def node_types(nodes: list[dict]) -> set[str]:
     return result
 
 
+_COMMERCIAL_TYPES = {"Offer", "AggregateOffer", "Review", "AggregateRating"}
+_COMMERCIAL_PROPERTIES = {"offers", "review", "aggregateRating"}
+
+
+def _schema_name(value):
+    for prefix in ("https://schema.org/", "http://schema.org/", "schema:"):
+        if value.startswith(prefix):
+            return value[len(prefix):]
+    return value
+
+
+def _has_value(value) -> bool:
+    """JSON-LD nulls, empty containers and type-only placeholders carry no value."""
+    if isinstance(value, dict):
+        return any(_has_value(child) for key, child in value.items()
+                   if key not in {"@type", "@context", "@language", "@direction", "@index"})
+    if isinstance(value, list):
+        return any(_has_value(child) for child in value)
+    return value is not None and (not isinstance(value, str) or bool(value.strip()))
+
+
 def commercial_claims(value) -> set[str]:
-    """Return commercial properties, including nested Product and Offer nodes."""
+    """Find substantive offers and reviews at any nesting level."""
     found = set()
     if isinstance(value, dict):
+        types = value.get("@type", [])
+        if isinstance(types, str):
+            types = [types]
+        if isinstance(types, list):
+            claim_types = _COMMERCIAL_TYPES.intersection(
+                _schema_name(kind) for kind in types if isinstance(kind, str)
+            )
+            if claim_types and _has_value({k: v for k, v in value.items() if k != "@id"}):
+                found.update(claim_types)
         for key, child in value.items():
             if key == "@context":
                 continue
-            name = key.rsplit("/", 1)[-1].removeprefix("schema:")
-            if name in {"aggregateRating", "review", "offers"}:
+            name = _schema_name(key)
+            if name in _COMMERCIAL_PROPERTIES and _has_value(child):
                 found.add(name)
             found.update(commercial_claims(child))
     elif isinstance(value, list):
@@ -69,23 +100,70 @@ def canonical_targets(soup: BeautifulSoup, page_url: str) -> set[str]:
     return targets
 
 
+_TEXT_BLOCKS = {
+    "address", "article", "aside", "blockquote", "br", "caption", "dd", "div", "dl", "dt", "figcaption",
+    "figure", "footer", "h3", "h4", "h5", "h6", "header", "li", "ol", "p", "pre", "section",
+    "table", "td", "th", "tr", "ul",
+}
+
+
+def _inline_style(node, prop):
+    style = node.get("style", "")
+    if not style:
+        return ""
+    values = re.findall(r"(?:^|;)\s*" + prop + r"\s*:\s*([^;]+)", style, re.I)
+    if not values:
+        return ""
+    important = [v for v in values if re.search(r"!\s*important\s*$", v, re.I)]
+    return re.sub(r"!\s*important\s*$", "", (important or values)[-1], flags=re.I).strip().lower()
+
+
+def _not_rendered(node):
+    return (node.name in {"script", "style", "template", "noscript"}
+            or node.has_attr("hidden") or _inline_style(node, "display") == "none")
+
+
+def _copy_tokens(node, visible=True):
+    """Yield the heading boundaries and readable text, preserving inline words."""
+    if isinstance(node, NavigableString):
+        if visible and not isinstance(node, Comment):
+            yield "text", str(node)
+        return
+    if _not_rendered(node):
+        return
+    # visibility is inherited; a child may explicitly make itself visible again.
+    visibility = _inline_style(node, "visibility")
+    if visibility in {"visible", "hidden", "collapse"}:
+        visible = visibility == "visible"
+    if node.name in {"h1", "h2"}:
+        title = "".join(value for child in node.children for _, value in _copy_tokens(child, visible))
+        if title.strip():
+            yield "heading", "" if node.name == "h1" else " ".join(title.split())
+        return
+    if node.name in _TEXT_BLOCKS:
+        yield "text", " "
+    for child in node.children:
+        yield from _copy_tokens(child, visible)
+    if node.name in _TEXT_BLOCKS:
+        yield "text", " "
+
+
 def missing_page_copy(soup: BeautifulSoup, page: ContentPage) -> list[str]:
-    """Check the approved intro and the body under each actual section heading."""
+    """Check approved text under its heading, regardless of the chosen body markup."""
     parts = {}
-    heading = None
-    for tag in soup.select("main h1, main h2, main p"):
-        if tag.find_parent(attrs={"hidden": True}) or tag.has_attr("hidden"):
+    for main in soup.find_all("main"):
+        if any(_not_rendered(parent) for parent in main.parents):
             continue
-        text = " ".join(tag.get_text().split())
-        if tag.name == "h1":
-            heading = ""
-        elif tag.name == "h2":
-            heading = text
-        elif heading is not None:
-            parts.setdefault(heading, []).append(text)
+        heading = None
+        for kind, value in _copy_tokens(main):
+            if kind == "heading":
+                heading = value
+            elif heading is not None:
+                parts.setdefault(heading, []).append(value)
     required = [("", page.intro), *((s.title, s.body) for s in page.sections)]
-    return [title or "導言" for title, body in required
-            if " ".join(body.split()) not in " ".join(parts.get(" ".join(title.split()), []))]
+    section_text = {k: " ".join("".join(chunks).split()) for k, chunks in parts.items()}
+    return [title or "導言" for title, body in required if
+            " ".join(body.split()) not in section_text.get(" ".join(title.split()), "")]
 
 
 def _label_text(node, include_hidden=False) -> str:
@@ -93,13 +171,20 @@ def _label_text(node, include_hidden=False) -> str:
         return "" if isinstance(node, Comment) else str(node).strip()
     if node.name in {"script", "style", "template"}:
         return ""
-    if not include_hidden and (node.has_attr("hidden") or node.get("aria-hidden") == "true"):
+    if not include_hidden and (_not_rendered(node) or node.get("aria-hidden") == "true"):
         return ""
     label = node.get("aria-label", "").strip()
     if label:
         return label
     if node.name == "img":
         return node.get("alt", "").strip()
+    if node.name == "input":
+        kind = node.get("type", "text").casefold()
+        if kind in {"button", "submit", "reset"}:
+            default = {"submit": "Submit", "reset": "Reset"}.get(kind, "")
+            return node.get("value", default).strip() or node.get("title", "").strip()
+        if kind == "image":
+            return (node.get("alt", "").strip() or node.get("title", "").strip())
     text = " ".join(filter(None, (_label_text(child, include_hidden) for child in node.children)))
     return text or node.get("title", "").strip()
 
@@ -170,6 +255,7 @@ def check_page_resources(
     live_checks: set[str],
     documents: dict[Path, BeautifulSoup],
     responsive_images: list[dict],
+    decoded_candidates: dict[Path, tuple[str, str]],
 ) -> tuple[list[str], set[Path]]:
     errors = []
     linked_files = set()
@@ -222,7 +308,14 @@ def check_page_resources(
                 errors.append(f"{source}：找不到本機資源 {value}")
             continue
         if candidate is not None:
-            candidate["status"] = "present"
+            if resource not in decoded_candidates:
+                decoded_candidates[resource] = responsive_image_status(resource)
+            status, message = decoded_candidates[resource]
+            candidate.update(status=status, decode=message)
+            if status == "invalid":
+                errors.append(f"{source}：{message} {value}（{candidate['media']} {candidate['descriptor']}）")
+            elif status == "verify_live":
+                live_checks.add(target_url)
         if tag.name == "a":
             linked_files.add(resource)
         fragment = unquote(target.fragment.split(":~:", 1)[0])

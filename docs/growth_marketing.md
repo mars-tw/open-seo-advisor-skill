@@ -17,7 +17,7 @@ seo-advisor growth utm --url https://example.com/promo --channels google,faceboo
 ```
 
 - 依常見渠道自動產生一致命名的 tagged URL（source/medium/campaign/content）。
-- 歸因衛生檢查：缺必要欄位、大小寫混用、含中文/空格、跨渠道 campaign 重用。
+- 產生追蹤網址時保留既有商品篩選值、查詢字串順序及錨點。同一活動可跨渠道沿用 campaign，以 source、medium 區分來源。稽核會指出必要欄位缺漏和命名差異。
 
 ## 2. CRO 落地頁優化（`growth cro`）
 

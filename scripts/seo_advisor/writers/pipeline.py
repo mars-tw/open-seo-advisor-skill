@@ -144,7 +144,9 @@ def _generate_qa(provider: LLMProvider, request: ContentRequest, draft_markdown:
 
     # 併入程式化結構檢查的結果，這些是 LLM 可能疏漏但規則明確的問題
     # （例如多個 H1、YMYL 關鍵字命中），不依賴 LLM 的語意判斷。
-    structural_issues = run_structural_checks(draft_markdown, request.metadata_batch_urls)
+    structural_issues = run_structural_checks(
+        draft_markdown, request.metadata_batch_urls, request.duplicate_title_urls
+    )
     combined_issues = list(llm_qa.issues) + structural_issues
     passed = llm_qa.passed and not any(i.severity in {"P0", "P1"} for i in combined_issues)
 

@@ -100,6 +100,7 @@ class GitRepoConnector(LocalArchiveConnector):
         # 之內），因為 .git 內容本身永遠不會出現在 `git status` 的追蹤範圍
         # ——這樣「乾淨的 working tree」這個核心承諾才是名副其實。
         self._backup_root = git_dir / "seo-advisor-backups-root"
+        self.review_directory = git_dir / "seo-advisor-plans"
         self._session_marker_path = git_dir / "seo-advisor-session.json"
 
         self._session_branch: str | None = None

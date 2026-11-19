@@ -40,6 +40,8 @@ def test_php_source_produces_an_unscored_report_in_every_format(tmp_path):
     ("complete", None), ("missing-one", "缺少指定頁面"), ("only-one", "缺少指定頁面"),
     ("empty", "meta_description"), ("duplicate", "重複交付"),
     ("similar-url", "不在本批清單"), ("urls-only", "有效 url"), ("empty-final", "無法讀取"),
+    ("same-title", "修訂後的標題仍重複"),
+    ("industrial", None),
 ])
 def test_six_page_handoff_and_qa_of_delivered_revision(tmp_path, monkeypatch, scenario, expected_issue):
     cli = CliRunner()
@@ -85,6 +87,11 @@ def test_six_page_handoff_and_qa_of_delivered_revision(tmp_path, monkeypatch, sc
             rows = pages
         elif scenario == "empty-final":
             return ""
+        elif scenario == "same-title":
+            rows[-1]["title"] = "  " + rows[0]["title"].upper() + "  "
+        elif scenario == "industrial":
+            rows[0].update(title="Gear heat treatment", h1="Hardening", meta_description="Compare alloy dimensions.")
+            rows[1].update(title="Patient monitor pole-mount bracket", h1="Adapter", meta_description="Check hole spacing.")
         return "```json\n" + json.dumps(rows, ensure_ascii=False) + "\n```"
 
     monkeypatch.setattr("seo_advisor.cli.create_provider", lambda *a, **kw: MockProvider(respond))

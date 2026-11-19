@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from urllib.parse import unquote, urlparse
 
 from seo_advisor.indexability import valid_hreflang
+from seo_advisor.url_utils import sitemap_url
 
 _X_DEFAULT = "x-default"
 
@@ -61,7 +62,7 @@ def _normalized_url_key(url: str) -> str:
     只用來偵測 language map 內部的重複宣告，不用於實際輸出——輸出一律
     保留使用者原始輸入的字串。
     """
-    parsed = urlparse(url)
+    parsed = urlparse(sitemap_url(url))
     host = (parsed.hostname or "").lower().rstrip(".")
     port = parsed.port
     if (parsed.scheme, port) in {("http", 80), ("https", 443)}:
@@ -151,7 +152,7 @@ def parse_language_map(raw: dict) -> HreflangMap:
                 if _normalized_url_key(normalized_alternates[code]) != url_key:
                     raise InvalidLanguageMapError(f"{context}：同一語系 {code} 指向不同網址，請選定目標。")
                 continue
-            normalized_alternates[code] = url
+            normalized_alternates[code] = sitemap_url(url)
             if url_key in seen_urls and seen_urls[url_key] != cluster_id:
                 raise InvalidLanguageMapError(
                     f"{context}（id={cluster_id!r}）：網址 {url!r} 同時出現在 cluster "

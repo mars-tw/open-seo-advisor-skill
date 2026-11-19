@@ -177,10 +177,13 @@ def build_content_request_from_report(
     topic = topic_override or (primary.suggested_topic if primary else "")
     custom_topic = bool(primary and topic.strip() != primary.suggested_topic.strip())
     batch_urls = []
+    duplicate_title_urls = []
     if primary and primary.opportunity_type == "metadata_batch" and not custom_topic:
-        batch_urls = list(dict.fromkeys(
-            url for opportunity in opportunities[:5] if opportunity.opportunity_type == "metadata_batch"
-            for url in opportunity.affected_urls
+        batch = [opp for opp in opportunities[:5] if opp.opportunity_type == "metadata_batch"]
+        batch_urls = list(dict.fromkeys(url for opp in batch for url in opp.affected_urls))
+        duplicate_title_urls = list(dict.fromkeys(
+            url for opp in batch if any(fid.startswith("SEO-TITLE_DUPLICATE-") for fid in opp.related_finding_ids)
+            for url in opp.affected_urls
         ))
 
     return ContentRequest(
@@ -195,6 +198,7 @@ def build_content_request_from_report(
         internal_links=primary.internal_links if primary else [],
         target_url=primary.target_url if primary else None,
         metadata_batch_urls=batch_urls,
+        duplicate_title_urls=duplicate_title_urls,
         auto_revise=auto_revise,
     )
 
